@@ -37,6 +37,7 @@ class IntelligencePipeline:
         run = ResearchRun(
             creator_id=creator_id,
             status="running",
+            started_at=datetime.now(timezone.utc),
             config_snapshot={"pipeline": "intelligence", "provider": self._provider.model_name},
             prompt_versions={
                 "extraction": EXTRACTION_PROMPT_VERSION,

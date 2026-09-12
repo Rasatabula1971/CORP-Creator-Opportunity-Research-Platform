@@ -1,5 +1,8 @@
 """API routes — CORP Step 8 endpoints."""
 
+import asyncio
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +89,8 @@ async def get_dossier(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    gen = DossierGenerator(session)
+    loop = asyncio.get_running_loop()
+    gen = await loop.run_in_executor(None, lambda: DossierGenerator(session))
     try:
         html = await gen.generate(creator_id)
     except ValueError:

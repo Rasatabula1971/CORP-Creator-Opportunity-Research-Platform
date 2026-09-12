@@ -51,6 +51,7 @@ class ClusterPipeline:
         run = ResearchRun(
             creator_id=creator_id,
             status="running",
+            started_at=datetime.now(timezone.utc),
             config_snapshot={
                 "pipeline": "clustering",
                 "min_cluster_size": self._config.min_cluster_size,

@@ -48,6 +48,7 @@ class ScoringPipeline:
         run = ResearchRun(
             creator_id=creator_id,
             status="running",
+            started_at=datetime.now(timezone.utc),
             config_snapshot={"pipeline": "scoring", "rule_version": SCORING_RULE_VERSION},
             prompt_versions={},
             model_versions={},

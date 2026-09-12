@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
 
+    cors_origins: str = ""
+
     app_env: str = "development"
     log_level: str = "INFO"
 

@@ -45,6 +45,7 @@ class IntentPipeline:
         run = ResearchRun(
             creator_id=creator_id,
             status="running",
+            started_at=datetime.now(timezone.utc),
             config_snapshot={
                 "pipeline": "intent",
                 "provider": self._provider.model_name,
