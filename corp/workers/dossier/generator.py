@@ -10,8 +10,6 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.evidence import Evidence
@@ -22,6 +20,7 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
+from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.engine import get_score_band, load_scoring_rules
 
 logger = logging.getLogger(__name__)
@@ -184,9 +183,23 @@ class DossierGenerator:
         return result.scalar_one_or_none()
 
     async def _load_opportunity_scores(self, creator_id: str) -> list[OpportunityScore]:
+        latest_run_id = (
+            select(ResearchRun.id)
+            .where(
+                ResearchRun.creator_id == creator_id,
+                ResearchRun.config_snapshot["pipeline"].as_string() == "scoring",
+                ResearchRun.status == "completed",
+            )
+            .order_by(ResearchRun.completed_at.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
         result = await self._session.execute(
             select(OpportunityScore)
-            .where(OpportunityScore.creator_id == creator_id)
+            .where(
+                OpportunityScore.creator_id == creator_id,
+                OpportunityScore.research_run_id == latest_run_id,
+            )
             .order_by(OpportunityScore.aggregate_score.desc())
         )
         return list(result.scalars().all())
@@ -199,11 +212,12 @@ class DossierGenerator:
 
     async def _load_signal(self, cluster_id: str) -> CommercialSignal | None:
         result = await self._session.execute(
-            select(CommercialSignal).where(
-                CommercialSignal.problem_cluster_id == cluster_id
-            )
+            select(CommercialSignal)
+            .where(CommercialSignal.problem_cluster_id == cluster_id)
+            .order_by(CommercialSignal.created_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def _load_observations(self, cluster_id: str) -> list[ProblemObservation]:
         result = await self._session.execute(
@@ -235,8 +249,11 @@ class DossierGenerator:
         )
         source_count = src_result.scalar() or 0
 
+        run_ids = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
         ev_result = await self._session.execute(
-            select(func.count()).select_from(Evidence)
+            select(func.count())
+            .select_from(Evidence)
+            .where(Evidence.research_run_id.in_(run_ids))
         )
         evidence_count = ev_result.scalar() or 0
 

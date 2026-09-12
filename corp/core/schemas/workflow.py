@@ -6,10 +6,8 @@ from corp.core.models.workflow import DecisionType, Gate
 
 
 class DecisionCreate(BaseModel):
-    creator_id: str
     opportunity_score_id: str | None = None
     decision: DecisionType
-    gate: Gate
     rationale: str | None = None
     decided_by: str | None = None
 

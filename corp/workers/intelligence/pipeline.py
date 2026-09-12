@@ -104,9 +104,12 @@ class IntelligencePipeline:
 
     async def _find_evidence(self, external_id: str) -> Evidence | None:
         result = await self._session.execute(
-            select(Evidence).where(Evidence.source_id == external_id)
+            select(Evidence)
+            .where(Evidence.source_id == external_id)
+            .order_by(Evidence.collected_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def _classify_creator_topics(self, creator_id: str) -> list[dict]:
         result = await self._session.execute(

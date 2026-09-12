@@ -50,7 +50,7 @@ class ResearchRun(TimestampMixin, Base):
     __table_args__ = (Index("ix_runs_creator_id", "creator_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
+    creator_id: Mapped[str | None] = mapped_column(ForeignKey("creators.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

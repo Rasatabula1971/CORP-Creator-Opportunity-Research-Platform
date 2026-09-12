@@ -40,7 +40,7 @@ async def _seed(session: AsyncSession) -> Creator:
     run = ResearchRun(
         creator_id=creator.id,
         status="completed",
-        config_snapshot={},
+        config_snapshot={"pipeline": "scoring"},
         prompt_versions={},
         model_versions={},
     )
@@ -279,9 +279,7 @@ async def test_create_decision_approve(clean_db: AsyncSession):
         resp = await client.post(
             f"/creators/{creator.id}/decisions",
             json={
-                "creator_id": creator.id,
                 "decision": "approve",
-                "gate": "gate_a",
                 "rationale": "Strong opportunity",
                 "decided_by": "test-user",
             },
@@ -309,9 +307,7 @@ async def test_create_decision_invalid_state(clean_db: AsyncSession):
         resp = await client.post(
             f"/creators/{creator.id}/decisions",
             json={
-                "creator_id": creator.id,
                 "decision": "approve",
-                "gate": "gate_a",
             },
         )
     assert resp.status_code == 409

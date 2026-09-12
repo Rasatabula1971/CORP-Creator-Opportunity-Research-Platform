@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import CreatorPlatformAccount
-from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember
+from corp.core.models.evidence import Evidence
+from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
-from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
+from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.confidence import compute_confidence_band
 from corp.core.scoring.engine import (
@@ -55,7 +56,7 @@ class ScoringPipeline:
 
         try:
             subscriber_count = await self._get_subscriber_count(creator_id)
-            clusters = await self._load_clusters()
+            clusters = await self._load_clusters(creator_id)
 
             opp_scores: list[OpportunityScore] = []
             for cluster in clusters:
@@ -80,8 +81,18 @@ class ScoringPipeline:
 
         return run
 
-    async def _load_clusters(self) -> list[ProblemCluster]:
-        result = await self._session.execute(select(ProblemCluster))
+    async def _load_clusters(self, creator_id: str) -> list[ProblemCluster]:
+        cluster_ids_subq = (
+            select(ProblemClusterMember.cluster_id)
+            .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
+            .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
+            .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+            .where(ResearchRun.creator_id == creator_id)
+            .distinct()
+        )
+        result = await self._session.execute(
+            select(ProblemCluster).where(ProblemCluster.id.in_(cluster_ids_subq))
+        )
         return list(result.scalars().all())
 
     async def _get_subscriber_count(self, creator_id: str) -> int | None:
@@ -94,11 +105,12 @@ class ScoringPipeline:
 
     async def _get_signal(self, cluster_id: str) -> CommercialSignal | None:
         result = await self._session.execute(
-            select(CommercialSignal).where(
-                CommercialSignal.problem_cluster_id == cluster_id
-            )
+            select(CommercialSignal)
+            .where(CommercialSignal.problem_cluster_id == cluster_id)
+            .order_by(CommercialSignal.created_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def _get_member_count(self, cluster_id: str) -> int:
         result = await self._session.execute(
@@ -133,7 +145,7 @@ class ScoringPipeline:
         member_count = await self._get_member_count(cluster.id)
 
         signal_level = signal.signal_level if signal else SignalLevel.WEAK
-        signal_confidence = signal.confidence if signal else 0.0
+        signal_confidence = signal.confidence if signal and signal.confidence is not None else 0.0
         competitor_strengths = await self._get_competitor_strengths(cluster.id)
 
         components = {

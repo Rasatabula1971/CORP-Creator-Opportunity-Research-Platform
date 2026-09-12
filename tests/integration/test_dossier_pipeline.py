@@ -35,7 +35,7 @@ async def _seed_full(session: AsyncSession) -> Creator:
     run = ResearchRun(
         creator_id=creator.id,
         status="completed",
-        config_snapshot={},
+        config_snapshot={"pipeline": "scoring"},
         prompt_versions={},
         model_versions={},
     )

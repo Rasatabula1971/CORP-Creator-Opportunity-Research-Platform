@@ -43,7 +43,7 @@ class IntentPipeline:
             creator_id: Scope to clusters related to this creator, or None for all.
         """
         run = ResearchRun(
-            creator_id=creator_id or "cross-creator",
+            creator_id=creator_id,
             status="running",
             config_snapshot={
                 "pipeline": "intent",

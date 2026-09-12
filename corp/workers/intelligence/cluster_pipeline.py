@@ -7,6 +7,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -47,7 +48,7 @@ class ClusterPipeline:
         """
         model_name = getattr(self._embedder, "model_name", "unknown")
         run = ResearchRun(
-            creator_id=creator_id or "cross-creator",
+            creator_id=creator_id,
             status="running",
             config_snapshot={
                 "pipeline": "clustering",
@@ -97,11 +98,10 @@ class ClusterPipeline:
     ) -> list[ProblemObservation]:
         stmt = select(ProblemObservation)
         if creator_id:
-            from corp.core.models.evidence import Evidence
-
             stmt = (
                 stmt.join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-                .where(Evidence.research_run_id.isnot(None))
+                .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+                .where(ResearchRun.creator_id == creator_id)
             )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
