@@ -14,6 +14,10 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
 
+    fair_url: str = ""
+    fair_client_id: str = "corp"
+    fair_api_key: str = ""
+
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
 
