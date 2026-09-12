@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor
-from corp.core.models.creator import CreatorPlatformAccount
+from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
@@ -42,6 +42,7 @@ class ScoringPipeline:
         self._session = session
         self._rules = load_scoring_rules(rules_path)
         self._weights: dict[str, float] = self._rules.get("weights", {})
+        self._confidence_thresholds: dict | None = self._rules.get("confidence_thresholds")
 
     async def run(self, creator_id: str) -> ResearchRun:
         run = ResearchRun(
@@ -53,6 +54,8 @@ class ScoringPipeline:
         )
         self._session.add(run)
         await self._session.flush()
+
+        await self._transition_status(creator_id, CreatorStatus.SCORING)
 
         try:
             subscriber_count = await self._get_subscriber_count(creator_id)
@@ -70,6 +73,7 @@ class ScoringPipeline:
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
+            await self._transition_status(creator_id, CreatorStatus.SCORED)
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:2000]
@@ -80,6 +84,15 @@ class ScoringPipeline:
             await self._session.flush()
 
         return run
+
+    async def _transition_status(self, creator_id: str, status: CreatorStatus) -> None:
+        result = await self._session.execute(
+            select(Creator).where(Creator.id == creator_id)
+        )
+        creator = result.scalars().first()
+        if creator:
+            creator.status = status
+            await self._session.flush()
 
     async def _load_clusters(self, creator_id: str) -> list[ProblemCluster]:
         cluster_ids_subq = (
@@ -167,6 +180,7 @@ class ScoringPipeline:
             evidence_depth=member_count,
             days_since_newest=days_fresh,
             single_source=source_count <= 1,
+            thresholds=self._confidence_thresholds,
         )
 
         opp = OpportunityScore(
@@ -217,6 +231,7 @@ class ScoringPipeline:
             evidence_depth=total_evidence,
             days_since_newest=days_fresh,
             single_source=source_count <= 1,
+            thresholds=self._confidence_thresholds,
         )
 
         creator_score = CreatorScore(

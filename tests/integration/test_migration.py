@@ -35,4 +35,4 @@ def test_migration_downgrade_upgrade():
 def test_migration_current_is_head():
     result = run_alembic("current")
     assert result.returncode == 0
-    assert "head" in result.stdout or "b4e7f2a1c3d5" in result.stdout
+    assert "head" in result.stdout or "c6f9d3e5a7b1" in result.stdout

@@ -24,3 +24,14 @@ def test_high_confidence():
 
 def test_medium_confidence():
     assert compute_confidence_band(2, 5, 100, False) == ConfidenceBand.MEDIUM
+
+
+def test_custom_thresholds_override_defaults():
+    custom = {
+        "high": {"min_sources": 5, "min_evidence": 20, "max_days_since_newest": 30},
+        "medium": {"min_sources": 3, "min_evidence": 10, "max_days_since_newest": 90},
+        "low": {"min_sources": 1, "min_evidence": 3},
+    }
+    assert compute_confidence_band(3, 10, 30, False, thresholds=custom) == ConfidenceBand.MEDIUM
+    assert compute_confidence_band(5, 20, 20, False, thresholds=custom) == ConfidenceBand.HIGH
+    assert compute_confidence_band(2, 5, 200, False, thresholds=custom) == ConfidenceBand.LOW

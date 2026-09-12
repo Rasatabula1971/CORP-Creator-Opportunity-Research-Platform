@@ -28,7 +28,9 @@ class CreatorScore(TimestampMixin, Base):
     )
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    research_run_id: Mapped[str | None] = mapped_column(String(36))
+    research_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("research_runs.id"), nullable=True
+    )
 
 
 class OpportunityScore(TimestampMixin, Base):
@@ -51,4 +53,6 @@ class OpportunityScore(TimestampMixin, Base):
     )
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    research_run_id: Mapped[str | None] = mapped_column(String(36))
+    research_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("research_runs.id"), nullable=True
+    )

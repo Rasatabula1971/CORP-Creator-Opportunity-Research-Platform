@@ -6,7 +6,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select as sa_select
+
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
@@ -19,6 +22,8 @@ _CONTENT_TYPE_MAP = {
     "short": ContentType.SHORT,
     "reel": ContentType.REEL,
     "article": ContentType.ARTICLE,
+    "story": ContentType.STORY,
+    "thread": ContentType.THREAD,
 }
 
 _INTERACTION_TYPE_MAP = {
@@ -63,11 +68,14 @@ class AcquisitionCollector:
         self._session.add(run)
         await self._session.flush()
 
+        await self._transition_status(creator_id, CreatorStatus.COLLECTING)
+
         try:
             items = await self._adapter.collect(identifier)
             await self._persist_items(items, creator_id, run.id)
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
+            await self._transition_status(creator_id, CreatorStatus.COLLECTED)
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:2000]
@@ -213,6 +221,15 @@ class AcquisitionCollector:
         self._session.add(interaction)
         await self._session.flush()
         return interaction
+
+    async def _transition_status(self, creator_id: str, status: CreatorStatus) -> None:
+        result = await self._session.execute(
+            sa_select(Creator).where(Creator.id == creator_id)
+        )
+        creator = result.scalars().first()
+        if creator:
+            creator.status = status
+            await self._session.flush()
 
     async def _create_evidence(
         self,

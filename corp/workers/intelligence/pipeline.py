@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.workflow import ResearchRun
@@ -46,12 +47,15 @@ class IntelligencePipeline:
         self._session.add(run)
         await self._session.flush()
 
+        await self._transition_status(creator_id, CreatorStatus.EXTRACTING)
+
         try:
             await self._extract_problems(creator_id, run.id)
             topics = await self._classify_creator_topics(creator_id)
             await self._store_topics(creator_id, topics)
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
+            await self._transition_status(creator_id, CreatorStatus.EXTRACTED)
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:2000]
@@ -125,6 +129,15 @@ class IntelligencePipeline:
             for ci in content_items
         ]
         return await classify_topics(self._provider, items_data)
+
+    async def _transition_status(self, creator_id: str, status: CreatorStatus) -> None:
+        result = await self._session.execute(
+            select(Creator).where(Creator.id == creator_id)
+        )
+        creator = result.scalars().first()
+        if creator:
+            creator.status = status
+            await self._session.flush()
 
     async def _store_topics(self, creator_id: str, topics: list[dict]) -> None:
         if not topics:

@@ -7,6 +7,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -61,6 +62,9 @@ class ClusterPipeline:
         self._session.add(run)
         await self._session.flush()
 
+        if creator_id:
+            await self._transition_status(creator_id, CreatorStatus.CLUSTERING)
+
         try:
             observations = await self._load_observations(creator_id)
             if not observations:
@@ -78,10 +82,12 @@ class ClusterPipeline:
             clusters = cluster_observations(
                 texts, embeddings, timestamps, self._config
             )
-            await self._persist_clusters(observations, clusters, model_name)
+            await self._persist_clusters(observations, clusters, embeddings, model_name)
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
+            if creator_id:
+                await self._transition_status(creator_id, CreatorStatus.CLUSTERED)
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:2000]
@@ -92,6 +98,15 @@ class ClusterPipeline:
             await self._session.flush()
 
         return run
+
+    async def _transition_status(self, creator_id: str, status: CreatorStatus) -> None:
+        result = await self._session.execute(
+            select(Creator).where(Creator.id == creator_id)
+        )
+        creator = result.scalars().first()
+        if creator:
+            creator.status = status
+            await self._session.flush()
 
     async def _load_observations(
         self, creator_id: str | None
@@ -124,6 +139,7 @@ class ClusterPipeline:
         self,
         observations: list[ProblemObservation],
         clusters: list[ClusterResult],
+        embeddings: np.ndarray,
         model_version: str,
     ) -> None:
         for cr in clusters:
@@ -139,9 +155,18 @@ class ClusterPipeline:
             self._session.add(cluster)
             await self._session.flush()
 
+            centroid = np.mean(
+                [embeddings[i] for i in cr.member_indices], axis=0
+            )
+            centroid_norm = np.linalg.norm(centroid)
             for idx in cr.member_indices:
                 obs = observations[idx]
-                similarity = 1.0 - (idx / max(len(observations), 1))
+                emb = embeddings[idx]
+                emb_norm = np.linalg.norm(emb)
+                if centroid_norm > 0 and emb_norm > 0:
+                    similarity = float(np.dot(emb, centroid) / (emb_norm * centroid_norm))
+                else:
+                    similarity = 0.0
                 member = ProblemClusterMember(
                     cluster_id=cluster.id,
                     observation_id=obs.id,
