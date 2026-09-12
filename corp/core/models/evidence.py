@@ -1,0 +1,42 @@
+import enum
+from datetime import datetime
+
+from sqlalchemy import DateTime, Enum, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from corp.core.models.base import Base, generate_uuid
+
+
+class AccessMethod(str, enum.Enum):
+    OFFICIAL = "official"
+    VENDOR_SCRAPE = "vendor_scrape"
+    OPEN = "open"
+
+
+class ComplianceStatus(str, enum.Enum):
+    COMPLIANT = "compliant"
+    TOS_RISK = "tos_risk"
+    PII_PRESENT = "pii_present"
+    VERIFY = "verify"
+
+
+class Evidence(Base):
+    """Append-only evidence store. No UPDATE or DELETE — ever."""
+
+    __tablename__ = "evidence"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_platform: Mapped[str] = mapped_column(String(50), nullable=False)
+    raw_text: Mapped[str] = mapped_column(Text, nullable=False)
+    author_handle: Mapped[str | None] = mapped_column(String(255))
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    access_method: Mapped[AccessMethod] = mapped_column(Enum(AccessMethod), nullable=False)
+    compliance_status: Mapped[ComplianceStatus] = mapped_column(
+        Enum(ComplianceStatus), nullable=False
+    )
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    research_run_id: Mapped[str | None] = mapped_column(String(36))

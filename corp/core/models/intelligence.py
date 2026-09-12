@@ -1,0 +1,56 @@
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+
+class ProblemObservation(TimestampMixin, Base):
+    __tablename__ = "problem_observations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    evidence_id: Mapped[str] = mapped_column(ForeignKey("evidence.id"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(100))
+    is_inferred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    extraction_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float)
+
+    cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(
+        back_populates="observation"
+    )
+
+
+class ProblemCluster(TimestampMixin, Base):
+    __tablename__ = "problem_clusters"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    frequency: Mapped[int] = mapped_column(Integer, default=0)
+    recency_score: Mapped[float] = mapped_column(Float, default=0.0)
+    evidence_strength: Mapped[float] = mapped_column(Float, default=0.0)
+    creator_count: Mapped[int] = mapped_column(Integer, default=1)
+    model_version: Mapped[str | None] = mapped_column(String(100))
+
+    members: Mapped[list["ProblemClusterMember"]] = relationship(
+        back_populates="cluster", cascade="all, delete-orphan"
+    )
+
+
+class ProblemClusterMember(Base):
+    __tablename__ = "problem_cluster_members"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    cluster_id: Mapped[str] = mapped_column(
+        ForeignKey("problem_clusters.id"), nullable=False
+    )
+    observation_id: Mapped[str] = mapped_column(
+        ForeignKey("problem_observations.id"), nullable=False
+    )
+    similarity_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    cluster: Mapped["ProblemCluster"] = relationship(back_populates="members")
+    observation: Mapped["ProblemObservation"] = relationship(
+        back_populates="cluster_memberships"
+    )

@@ -1,0 +1,36 @@
+version: "1.0.0"
+
+weights:
+  audience_problem_frequency: 0.25
+  recency_trend: 0.15
+  commercial_intent_strength: 0.20
+  evidence_depth: 0.15
+  creator_reach: 0.10
+  competition_saturation: 0.15
+
+confidence_thresholds:
+  high:
+    min_sources: 3
+    min_evidence: 10
+    max_days_since_newest: 90
+  medium:
+    min_sources: 2
+    min_evidence: 5
+    max_days_since_newest: 180
+  low:
+    min_sources: 1
+    min_evidence: 3
+
+score_bands:
+  exceptional:
+    min: 0.85
+    label: "Exceptional opportunity"
+  strong:
+    min: 0.70
+    label: "Strong opportunity"
+  moderate:
+    min: 0.50
+    label: "Moderate — worth watching"
+  weak:
+    min: 0.0
+    label: "Weak — insufficient signal"

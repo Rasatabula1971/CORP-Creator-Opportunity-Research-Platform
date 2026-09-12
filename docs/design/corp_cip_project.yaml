@@ -1,0 +1,209 @@
+# CORP as a CIP project + requirements
+#
+# Purpose: feed CORP's capability needs into CIP once Step 14 (project/requirements/
+# fit-eval API) is live, so CIP returns Adopt/Adapt/Wrap/Reference/Reject/Build
+# recommendations pinned to exact revisions and traceable to evidence_item rows.
+#
+# STATUS: manual first pass. Field names below are the natural mapping; RECONCILE
+# them against CIP's actual `project` / `requirement` schema when Step 14 lands
+# (esp. the constraint keys the three fit-eval matchers read). `manual_verdict` and
+# `candidate` are my hand pass — CIP should confirm or overturn them, not trust them.
+#
+# PRIOR ART: candidates below tagged `# repo:` were surfaced by the executed
+# search-before-build gate (five repos, 2026-09-11). Rejected: clankwright/spam-bot-3000
+# (auto-contact spam, against CORP's founding principle — never a candidate).
+
+project:
+  id: corp
+  name: Creator Opportunity Research Platform
+  description: >
+    Evidence-first creator/audience research engine. Discovers creators, mines
+    audience problems from permitted public signal, clusters and scores
+    opportunities, and produces decision-ready dossiers for a human gate.
+  # Global constraints every requirement inherits (matchers apply these unless overridden).
+  constraints:
+    language: python
+    license_policy: permissive_preferred     # reject copyleft-incompatible for embedded code
+    determinism: required_for_scoring         # OD-16 lineage: scoring/routing must be reproducible
+    cost_posture: free_tier_first             # local/free where possible; paid only for the ranked few
+    runtime: postgres16
+    maintenance: active_required              # reject unmaintained deps
+
+requirements:
+
+  # ---- Foundation ----
+  - id: db-migrations
+    capability: relational store + migrations
+    manual_verdict: adopt
+    candidate: postgresql16 + alembic
+    constraints: { determinism: na }
+    done_when: schema migrates up/down clean against real Postgres 16
+
+  - id: scheduler
+    capability: job scheduling, rate limits, retries, incremental refresh
+    manual_verdict: wrap
+    candidate: arq            # or celery+redis
+    also: [tenacity, pyrate-limiter]
+    constraints: { determinism: na }
+    done_when: collection jobs run with backoff + per-source rate caps, no hand-rolled retry loop
+
+  - id: api
+    capability: read/write HTTP API
+    manual_verdict: adopt
+    candidate: fastapi
+
+  - id: console
+    capability: human review console UI
+    manual_verdict: adopt
+    candidate: react + vite + shadcn/ui + tanstack-table
+
+  # ---- Source acquisition: creator-bound ----
+  - id: adapter-youtube
+    capability: creator-bound comment + video + transcript collection (v1 binding source)
+    manual_verdict: wrap
+    candidate: google-api-python-client + youtube-transcript-api
+    constraints: { data_access: official_no_consent, compliance: compliant }
+    done_when: given a channel handle, returns videos + public comment threads + captions in normalized schema
+
+  - id: adapter-social-vendor
+    capability: IG/TikTok/FB/X comment collection
+    manual_verdict: wrap_vendor        # NOT build a scraper
+    candidate: apify actors            # repo: — OR ScrapeCreators (bundles research skills on top of scrape API)
+    alternatives: [scrapecreators]     # compare coverage/price/ToS vs apify before wiring
+    constraints:
+      data_access: vendor_scrape
+      compliance: tos_breach_and_pii   # requires recorded risk acceptance
+      cost: low_per_1k                 # ~$0.50-2.40/1k, verify at build
+    priority: post_v1
+    done_when: deferred; interface stub only until slice proves the dossier converts
+
+  - id: adapter-reddit
+    capability: creator community problem collection
+    manual_verdict: wrap
+    candidate: praw            # or apify reddit actor
+    constraints: { data_access: verify, compliance: verify }
+    priority: v1_optional
+
+  # ---- Source acquisition: niche-signal (creator-agnostic problem reservoirs) ----
+  - id: signal-search-demand
+    capability: purchase-intent question mining
+    manual_verdict: wrap
+    candidate: pytrends + autocomplete/PAA
+    constraints: { data_access: open, compliance: compliant, cost: free }
+
+  - id: signal-amazon-reviews
+    capability: unmet-need + competitor-weakness mining
+    manual_verdict: wrap
+    candidate: amazon 1-3 star review collection
+    constraints: { data_access: open, compliance: public }
+
+  - id: signal-stackexchange
+    capability: technical-niche problem mining
+    manual_verdict: adopt
+    candidate: stack exchange api
+    constraints: { data_access: official, compliance: compliant, cost: free }
+
+  - id: adapter-schema
+    capability: normalized output schema across both adapter families
+    manual_verdict: build          # authorize before writing
+    candidate: null
+    note: carries per-source compliance_status + access_method
+    done_when: one pydantic schema both families emit; confidence + governance layers read its fields
+
+  # ---- Intelligence ----
+  - id: extract-topics
+    capability: creator topic/content classification
+    manual_verdict: wrap
+    candidate: gemini free tier + structured output
+    reference: scrapecreators/creator-profile-teardown, audience-research   # repo: prompt starting point
+    constraints: { determinism: prompt_and_model_pinned }
+
+  - id: extract-audience
+    capability: comment -> problem/question/pain extraction
+    manual_verdict: wrap
+    candidate: gemini + instructor/pydantic structured output
+    reference: scrapecreators/comment-mining + product-demand-research; social-media-research-ops   # repo: prompt starting point
+    constraints: { determinism: prompt_and_model_pinned }
+    note: biggest hallucination surface; pin prompt version per ResearchRun
+
+  - id: embeddings
+    capability: text embeddings for clustering
+    manual_verdict: adopt
+    candidate: sentence-transformers (all-MiniLM)   # local, zero marginal cost
+    constraints: { cost: free }
+
+  - id: clustering
+    capability: embed -> cluster -> label problem families (within AND across creators)
+    manual_verdict: adopt          # OPEN QUESTION — run full compare, see checklist
+    candidate: bertopic            # fallback: hdbscan + sklearn
+    constraints: { determinism: pin_model_versions }
+    note: elevate cross-creator aggregation (PDR improvement #3), not within-creator only
+
+  - id: vector-store
+    capability: vector storage
+    manual_verdict: adopt
+    candidate: pgvector            # stays in Postgres, no new infra
+
+  - id: commercial-intent
+    capability: purchase-intent classification over signal hierarchy
+    manual_verdict: wrap
+    candidate: gemini classifier + rules table
+    depends_on: [intent-rules]
+
+  - id: intent-rules
+    capability: weak/moderate/strong/validation signal hierarchy
+    manual_verdict: build          # tiny rules table
+    candidate: null
+
+  - id: market-research
+    capability: existing-solution + pricing research
+    manual_verdict: wrap
+    candidate: tavily/brave/serpapi web search
+    reference: kushalsamani/social-media-ai-agent   # repo: Gemini+Serper+Pydantic wiring only; its CrewAI orchestration is against OD-16, do not copy
+    priority: phase5
+
+  # ---- Scoring / evidence / workflow: reuse CIP ----
+  - id: evidence-model
+    capability: append-only evidence + FK-traceable claims
+    manual_verdict: adapt
+    candidate: "own: CIP Step 12 evidence_item"
+
+  - id: scoring
+    capability: deterministic reproducible component + aggregate scores
+    manual_verdict: adapt
+    candidate: "own: CIP Step 9 computed_hash"
+    constraints: { determinism: required }
+    note: split CreatorScore vs OpportunityScore (PDR improvement #6)
+
+  - id: decision-rules
+    capability: declarative scoring weights + decision rules
+    manual_verdict: adapt
+    candidate: "own: CIP Step 12 YAML decision rules"
+    note: CORP §7 weights drop in; add recency dimension (PDR #7), calibration governance (PDR #10)
+
+  - id: confidence
+    capability: confidence banding
+    manual_verdict: adapt
+    candidate: "own: CIP EOR banding"
+
+  - id: gates
+    capability: human-gate policy + append-only overrides (Gate A-E)
+    manual_verdict: adapt
+    candidate: "own: CIP Steps 10-11 policy gates + risk_acceptance"
+
+  - id: provider-routing
+    capability: deterministic free-tier-first LLM provider routing
+    manual_verdict: adapt
+    candidate: "own: CIP Provider Registry + OD-16 deterministic routing"
+
+  - id: state-machine
+    capability: 18-state creator/opportunity lifecycle
+    manual_verdict: adapt
+    candidate: "own: CIP state-machine pattern"    # or python-statemachine
+
+  # ---- Presentation ----
+  - id: dossier
+    capability: decision-ready dossier generation
+    manual_verdict: build          # template only; engine adopted
+    candidate: jinja2 (engine)     # optional docx/pdf render via existing skills
+    done_when: renders CORP §13 dossier for one creator with evidence drill-down refs

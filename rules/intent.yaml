@@ -1,0 +1,60 @@
+version: "1.0.0"
+
+levels:
+  validation:
+    description: "Audience already paying for alternatives or actively reviewing competitors"
+    keywords:
+      - "bought"
+      - "purchased"
+      - "subscribed"
+      - "paying for"
+      - "switched to"
+      - "compared"
+      - "review of"
+      - "alternative to"
+      - "vs"
+      - "worth the money"
+    weight: 1.0
+
+  strong:
+    description: "Direct purchase intent or explicit product requests"
+    keywords:
+      - "where can I buy"
+      - "how much does"
+      - "pricing"
+      - "discount"
+      - "coupon"
+      - "recommend a"
+      - "best product for"
+      - "looking for a"
+      - "need a tool"
+      - "wish there was"
+      - "someone should make"
+    weight: 0.75
+
+  moderate:
+    description: "Specific problem descriptions, comparison seeking, solution hunting"
+    keywords:
+      - "how do I"
+      - "struggling with"
+      - "can't figure out"
+      - "anyone know how"
+      - "what do you use for"
+      - "is there a way to"
+      - "frustrated"
+      - "doesn't work"
+      - "broken"
+      - "help me"
+    weight: 0.50
+
+  weak:
+    description: "General complaints, vague wishes, opinions without action"
+    keywords:
+      - "annoying"
+      - "hate when"
+      - "wish"
+      - "would be nice"
+      - "should be"
+      - "why doesn't"
+      - "sucks"
+    weight: 0.25

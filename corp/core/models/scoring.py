@@ -1,0 +1,49 @@
+import enum
+
+from sqlalchemy import Enum, Float, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+
+class ConfidenceBand(str, enum.Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INSUFFICIENT = "insufficient"
+
+
+class CreatorScore(TimestampMixin, Base):
+    __tablename__ = "creator_scores"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
+    component_scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    aggregate_score: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence_band: Mapped[ConfidenceBand] = mapped_column(
+        Enum(ConfidenceBand), nullable=False
+    )
+    rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    research_run_id: Mapped[str | None] = mapped_column(String(36))
+
+
+class OpportunityScore(TimestampMixin, Base):
+    __tablename__ = "opportunity_scores"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
+    problem_cluster_id: Mapped[str] = mapped_column(
+        ForeignKey("problem_clusters.id"), nullable=False
+    )
+    component_scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    aggregate_score: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence_band: Mapped[ConfidenceBand] = mapped_column(
+        Enum(ConfidenceBand), nullable=False
+    )
+    rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    research_run_id: Mapped[str | None] = mapped_column(String(36))
