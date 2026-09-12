@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, Text, func
+from sqlalchemy import DateTime, Enum, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from corp.core.models.base import Base, generate_uuid
@@ -24,6 +24,11 @@ class Evidence(Base):
     """Append-only evidence store. No UPDATE or DELETE — ever."""
 
     __tablename__ = "evidence"
+    __table_args__ = (
+        Index("ix_evidence_source", "source_type", "source_id"),
+        Index("ix_evidence_platform", "source_platform"),
+        Index("ix_evidence_research_run", "research_run_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)

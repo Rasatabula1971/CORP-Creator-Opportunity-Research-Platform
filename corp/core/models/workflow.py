@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,10 @@ class HumanDecision(Base):
     """Append-only. Every decision is a new row — never update or delete."""
 
     __tablename__ = "human_decisions"
+    __table_args__ = (
+        Index("ix_decisions_creator_id", "creator_id"),
+        Index("ix_decisions_gate", "gate"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
@@ -43,6 +47,7 @@ class HumanDecision(Base):
 
 class ResearchRun(TimestampMixin, Base):
     __tablename__ = "research_runs"
+    __table_args__ = (Index("ix_runs_creator_id", "creator_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
