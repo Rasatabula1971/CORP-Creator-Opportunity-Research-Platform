@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -26,6 +26,10 @@ class InteractionType(str, enum.Enum):
 
 class ContentItem(TimestampMixin, Base):
     __tablename__ = "content_items"
+    __table_args__ = (
+        Index("ix_content_items_creator_id", "creator_id"),
+        Index("ix_content_items_platform_ext", "platform", "external_id", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
@@ -47,6 +51,10 @@ class ContentItem(TimestampMixin, Base):
 
 class AudienceInteraction(TimestampMixin, Base):
     __tablename__ = "audience_interactions"
+    __table_args__ = (
+        Index("ix_interactions_content_item_id", "content_item_id"),
+        Index("ix_interactions_external_id", "external_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     content_item_id: Mapped[str] = mapped_column(

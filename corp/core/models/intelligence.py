@@ -1,11 +1,19 @@
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from pgvector.sqlalchemy import Vector
+
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+EMBEDDING_DIM = 384
 
 
 class ProblemObservation(TimestampMixin, Base):
     __tablename__ = "problem_observations"
+    __table_args__ = (
+        Index("ix_observations_evidence_id", "evidence_id"),
+        Index("ix_observations_category", "category"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     evidence_id: Mapped[str] = mapped_column(ForeignKey("evidence.id"), nullable=False)
@@ -15,6 +23,7 @@ class ProblemObservation(TimestampMixin, Base):
     extraction_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
+    embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(
         back_populates="observation"
@@ -40,6 +49,11 @@ class ProblemCluster(TimestampMixin, Base):
 
 class ProblemClusterMember(Base):
     __tablename__ = "problem_cluster_members"
+    __table_args__ = (
+        Index("ix_pcm_cluster_id", "cluster_id"),
+        Index("ix_pcm_observation_id", "observation_id"),
+        Index("ix_pcm_unique", "cluster_id", "observation_id", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     cluster_id: Mapped[str] = mapped_column(

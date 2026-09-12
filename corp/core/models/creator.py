@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import Enum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -29,6 +29,10 @@ class CreatorStatus(str, enum.Enum):
 
 class Creator(TimestampMixin, Base):
     __tablename__ = "creators"
+    __table_args__ = (
+        Index("ix_creators_status", "status"),
+        Index("ix_creators_niche", "niche"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -46,6 +50,10 @@ class Creator(TimestampMixin, Base):
 
 class CreatorPlatformAccount(TimestampMixin, Base):
     __tablename__ = "creator_platform_accounts"
+    __table_args__ = (
+        Index("ix_cpa_creator_id", "creator_id"),
+        Index("ix_cpa_platform_handle", "platform", "handle", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
