@@ -4,6 +4,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from corp.core.models.competitive import CompetitorStrength, CompetitorType
 from corp.core.models.intent import SignalLevel
 from corp.core.models.scoring import ConfidenceBand
 
@@ -69,11 +70,20 @@ class FakeObservation:
     confidence = 0.9
 
 
+class FakeCompetitor:
+    name = "GenericBatteryCo replacement kit"
+    competitor_type = CompetitorType.SUBSTITUTE
+    strength = CompetitorStrength.MODERATE
+    url = "https://example.com/kit"
+    gap_notes = "Does not fit this device battery compartment without modification"
+
+
 class FakeOpportunity:
     cluster = FakeCluster()
     score = FakeOppScore()
     signal = FakeSignal()
     observations = [FakeObservation(), FakeObservation()]
+    competitors = []
 
 
 class FakeSignalCtx:
@@ -86,6 +96,7 @@ class FakeDataCoverage:
     evidence_count = 25
     cluster_count = 3
     observation_count = 18
+    competitor_count = 4
 
 
 def _render_template(**kwargs) -> str:
@@ -224,6 +235,44 @@ async def test_stubs_present():
     assert "Phase 5+" in html
     assert "Competitive" in html
     assert "Product Concepts" in html
+
+
+async def test_competitive_landscape_with_data():
+    opp = FakeOpportunity()
+    opp.competitors = [FakeCompetitor()]
+    html = _render_template(
+        creator=FakeCreator(),
+        platform_accounts=[],
+        creator_score=FakeCreatorScore(),
+        score_band="Strong opportunity",
+        weights={},
+        opportunities=[opp],
+        signals=[FakeSignalCtx()],
+        data_coverage=FakeDataCoverage(),
+        generated_at="2025-01-15 10:30 UTC",
+    )
+
+    assert "GenericBatteryCo replacement kit" in html
+    assert "SUBSTITUTE" in html
+    assert "MODERATE" in html
+    assert "Does not fit this device battery compartment without modification" in html
+    assert "No competitive research recorded" not in html
+
+
+async def test_competitive_landscape_empty():
+    html = _render_template(
+        creator=FakeCreator(),
+        platform_accounts=[],
+        creator_score=FakeCreatorScore(),
+        score_band="Strong opportunity",
+        weights={},
+        opportunities=[FakeOpportunity()],
+        signals=[FakeSignalCtx()],
+        data_coverage=FakeDataCoverage(),
+        generated_at="2025-01-15 10:30 UTC",
+    )
+
+    assert "No competitive research recorded yet" in html
 
 
 async def test_data_coverage_section():

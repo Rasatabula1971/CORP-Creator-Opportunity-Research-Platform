@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import (
@@ -216,6 +217,55 @@ async def test_scoring_pipeline_no_clusters(clean_db: AsyncSession):
     cs = result.scalar_one()
     assert cs.aggregate_score == 0.0
     assert cs.confidence_band == ConfidenceBand.INSUFFICIENT
+
+
+@pytest.mark.asyncio
+async def test_scoring_pipeline_competition_saturation_neutral_without_competitors(
+    clean_db: AsyncSession,
+):
+    session = clean_db
+    creator, cluster = await _seed(session)
+    pipeline = ScoringPipeline(session)
+
+    await pipeline.run(creator.id)
+
+    result = await session.execute(
+        select(OpportunityScore).where(OpportunityScore.problem_cluster_id == cluster.id)
+    )
+    opp = result.scalar_one()
+    assert opp.component_scores["competition_saturation"] == 0.5
+
+
+@pytest.mark.asyncio
+async def test_scoring_pipeline_competition_saturation_reflects_competitors(
+    clean_db: AsyncSession,
+):
+    session = clean_db
+    creator, cluster = await _seed(session)
+    session.add_all([
+        Competitor(
+            problem_cluster_id=cluster.id,
+            name="Incumbent A",
+            competitor_type=CompetitorType.DIRECT,
+            strength=CompetitorStrength.STRONG,
+        ),
+        Competitor(
+            problem_cluster_id=cluster.id,
+            name="Incumbent B",
+            competitor_type=CompetitorType.SUBSTITUTE,
+            strength=CompetitorStrength.MODERATE,
+        ),
+    ])
+    await session.flush()
+
+    pipeline = ScoringPipeline(session)
+    await pipeline.run(creator.id)
+
+    result = await session.execute(
+        select(OpportunityScore).where(OpportunityScore.problem_cluster_id == cluster.id)
+    )
+    opp = result.scalar_one()
+    assert opp.component_scores["competition_saturation"] < 0.5
 
 
 @pytest.mark.asyncio

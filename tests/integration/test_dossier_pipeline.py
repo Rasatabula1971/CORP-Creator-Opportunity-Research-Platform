@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import (
@@ -143,6 +144,15 @@ async def _seed_full(session: AsyncSession) -> Creator:
         research_run_id=run.id,
     )
     session.add(creator_score)
+
+    competitor = Competitor(
+        problem_cluster_id=cluster.id,
+        name="BulkGains Protein Timer app",
+        competitor_type=CompetitorType.SUBSTITUTE,
+        strength=CompetitorStrength.WEAK,
+        gap_notes="Only supports whey, not plant-based protein",
+    )
+    session.add(competitor)
     await session.flush()
 
     return creator
@@ -197,6 +207,20 @@ async def test_dossier_data_coverage(clean_db: AsyncSession):
     assert data.data_coverage.cluster_count == 1
     assert data.data_coverage.observation_count == 4
     assert data.data_coverage.source_count >= 1
+    assert data.data_coverage.competitor_count == 1
+
+
+@pytest.mark.asyncio
+async def test_dossier_contains_competitors(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _seed_full(session)
+
+    gen = DossierGenerator(session)
+    html = await gen.generate(creator.id)
+
+    assert "BulkGains Protein Timer app" in html
+    assert "Only supports whey, not plant-based protein" in html
+    assert "No competitive research recorded" not in html
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,9 @@
   .badge-strong { background: #cfe2ff; color: var(--accent); }
   .badge-moderate { background: #fff3cd; color: #664d03; }
   .badge-weak { background: #f8d7da; color: var(--danger); }
+  .badge-direct { background: #f8d7da; color: var(--danger); }
+  .badge-substitute { background: #fff3cd; color: #664d03; }
+  .badge-diy_workaround { background: #e2e3e5; color: var(--muted); }
   blockquote { border-left: 3px solid var(--border); padding: 0.5rem 1rem;
                margin: 0.5rem 0; background: #fff; font-style: italic;
                font-size: 0.9rem; color: var(--muted); }
@@ -199,9 +202,34 @@
 <p class="stub">No commercial signals classified yet.</p>
 {% endif %}
 
-<!-- ── Competitive Landscape (stub) ──────────────────────────────── -->
+<!-- ── Competitive Landscape ───────────────────────────────────────── -->
 <h2>Competitive Landscape</h2>
-<p class="stub">Competitive analysis will be available in Phase 5+.</p>
+{% if opportunities and (opportunities | map(attribute="competitors") | map("length") | sum) > 0 %}
+{% for opp in opportunities %}
+{% if opp.competitors %}
+<h3>{{ loop.index }}. {{ opp.cluster.label }}</h3>
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>Strength</th><th>Gap / Weakness</th></tr></thead>
+  <tbody>
+  {% for comp in opp.competitors %}
+  <tr>
+    <td>
+      {% if comp.url %}<a href="{{ comp.url }}">{{ comp.name }}</a>{% else %}{{ comp.name }}{% endif %}
+    </td>
+    <td><span class="badge badge-{{ comp.competitor_type.value }}">{{ comp.competitor_type.value | replace("_", " ") | upper }}</span></td>
+    <td><span class="badge badge-{{ comp.strength.value }}">{{ comp.strength.value | upper }}</span></td>
+    <td>{{ comp.gap_notes or "—" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="evidence-source">{{ opp.cluster.label }}: no competitors identified for this problem yet.</p>
+{% endif %}
+{% endfor %}
+{% else %}
+<p class="stub">No competitive research recorded yet for this creator's problem clusters.</p>
+{% endif %}
 
 <!-- ── Recommended Product Concepts (stub) ─────────────────────── -->
 <h2>Recommended Product Concepts</h2>
@@ -225,6 +253,10 @@
   <div class="meta-item">
     <span class="meta-label">Observations</span>
     {{ data_coverage.observation_count }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Competitors Tracked</span>
+    {{ data_coverage.competitor_count }}
   </div>
 </div>
 

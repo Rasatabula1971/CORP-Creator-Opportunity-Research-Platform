@@ -2,6 +2,7 @@
 
 import math
 
+from corp.core.models.competitive import CompetitorStrength
 from corp.core.models.intent import SignalLevel
 from corp.core.scoring.engine import (
     compute_hash,
@@ -110,6 +111,32 @@ async def test_creator_reach_above_cap():
 
 async def test_competition_saturation_neutral():
     assert score_competition_saturation() == 0.5
+
+
+async def test_competition_saturation_empty_list_neutral():
+    assert score_competition_saturation([]) == 0.5
+
+
+async def test_competition_saturation_one_weak():
+    s = score_competition_saturation([CompetitorStrength.WEAK])
+    assert abs(s - 0.9167) < 1e-4
+
+
+async def test_competition_saturation_mixed():
+    s = score_competition_saturation([CompetitorStrength.STRONG, CompetitorStrength.MODERATE])
+    assert abs(s - 0.4667) < 1e-4
+
+
+async def test_competition_saturation_fully_saturated():
+    s = score_competition_saturation(
+        [CompetitorStrength.STRONG, CompetitorStrength.STRONG, CompetitorStrength.STRONG]
+    )
+    assert s == 0.0
+
+
+async def test_competition_saturation_above_cap_clamped():
+    s = score_competition_saturation([CompetitorStrength.STRONG] * 5)
+    assert s == 0.0
 
 
 # ── Aggregate score ──────────────────────────────────────────────────

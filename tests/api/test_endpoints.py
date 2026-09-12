@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.api.app import create_app
+from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import (
@@ -135,6 +136,15 @@ async def _seed(session: AsyncSession) -> Creator:
         research_run_id=run.id,
     )
     session.add(cs)
+
+    competitor = Competitor(
+        problem_cluster_id=cluster.id,
+        name="API Competitor",
+        competitor_type=CompetitorType.DIRECT,
+        strength=CompetitorStrength.MODERATE,
+        gap_notes="Doesn't cover this use case",
+    )
+    session.add(competitor)
     await session.flush()
 
     return creator
@@ -238,6 +248,27 @@ async def test_get_opportunities(clean_db: AsyncSession):
     data = resp.json()
     assert len(data) == 1
     assert data[0]["aggregate_score"] == 0.65
+
+
+@pytest.mark.asyncio
+async def test_get_competitors(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _seed(session)
+    async with _make_client(session) as client:
+        resp = await client.get(f"/creators/{creator.id}/competitors")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "API Competitor"
+    assert data[0]["strength"] == "moderate"
+
+
+@pytest.mark.asyncio
+async def test_get_competitors_not_found(clean_db: AsyncSession):
+    session = clean_db
+    async with _make_client(session) as client:
+        resp = await client.get("/creators/nonexistent/competitors")
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio

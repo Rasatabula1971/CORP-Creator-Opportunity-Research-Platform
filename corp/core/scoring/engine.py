@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from corp.core.models.competitive import CompetitorStrength
 from corp.core.models.intent import SignalLevel
 
 
@@ -85,5 +86,20 @@ def score_creator_reach(subscriber_count: int | None) -> float:
     return min(1.0, math.log10(max(1, subscriber_count)) / 7.0)
 
 
-def score_competition_saturation() -> float:
-    return 0.5
+_STRENGTH_WEIGHT = {
+    CompetitorStrength.WEAK: 0.25,
+    CompetitorStrength.MODERATE: 0.6,
+    CompetitorStrength.STRONG: 1.0,
+}
+_SATURATION_CAP = 3.0  # pressure at which the market counts as fully saturated
+
+
+def score_competition_saturation(competitors: list[CompetitorStrength] | None = None) -> float:
+    """Higher = more whitespace (less saturated), matching the "higher is better"
+    convention of the other components. Neutral 0.5 when no competitor research
+    has been done yet for this cluster — not evidence of an open market."""
+    if not competitors:
+        return 0.5
+    pressure = sum(_STRENGTH_WEIGHT.get(c, 0.5) for c in competitors)
+    saturation = min(1.0, pressure / _SATURATION_CAP)
+    return round(1.0 - saturation, 4)

@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
@@ -15,6 +16,7 @@ from corp.core.models.intelligence import (
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
+from corp.core.schemas.competitive import CompetitorResponse
 from corp.core.schemas.creator import CreatorDetailResponse, CreatorResponse, PlatformAccountResponse
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.scoring import OpportunityScoreResponse, ScoreResponse
@@ -136,6 +138,30 @@ async def get_opportunities(
         .order_by(OpportunityScore.aggregate_score.desc())
     )
     return [OpportunityScoreResponse.model_validate(o) for o in result.scalars().all()]
+
+
+# ── Competitors ──────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/competitors",
+    response_model=list[CompetitorResponse],
+)
+async def get_competitors(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids = select(OpportunityScore.problem_cluster_id).where(
+        OpportunityScore.creator_id == creator_id
+    )
+    result = await session.execute(
+        select(Competitor).where(Competitor.problem_cluster_id.in_(cluster_ids))
+    )
+    return [CompetitorResponse.model_validate(c) for c in result.scalars().all()]
 
 
 # ── Decisions (Gate A) ───────────────────────────────────────────────

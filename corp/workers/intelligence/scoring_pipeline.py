@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.competitive import Competitor
 from corp.core.models.creator import CreatorPlatformAccount
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember
 from corp.core.models.intent import CommercialSignal, SignalLevel
@@ -115,6 +116,12 @@ class ScoringPipeline:
         )
         return result.scalar() or 0
 
+    async def _get_competitor_strengths(self, cluster_id: str) -> list:
+        result = await self._session.execute(
+            select(Competitor.strength).where(Competitor.problem_cluster_id == cluster_id)
+        )
+        return list(result.scalars().all())
+
     async def _score_opportunity(
         self,
         cluster: ProblemCluster,
@@ -127,6 +134,7 @@ class ScoringPipeline:
 
         signal_level = signal.signal_level if signal else SignalLevel.WEAK
         signal_confidence = signal.confidence if signal else 0.0
+        competitor_strengths = await self._get_competitor_strengths(cluster.id)
 
         components = {
             "audience_problem_frequency": score_audience_problem_frequency(cluster.frequency),
@@ -134,7 +142,7 @@ class ScoringPipeline:
             "commercial_intent_strength": score_commercial_intent(signal_level, signal_confidence),
             "evidence_depth": score_evidence_depth(member_count),
             "creator_reach": score_creator_reach(subscriber_count),
-            "competition_saturation": score_competition_saturation(),
+            "competition_saturation": score_competition_saturation(competitor_strengths),
         }
 
         aggregate = compute_score(components, self._weights)
