@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORP Dossier — {{ creator.name }}</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --fg: #212529; --muted: #6c757d;
+    --border: #dee2e6; --accent: #0d6efd; --success: #198754;
+    --warning: #ffc107; --danger: #dc3545;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--fg); line-height: 1.6;
+         max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 0.75rem; border-bottom: 2px solid var(--border); padding-bottom: 0.25rem; }
+  h3 { font-size: 1.05rem; margin: 1.25rem 0 0.5rem; }
+  .subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1rem; }
+  .meta-item { font-size: 0.9rem; }
+  .meta-label { color: var(--muted); font-size: 0.8rem; display: block; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.25rem;
+           font-size: 0.8rem; font-weight: 600; }
+  .badge-high { background: #d1e7dd; color: var(--success); }
+  .badge-medium { background: #fff3cd; color: #664d03; }
+  .badge-low { background: #f8d7da; color: var(--danger); }
+  .badge-insufficient { background: #e2e3e5; color: var(--muted); }
+  .badge-validation { background: #d1e7dd; color: var(--success); }
+  .badge-strong { background: #cfe2ff; color: var(--accent); }
+  .badge-moderate { background: #fff3cd; color: #664d03; }
+  .badge-weak { background: #f8d7da; color: var(--danger); }
+  blockquote { border-left: 3px solid var(--border); padding: 0.5rem 1rem;
+               margin: 0.5rem 0; background: #fff; font-style: italic;
+               font-size: 0.9rem; color: var(--muted); }
+  .evidence-source { font-size: 0.75rem; color: var(--muted); }
+  .score-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 0.25rem; }
+  .score-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .stub { color: var(--muted); font-style: italic; padding: 1rem; background: #fff;
+          border: 1px dashed var(--border); border-radius: 0.25rem; margin: 0.75rem 0; }
+  .generated-at { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border);
+                  font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>{{ creator.name }}</h1>
+<p class="subtitle">Creator Opportunity Research Dossier</p>
+
+<!-- ── Creator Overview ───────────────────────────────────────────── -->
+<h2>Creator Overview</h2>
+<div class="meta">
+  <div class="meta-item">
+    <span class="meta-label">Niche</span>
+    {{ creator.niche or "—" }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Discovery Source</span>
+    {{ creator.discovery_source or "—" }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Status</span>
+    {{ creator.status }}
+  </div>
+  {% for acct in platform_accounts %}
+  <div class="meta-item">
+    <span class="meta-label">{{ acct.platform | capitalize }}</span>
+    {{ acct.handle }}{% if acct.subscriber_count %} · {{ "{:,}".format(acct.subscriber_count) }} subscribers{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Aggregate Score ─────────────────────────────────────────────── -->
+{% if creator_score %}
+<h2>Overall Score</h2>
+<div class="meta">
+  <div class="meta-item">
+    <span class="meta-label">Aggregate</span>
+    <strong>{{ "%.2f"|format(creator_score.aggregate_score) }}</strong>
+    — {{ score_band }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Confidence</span>
+    <span class="badge badge-{{ creator_score.confidence_band.value }}">{{ creator_score.confidence_band.value | upper }}</span>
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Rule Version</span>
+    {{ creator_score.rule_version }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Hash</span>
+    <code>{{ creator_score.computed_hash[:12] }}…</code>
+  </div>
+</div>
+
+<h3>Component Breakdown</h3>
+<table>
+  <thead><tr><th>Dimension</th><th>Score</th><th>Weight</th><th></th></tr></thead>
+  <tbody>
+  {% for dim, value in creator_score.component_scores.items() %}
+  <tr>
+    <td>{{ dim | replace("_", " ") | title }}</td>
+    <td>{{ "%.3f"|format(value) }}</td>
+    <td>{{ weights.get(dim, 0) }}</td>
+    <td><div class="score-bar"><div class="score-fill" style="width:{{ (value * 100)|int }}%"></div></div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- ── Top Audience Problems ───────────────────────────────────────── -->
+<h2>Top Audience Problems</h2>
+{% if opportunities %}
+<table>
+  <thead><tr><th>#</th><th>Problem</th><th>Score</th><th>Intent</th><th>Frequency</th></tr></thead>
+  <tbody>
+  {% for opp in opportunities %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td><strong>{{ opp.cluster.label }}</strong><br><small>{{ opp.cluster.description or "" }}</small></td>
+    <td>{{ "%.2f"|format(opp.score.aggregate_score) }}</td>
+    <td>
+      {% if opp.signal %}
+      <span class="badge badge-{{ opp.signal.signal_level.value }}">{{ opp.signal.signal_level.value | upper }}</span>
+      {% else %}
+      <span class="badge badge-weak">NONE</span>
+      {% endif %}
+    </td>
+    <td>{{ opp.cluster.frequency }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- ── Evidence Drill-Down ──────────────────────────────────────── -->
+{% for opp in opportunities %}
+<h3>{{ loop.index }}. {{ opp.cluster.label }} — Evidence</h3>
+
+{% if opp.signal %}
+<p><strong>Intent:</strong>
+  <span class="badge badge-{{ opp.signal.signal_level.value }}">{{ opp.signal.signal_level.value | upper }}</span>
+  (confidence {{ "%.0f"|format((opp.signal.confidence or 0) * 100) }}%)
+  — {{ opp.signal.rationale or "No rationale" }}
+</p>
+{% endif %}
+
+{% if opp.observations %}
+{% for obs in opp.observations[:5] %}
+<blockquote>{{ obs.text }}</blockquote>
+<p class="evidence-source">Source: {{ obs.evidence_id }} · Confidence: {{ "%.0f"|format((obs.confidence or 0) * 100) }}%</p>
+{% endfor %}
+{% if opp.observations|length > 5 %}
+<p class="evidence-source">… and {{ opp.observations|length - 5 }} more observations</p>
+{% endif %}
+{% else %}
+<p class="evidence-source">No observations linked.</p>
+{% endif %}
+
+<h4>Score Breakdown</h4>
+<table>
+  <thead><tr><th>Dimension</th><th>Score</th></tr></thead>
+  <tbody>
+  {% for dim, value in opp.score.component_scores.items() %}
+  <tr>
+    <td>{{ dim | replace("_", " ") | title }}</td>
+    <td>{{ "%.3f"|format(value) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+
+{% else %}
+<p class="stub">No problem clusters found for this creator.</p>
+{% endif %}
+
+<!-- ── Commercial Intent Assessment ──────────────────────────────── -->
+<h2>Commercial Intent Assessment</h2>
+{% if signals %}
+<table>
+  <thead><tr><th>Problem</th><th>Signal</th><th>Confidence</th><th>Rationale</th></tr></thead>
+  <tbody>
+  {% for sig in signals %}
+  <tr>
+    <td>{{ sig.cluster_label }}</td>
+    <td><span class="badge badge-{{ sig.signal.signal_level.value }}">{{ sig.signal.signal_level.value | upper }}</span></td>
+    <td>{{ "%.0f"|format((sig.signal.confidence or 0) * 100) }}%</td>
+    <td>{{ sig.signal.rationale or "—" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="stub">No commercial signals classified yet.</p>
+{% endif %}
+
+<!-- ── Competitive Landscape (stub) ──────────────────────────────── -->
+<h2>Competitive Landscape</h2>
+<p class="stub">Competitive analysis will be available in Phase 5+.</p>
+
+<!-- ── Recommended Product Concepts (stub) ─────────────────────── -->
+<h2>Recommended Product Concepts</h2>
+<p class="stub">Product concept generation will be available in Phase 5+.</p>
+
+<!-- ── Confidence Assessment ──────────────────────────────────────── -->
+<h2>Confidence Assessment</h2>
+<div class="meta">
+  <div class="meta-item">
+    <span class="meta-label">Data Sources</span>
+    {{ data_coverage.source_count }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Total Evidence</span>
+    {{ data_coverage.evidence_count }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Problem Clusters</span>
+    {{ data_coverage.cluster_count }}
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Observations</span>
+    {{ data_coverage.observation_count }}
+  </div>
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<p class="generated-at">Generated {{ generated_at }} · CORP Creator Opportunity Research Platform</p>
+
+</body>
+</html>
