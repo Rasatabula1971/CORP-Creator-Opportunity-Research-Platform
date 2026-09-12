@@ -249,8 +249,19 @@ class YouTubeAdapter(SourceAdapter):
                     )
                 except HttpError as e:
                     if e.resp.status == 403:
-                        logger.warning("Comments disabled for video %s", video_id)
-                        return results
+                        reason = ""
+                        if hasattr(e, "error_details") and e.error_details:
+                            reason = str(e.error_details)
+                        elif hasattr(e, "reason"):
+                            reason = e.reason or ""
+                        if "commentsDisabled" in reason or "forbidden" in reason.lower():
+                            logger.warning("Comments disabled for video %s", video_id)
+                            return results
+                        logger.error(
+                            "HTTP 403 fetching comments for %s (not disabled): %s",
+                            video_id, reason,
+                        )
+                        raise
                     raise
 
                 for thread in resp.get("items", []):
@@ -276,7 +287,15 @@ class YouTubeAdapter(SourceAdapter):
                     )
                     remaining -= 1
 
-                    for reply in thread.get("replies", {}).get("comments", []):
+                    total_reply_count = thread["snippet"].get("totalReplyCount", 0)
+                    inline_replies = thread.get("replies", {}).get("comments", [])
+
+                    if total_reply_count > len(inline_replies):
+                        all_replies = self._fetch_all_replies(cid)
+                    else:
+                        all_replies = inline_replies
+
+                    for reply in all_replies:
                         r_snip = reply["snippet"]
                         r_pub = r_snip.get("publishedAt")
                         r_ts = (
@@ -307,16 +326,47 @@ class YouTubeAdapter(SourceAdapter):
 
         return await asyncio.to_thread(_fetch)
 
+    def _fetch_all_replies(self, parent_comment_id: str) -> list[dict]:
+        """Paginate through all replies for a comment thread."""
+        replies: list[dict] = []
+        page_token: str | None = None
+        while True:
+            kwargs: dict = {
+                "part": "snippet",
+                "parentId": parent_comment_id,
+                "maxResults": 100,
+                "textFormat": "plainText",
+            }
+            if page_token:
+                kwargs["pageToken"] = page_token
+            resp = self._execute(
+                self._service.comments().list(**kwargs), quota_cost=1
+            )
+            replies.extend(resp.get("items", []))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return replies
+
     async def get_captions(self, video_id: str) -> NormalizedContent | None:
         """Fetch transcript/captions for a video (no quota cost)."""
 
         def _fetch() -> NormalizedContent | None:
-            try:
-                from youtube_transcript_api import YouTubeTranscriptApi
+            from youtube_transcript_api import YouTubeTranscriptApi
+            from youtube_transcript_api._errors import (
+                TranscriptsDisabled,
+                NoTranscriptFound,
+                VideoUnavailable,
+            )
 
+            try:
                 api = YouTubeTranscriptApi()
                 transcript = api.fetch(video_id)
-                text = " ".join(snippet.text for snippet in transcript)
+                segments = [
+                    {"text": s.text, "start": s.start, "duration": s.duration}
+                    for s in transcript
+                ]
+                text = " ".join(s["text"] for s in segments)
                 return NormalizedContent(
                     source_platform="youtube",
                     content_type="caption",
@@ -325,9 +375,16 @@ class YouTubeAdapter(SourceAdapter):
                     parent_id=video_id,
                     access_method=self.access_method,
                     compliance_status=self.compliance_status,
+                    metadata={"segments": segments},
                 )
+            except (TranscriptsDisabled, NoTranscriptFound):
+                logger.debug("No captions available for video %s", video_id)
+                return None
+            except VideoUnavailable:
+                logger.warning("Video unavailable for captions: %s", video_id)
+                return None
             except Exception:
-                logger.debug("No captions for video %s", video_id)
+                logger.exception("Unexpected error fetching captions for %s", video_id)
                 return None
 
         return await asyncio.to_thread(_fetch)
@@ -338,12 +395,23 @@ class YouTubeAdapter(SourceAdapter):
         videos = await self.list_videos(channel_id)
         results: list[NormalizedContent] = list(videos)
 
-        for video in videos:
+        async def _collect_video_extras(video: NormalizedContent) -> list[NormalizedContent]:
+            extras: list[NormalizedContent] = []
             comments = await self.get_comment_threads(video.external_id)
-            results.extend(comments)
-
+            extras.extend(comments)
             caption = await self.get_captions(video.external_id)
             if caption:
-                results.append(caption)
+                extras.append(caption)
+            return extras
+
+        sem = asyncio.Semaphore(5)
+
+        async def _limited(video: NormalizedContent) -> list[NormalizedContent]:
+            async with sem:
+                return await _collect_video_extras(video)
+
+        batches = await asyncio.gather(*[_limited(v) for v in videos])
+        for batch in batches:
+            results.extend(batch)
 
         return results

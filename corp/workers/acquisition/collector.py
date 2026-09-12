@@ -92,17 +92,20 @@ class AcquisitionCollector:
         creator_id: str,
         research_run_id: str,
     ) -> None:
-        videos = [i for i in items if i.content_type == "video"]
-        comments = [i for i in items if i.content_type in ("comment", "reply")]
-        captions = [i for i in items if i.content_type == "caption"]
+        _CONTENT_TYPES = set(_CONTENT_TYPE_MAP.keys())
+        _INTERACTION_TYPES = set(_INTERACTION_TYPE_MAP.keys())
+
+        content_items = [i for i in items if i.content_type in _CONTENT_TYPES]
+        interactions = [i for i in items if i.content_type in _INTERACTION_TYPES]
+        evidence_only = [i for i in items if i.content_type not in _CONTENT_TYPES and i.content_type not in _INTERACTION_TYPES]
 
         content_map: dict[str, ContentItem] = {}
-        for item in videos:
+        for item in content_items:
             ci = await self._upsert_content_item(item, creator_id)
             content_map[item.external_id] = ci
-            await self._create_evidence(item, research_run_id)
+            await self._upsert_evidence(item, research_run_id)
 
-        for item in comments:
+        for item in interactions:
             ci = await self._find_content_item_for_interaction(
                 item, content_map
             )
@@ -115,10 +118,10 @@ class AcquisitionCollector:
                 continue
 
             await self._upsert_interaction(item, ci.id)
-            await self._create_evidence(item, research_run_id)
+            await self._upsert_evidence(item, research_run_id)
 
-        for item in captions:
-            await self._create_evidence(item, research_run_id)
+        for item in evidence_only:
+            await self._upsert_evidence(item, research_run_id)
 
     async def _upsert_content_item(
         self,
@@ -226,16 +229,29 @@ class AcquisitionCollector:
             creator.status = status
             await self._session.flush()
 
-    async def _create_evidence(
+    async def _upsert_evidence(
         self,
         item: NormalizedContent,
         research_run_id: str,
     ) -> Evidence:
+        result = await self._session.execute(
+            select(Evidence).where(
+                Evidence.source_id == item.external_id,
+                Evidence.source_platform == item.source_platform,
+                Evidence.research_run_id == research_run_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.raw_text = item.text or ""
+            await self._session.flush()
+            return existing
+
         evidence = Evidence(
             source_type=item.content_type,
             source_id=item.external_id,
             source_platform=item.source_platform,
-            raw_text=item.text[:10000] if item.text else "",
+            raw_text=item.text or "",
             author_handle=item.author,
             source_url=item.url,
             access_method=item.access_method,
