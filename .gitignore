@@ -39,3 +39,12 @@ web/dist/
 
 *.log
 .DS_Store
+
+# Graphify knowledge graph (local build artifacts)
+graphify-out/cost.json
+graphify-out/cache/
+.graphify_ast.json
+.graphify_cached.json
+.graphify_chunks.json
+.graphify_detect.json
+.graphify_semantic_parts/
