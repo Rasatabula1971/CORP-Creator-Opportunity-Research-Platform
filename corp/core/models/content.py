@@ -2,6 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -43,6 +44,7 @@ class ContentItem(TimestampMixin, Base):
     like_count: Mapped[int | None] = mapped_column(Integer)
     comment_count: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String(500))
+    topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     interactions: Mapped[list["AudienceInteraction"]] = relationship(
         back_populates="content_item", cascade="all, delete-orphan"
