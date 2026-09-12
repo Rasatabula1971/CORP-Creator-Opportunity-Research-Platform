@@ -70,13 +70,13 @@ class IntelligencePipeline:
 
     async def _extract_problems(self, creator_id: str, research_run_id: str) -> None:
         result = await self._session.execute(
-            select(AudienceInteraction, ContentItem.title)
+            select(AudienceInteraction, ContentItem.title, ContentItem.platform)
             .join(ContentItem, AudienceInteraction.content_item_id == ContentItem.id)
             .where(ContentItem.creator_id == creator_id)
         )
         rows = result.all()
 
-        for interaction, content_title in rows:
+        for interaction, content_title, platform in rows:
             evidence = await self._find_evidence(interaction.external_id)
             if evidence is None:
                 logger.warning(
@@ -90,7 +90,7 @@ class IntelligencePipeline:
                 comment_text=interaction.text,
                 author=interaction.author_handle,
                 content_title=content_title,
-                platform="youtube",
+                platform=platform,
             )
 
             for obs in observations:

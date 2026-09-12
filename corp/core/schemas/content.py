@@ -27,12 +27,14 @@ class ContentItemResponse(BaseModel):
     platform: str
     external_id: str
     title: str | None
+    description: str | None = None
     content_type: ContentType
     published_at: datetime | None
     view_count: int | None
     like_count: int | None
     comment_count: int | None
     url: str | None
+    topics: list | None = None
     created_at: datetime
 
 

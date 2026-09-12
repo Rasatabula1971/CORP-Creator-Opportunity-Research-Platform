@@ -101,7 +101,7 @@ class IntentPipeline:
         evidence = Evidence(
             source_type="intent_classification",
             source_id=cluster.id,
-            source_platform="gemini",
+            source_platform=self._provider.model_name,
             raw_text=classification.rationale,
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,

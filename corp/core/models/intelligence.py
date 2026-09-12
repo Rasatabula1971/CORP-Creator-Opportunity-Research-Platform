@@ -26,7 +26,7 @@ class ProblemObservation(TimestampMixin, Base):
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(
-        back_populates="observation"
+        back_populates="observation", cascade="all, delete-orphan"
     )
 
 

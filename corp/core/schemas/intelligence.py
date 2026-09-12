@@ -34,3 +34,4 @@ class ProblemClusterResponse(BaseModel):
     recency_score: float
     evidence_strength: float
     creator_count: int
+    model_version: str | None = None

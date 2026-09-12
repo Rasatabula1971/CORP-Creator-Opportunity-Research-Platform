@@ -1,7 +1,6 @@
 """API routes — CORP Step 8 endpoints."""
 
 import asyncio
-from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
@@ -208,11 +207,12 @@ async def create_decision(
 async def list_research_runs(
     creator_id: str | None = None,
     limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
     query = select(ResearchRun)
     if creator_id:
         query = query.where(ResearchRun.creator_id == creator_id)
-    query = query.order_by(ResearchRun.created_at.desc()).limit(limit)
+    query = query.order_by(ResearchRun.created_at.desc()).offset(offset).limit(limit)
     result = await session.execute(query)
     return [ResearchRunResponse.model_validate(r) for r in result.scalars().all()]

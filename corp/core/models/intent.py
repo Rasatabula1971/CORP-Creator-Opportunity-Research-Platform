@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Enum, Float, ForeignKey, String, Text
+from sqlalchemy import Enum, Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -15,6 +15,10 @@ class SignalLevel(str, enum.Enum):
 
 class CommercialSignal(TimestampMixin, Base):
     __tablename__ = "commercial_signals"
+    __table_args__ = (
+        Index("ix_signals_cluster_id", "problem_cluster_id"),
+        Index("ix_signals_evidence_id", "evidence_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     problem_cluster_id: Mapped[str] = mapped_column(

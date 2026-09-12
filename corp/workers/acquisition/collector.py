@@ -6,8 +6,6 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select as sa_select
-
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
@@ -105,10 +103,6 @@ class AcquisitionCollector:
             await self._create_evidence(item, research_run_id)
 
         for item in comments:
-            video_ext_id = item.parent_id
-            if item.content_type == "reply":
-                pass  # parent_id is the comment id, not the video id
-
             ci = await self._find_content_item_for_interaction(
                 item, content_map
             )
@@ -225,7 +219,7 @@ class AcquisitionCollector:
 
     async def _transition_status(self, creator_id: str, status: CreatorStatus) -> None:
         result = await self._session.execute(
-            sa_select(Creator).where(Creator.id == creator_id)
+            select(Creator).where(Creator.id == creator_id)
         )
         creator = result.scalars().first()
         if creator:
