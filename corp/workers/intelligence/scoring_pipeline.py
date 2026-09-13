@@ -59,9 +59,14 @@ class ScoringPipeline:
         await self._transition_status(creator_id, CreatorStatus.SCORING)
 
         try:
+            run.record_step("load_data", "running")
+            await self._session.flush()
             subscriber_count = await self._get_subscriber_count(creator_id)
             clusters = await self._load_clusters(creator_id)
+            run.record_step("load_data", "completed", detail={"cluster_count": len(clusters)})
 
+            run.record_step("score_opportunities", "running")
+            await self._session.flush()
             opp_scores: list[OpportunityScore] = []
             for cluster in clusters:
                 opp = await self._score_opportunity(
@@ -69,8 +74,12 @@ class ScoringPipeline:
                 )
                 if opp is not None:
                     opp_scores.append(opp)
+            run.record_step("score_opportunities", "completed", detail={"count": len(opp_scores)})
 
+            run.record_step("score_creator", "running")
+            await self._session.flush()
             await self._score_creator(creator_id, opp_scores, run.id)
+            run.record_step("score_creator", "completed")
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)

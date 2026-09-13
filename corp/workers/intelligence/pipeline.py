@@ -55,9 +55,17 @@ class IntelligencePipeline:
         await self._transition_status(creator_id, CreatorStatus.EXTRACTING)
 
         try:
+            run.record_step("extract_problems", "running")
+            await self._session.flush()
             await self._extract_problems(creator_id, run.id)
+            run.record_step("extract_problems", "completed")
+
+            run.record_step("classify_topics", "running")
+            await self._session.flush()
             topics = await self._classify_creator_topics(creator_id)
             await self._store_topics(creator_id, topics)
+            run.record_step("classify_topics", "completed", detail={"topic_count": len(topics)})
+
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
             await self._transition_status(creator_id, CreatorStatus.EXTRACTED)

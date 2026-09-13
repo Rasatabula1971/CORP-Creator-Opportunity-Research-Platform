@@ -25,6 +25,14 @@ class DecisionResponse(BaseModel):
     decided_by: str | None
 
 
+class PipelineStepResponse(BaseModel):
+    name: str
+    status: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    detail: dict | None = None
+
+
 class ResearchRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,4 +45,5 @@ class ResearchRunResponse(BaseModel):
     prompt_versions: dict | None
     model_versions: dict | None
     error_message: str | None
+    steps: list[PipelineStepResponse] | None = None
     created_at: datetime

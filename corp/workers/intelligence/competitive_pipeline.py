@@ -96,11 +96,17 @@ class CompetitivePipeline:
         await self._session.flush()
 
         try:
+            run.record_step("load_clusters", "running")
+            await self._session.flush()
             clusters = await self._load_clusters(creator_id)
             descriptions = await self._load_descriptions(creator_id)
+            run.record_step("load_clusters", "completed", detail={"count": len(clusters)})
 
+            run.record_step("discover_competitors", "running")
+            await self._session.flush()
             for cluster in clusters:
                 await self._discover_competitors(cluster, descriptions, run.id)
+            run.record_step("discover_competitors", "completed")
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)

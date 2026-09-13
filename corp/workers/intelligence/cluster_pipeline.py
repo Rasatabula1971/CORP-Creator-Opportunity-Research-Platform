@@ -68,26 +68,38 @@ class ClusterPipeline:
             await self._transition_status(creator_id, CreatorStatus.CLUSTERING)
 
         try:
+            run.record_step("load_observations", "running")
+            await self._session.flush()
             observations = await self._load_observations(creator_id)
             if not observations:
+                run.record_step("load_observations", "completed", detail={"count": 0})
                 run.status = "completed"
                 run.completed_at = datetime.now(timezone.utc)
                 await self._session.flush()
                 return run
+            run.record_step("load_observations", "completed", detail={"count": len(observations)})
 
+            run.record_step("embed", "running")
+            await self._session.flush()
             texts = [o.text for o in observations]
             embeddings = embed_texts(texts, self._embedder)
-
             await self._store_embeddings(observations, embeddings)
+            run.record_step("embed", "completed")
 
+            run.record_step("cluster", "running")
+            await self._session.flush()
             timestamps = await self._get_timestamps(observations)
             clusters = cluster_observations(
                 texts, embeddings, timestamps, self._config
             )
             await self._persist_clusters(observations, clusters, embeddings, model_name)
+            run.record_step("cluster", "completed", detail={"cluster_count": len(clusters)})
 
             if creator_id and clusters:
+                run.record_step("unify_topics", "running")
+                await self._session.flush()
                 await self._unify_topics(creator_id, clusters)
+                run.record_step("unify_topics", "completed")
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
