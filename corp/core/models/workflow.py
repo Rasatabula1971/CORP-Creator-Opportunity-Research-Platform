@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -58,3 +58,25 @@ class ResearchRun(TimestampMixin, Base):
     prompt_versions: Mapped[dict | None] = mapped_column(JSONB)
     model_versions: Mapped[dict | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
+    steps: Mapped[list | None] = mapped_column(JSONB, default=list)
+
+    def record_step(
+        self,
+        name: str,
+        status: str,
+        detail: dict | None = None,
+    ) -> None:
+        if self.steps is None:
+            self.steps = []
+        now = datetime.now(timezone.utc).isoformat()
+        for step in self.steps:
+            if step["name"] == name:
+                step["status"] = status
+                step["completed_at"] = now
+                if detail:
+                    step["detail"] = detail
+                return
+        entry: dict = {"name": name, "status": status, "started_at": now}
+        if detail:
+            entry["detail"] = detail
+        self.steps.append(entry)

@@ -1,33 +1,33 @@
 # Graph Report - CORP-Creator-Opportunity-Research-Platform  (2026-09-13)
 
 ## Corpus Check
-- 120 files · ~42,856 words
+- 117 files · ~42,014 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: (none) 4, .example 1, .ini 1)
 
 ## Summary
-- 1021 nodes · 2751 edges · 75 communities (39 shown, 6 thin omitted)
-- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 417 edges (avg confidence: 0.95)
+- 998 nodes · 2655 edges · 72 communities (36 shown, 7 thin omitted)
+- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 377 edges (avg confidence: 0.95)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ba46ff3a`
+- Built from commit: `0fbb2a40`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Creator
+- routes.py
 - CreatorStatus
 - test_scoring_engine.py
 - CORP Implementation Steps — Coding Roadmap
 - test_fair_provider.py
 - ConfidenceBand
-- ClusteringConfig
+- ClusterPipeline
 - test_endpoints.py
 - test_models_db.py
 - test_intelligence_pipeline.py
 - YouTubeAdapter
-- Evidence
+- test_intent_pipeline.py
 - test_intent_classifier.py
 - What You Must Do When Invoked
 - test_extraction.py
@@ -36,20 +36,20 @@
 - LLMProvider
 - CORP — CIP-Driven Build Design (Claude Code handoff) — v1.1
 - test_youtube_adapter.py
-- test_cluster_pipeline.py
+- .list_videos
 - test_topics.py
 - test_collector.py
 - embed_texts
 - clean_db
-- NormalizedContent
+- AcquisitionCollector
 - SignalLevel
 - load_yaml_rules
 - graphify reference: extra exports and benchmark
 - CORP Search-Before-Build Checklist
 - test_migration.py
 - graphify reference: query, path, explain
-- routes.py
-- cluster_observations
+- schemas/intelligence.py
+- _RateLimiter
 - graphify reference: add a URL and watch a folder
 - graphify reference: commit hook and native CLAUDE.md integration
 - graphify reference: incremental update and cluster-only
@@ -59,20 +59,18 @@
 - .claude/CLAUDE.md
 - extraction-spec.md
 - corp
-- ClusterPipeline
-- Embedder
 
 ## God Nodes (most connected - your core abstractions)
-1. `Creator` - 51 edges
-2. `SignalLevel` - 50 edges
-3. `ResearchRun` - 49 edges
-4. `Evidence` - 47 edges
-5. `ProblemObservation` - 45 edges
-6. `LLMProvider` - 45 edges
-7. `CreatorStatus` - 44 edges
-8. `AccessMethod` - 43 edges
-9. `ComplianceStatus` - 42 edges
-10. `ProblemCluster` - 40 edges
+1. `Creator` - 48 edges
+2. `SignalLevel` - 48 edges
+3. `ResearchRun` - 45 edges
+4. `LLMProvider` - 45 edges
+5. `CreatorStatus` - 44 edges
+6. `Evidence` - 44 edges
+7. `AccessMethod` - 43 edges
+8. `ComplianceStatus` - 42 edges
+9. `ProblemObservation` - 42 edges
+10. `ProblemCluster` - 39 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `FakeSignal` --uses--> `SignalLevel`  [INFERRED]
@@ -89,19 +87,19 @@
 ## Import Cycles
 - None detected.
 
-## Communities (75 total, 6 thin omitted)
+## Communities (72 total, 7 thin omitted)
 
-### Community 0 - "Creator"
+### Community 0 - "routes.py"
 Cohesion: 0.07
-Nodes (73): create_decision(), Base, generate_uuid(), TimestampMixin, Competitor, CompetitorType, An existing product/creator/workaround already serving a problem cluster's…, AudienceInteraction (+65 more)
+Nodes (76): create_decision(), get_competitors(), get_creator(), get_dossier(), get_evidence(), get_opportunities(), list_creators(), list_research_runs() (+68 more)
 
 ### Community 1 - "CreatorStatus"
-Cohesion: 0.23
-Nodes (21): CreatorStatus, str, Gate A logic — human review decisions with state machine transitions., InvalidTransitionError, Exception, validate_transition(), Unit tests for Gate A state transitions., test_decision_type_maps_to_status() (+13 more)
+Cohesion: 0.14
+Nodes (31): CreatorStatus, str, DecisionType, Gate, str, DecisionCreate, DecisionResponse, BaseModel (+23 more)
 
 ### Community 2 - "test_scoring_engine.py"
 Cohesion: 0.06
-Nodes (55): CompetitorStrength, str, compute_hash(), compute_score(), get_score_band(), load_scoring_rules(), Any, Higher = more whitespace (less saturated), matching the "higher is better"… (+47 more)
+Nodes (57): CompetitorStrength, str, compute_hash(), compute_score(), get_score_band(), load_scoring_rules(), Any, Higher = more whitespace (less saturated), matching the "higher is better"… (+49 more)
 
 ### Community 3 - "CORP Implementation Steps — Coding Roadmap"
 Cohesion: 0.04
@@ -112,32 +110,32 @@ Cohesion: 0.09
 Nodes (31): FairProvider, FairProviderError, AsyncClient, Exception, FAIR Free AI Router provider — governed multi-provider LLM backend., FAIR routing failed and no output was returned., LLM provider backed by a FAIR Free AI Router instance. Sends prompts to FAIR's…, accepted_provider() (+23 more)
 
 ### Community 5 - "ConfidenceBand"
-Cohesion: 0.37
-Nodes (11): ConfidenceBand, str, compute_confidence_band(), Confidence banding driven by YAML thresholds when provided. Args: thresholds:…, test_custom_thresholds_override_defaults(), test_high_confidence(), test_insufficient_low_evidence(), test_insufficient_no_sources() (+3 more)
+Cohesion: 0.26
+Nodes (14): ConfidenceBand, str, OpportunityScoreResponse, BaseModel, ScoreResponse, compute_confidence_band(), Confidence banding driven by YAML thresholds when provided. Args: thresholds:…, test_custom_thresholds_override_defaults() (+6 more)
 
-### Community 6 - "ClusteringConfig"
-Cohesion: 0.16
-Nodes (15): ClusteringConfig, _pick_representative(), Pick the longest text as the representative description., Tunable clustering parameters., _make_clustered_embeddings(), ndarray, Unit tests for clustering — uses synthetic embeddings with known structure., Generate synthetic embeddings with clear cluster structure. (+7 more)
+### Community 6 - "ClusterPipeline"
+Cohesion: 0.07
+Nodes (51): ClusterPipeline, AsyncSession, datetime, ndarray, Merge BERTopic cluster labels into the creator's ContentItem topics. Produces a…, Embeds ProblemObservations, clusters them, and persists results., Run clustering pipeline. Args: creator_id: Scope to a single creator, or None…, _build_clusters() (+43 more)
 
 ### Community 7 - "test_endpoints.py"
 Cohesion: 0.18
 Nodes (28): BaseSettings, create_app(), _get_cors_origins(), FastAPI application factory., Settings, get_session(), AsyncSession, FastAPI (+20 more)
 
 ### Community 8 - "test_models_db.py"
-Cohesion: 0.19
-Nodes (30): ContentType, InteractionType, str, ContentItemCreate, ContentItemResponse, InteractionCreate, InteractionResponse, BaseModel (+22 more)
+Cohesion: 0.13
+Nodes (39): ContentType, InteractionType, str, ContentItemCreate, ContentItemResponse, InteractionCreate, InteractionResponse, BaseModel (+31 more)
 
 ### Community 9 - "test_intelligence_pipeline.py"
 Cohesion: 0.11
 Nodes (22): IntelligencePipeline, AsyncSession, Extract observations from a group of comments in batches., Pick the best evidence row for a batch-extracted observation., Load the most recent Evidence row for each external_id., Runs extraction + topic classification for a creator's collected data., Run intelligence pipeline for a creator. Loads all interactions + evidence,…, FakeProvider (+14 more)
 
 ### Community 10 - "YouTubeAdapter"
-Cohesion: 0.08
-Nodes (22): _parse_duration(), datetime, _RateLimiter, Resolve a channel handle (e.g. '@mkbhd') to a channel ID., List videos from a channel's uploads playlist., Get comment threads (top-level + replies) for a video., Parse ISO 8601 duration (e.g. 'PT4M13S') to total seconds., Paginate through all replies for a comment thread. (+14 more)
+Cohesion: 0.10
+Nodes (18): Exception, QuotaExceededError, Resolve a channel handle (e.g. '@mkbhd') to a channel ID., Get comment threads (top-level + replies) for a video., Raised when YouTube API daily quota would be exceeded., Paginate through all replies for a comment thread., Fetch transcript/captions for a video (no quota cost)., Fetch channel-level statistics, snippet, and branding. (+10 more)
 
-### Community 11 - "Evidence"
-Cohesion: 0.15
-Nodes (19): create_evidence(), AsyncSession, Evidence, Append-only evidence store. No UPDATE or DELETE — ever., IntentPipeline, Classifies commercial intent for each ProblemCluster., Run intent classification for all clusters. Args: creator_id: Scope to clusters…, FakeProvider (+11 more)
+### Community 11 - "test_intent_pipeline.py"
+Cohesion: 0.16
+Nodes (16): IntentPipeline, AsyncSession, Classifies commercial intent for each ProblemCluster., Run intent classification for all clusters. Args: creator_id: Scope to clusters…, FakeProvider, asyncio, AsyncSession, Integration tests for IntentPipeline against real Postgres. (+8 more)
 
 ### Community 12 - "test_intent_classifier.py"
 Cohesion: 0.14
@@ -153,47 +151,47 @@ Nodes (20): extract_observations(), extract_observations_batch(), ExtractedObser
 
 ### Community 15 - "AccessMethod"
 Cohesion: 0.17
-Nodes (16): BaseException, AccessMethod, ComplianceStatus, str, EvidenceCreate, EvidenceResponse, BaseModel, ABC (+8 more)
+Nodes (17): BaseException, create_evidence(), AsyncSession, AccessMethod, ComplianceStatus, str, NormalizedContent, ABC (+9 more)
 
 ### Community 16 - "test_dossier_generator.py"
 Cohesion: 0.26
 Nodes (23): FakeAccount, FakeCluster, FakeCompetitor, FakeCreator, FakeCreatorScore, FakeDataCoverage, FakeObservation, FakeOpportunity (+15 more)
 
 ### Community 17 - "LLMProvider"
-Cohesion: 0.11
-Nodes (14): AsyncSession, AsyncSession, GeminiProvider, LLMProvider, ABC, LLM provider abstraction with deterministic call logging., Abstract LLM provider with JSON-mode generation., Google Gemini provider using the free tier. (+6 more)
+Cohesion: 0.12
+Nodes (13): AsyncSession, GeminiProvider, LLMProvider, ABC, LLM provider abstraction with deterministic call logging., Abstract LLM provider with JSON-mode generation., Google Gemini provider using the free tier., _response_hash() (+5 more)
 
 ### Community 18 - "CORP — CIP-Driven Build Design (Claude Code handoff) — v1.1"
 Cohesion: 0.10
 Nodes (20): 0. What "using CIP" means here, 1. Two findings before you build, 2. Capability decomposition + reuse verdicts, 3. Prior art — five candidate repos (search-before-build gate, executed), 4. The headline: CORP and CIP share DNA, 5. Repo skeleton (respects your import-linter discipline), 6. Recommended v1 build sequence (thin slice, N=1, YouTube-only), 7. Phase 0 source-capability matrix (pre-filled — don't restart from zero) (+12 more)
 
 ### Community 19 - "test_youtube_adapter.py"
-Cohesion: 0.15
-Nodes (21): Exception, QuotaExceededError, Raised when YouTube API daily quota would be exceeded., _comment_threads_response(), _make_adapter(), _playlist_items_response(), Unit tests for the YouTube adapter — all API calls mocked., test_collect_full_flow() (+13 more)
+Cohesion: 0.19
+Nodes (18): _comment_threads_response(), _make_adapter(), _playlist_items_response(), Unit tests for the YouTube adapter — all API calls mocked., test_collect_full_flow(), test_get_captions(), test_get_captions_unavailable(), test_get_comment_threads() (+10 more)
 
-### Community 20 - "test_cluster_pipeline.py"
-Cohesion: 0.27
-Nodes (14): FakeEmbedder, asyncio, AsyncSession, ndarray, Integration tests for ClusterPipeline against real Postgres., Returns embeddings with clear cluster structure for testing., Create a creator with multiple ProblemObservation groups., _seed_observations() (+6 more)
+### Community 20 - ".list_videos"
+Cohesion: 0.33
+Nodes (5): _parse_duration(), datetime, List videos from a channel's uploads playlist., Parse ISO 8601 duration (e.g. 'PT4M13S') to total seconds., _list()
 
 ### Community 21 - "test_topics.py"
 Cohesion: 0.17
 Nodes (12): classify_topics(), Topic classification for creator content via LLM., Classify a creator's content into topics. Args: provider: LLM provider…, FailingProvider, FakeProvider, Unit tests for topic classification — LLM calls mocked., test_classify_topics_basic(), test_classify_topics_clamps_confidence() (+4 more)
 
 ### Community 22 - "test_collector.py"
-Cohesion: 0.22
+Cohesion: 0.19
 Nodes (14): _create_creator(), FakeAdapter, asyncio, AsyncSession, Integration tests for AcquisitionCollector against real Postgres., Adapter returning canned NormalizedContent items., Running collection twice should not create duplicate ContentItems., If the adapter raises, the ResearchRun is marked failed. (+6 more)
 
 ### Community 23 - "embed_texts"
-Cohesion: 0.19
-Nodes (12): embed_texts(), Embedding generation for ProblemObservation text using sentence-transformers., Embed a list of texts in batches. Returns an (N, EMBEDDING_DIM) float32 array., FakeEmbedder, ndarray, Unit tests for embeddings module — no model download needed., Deterministic embedder returning fixed-dimension vectors., test_embed_texts_basic() (+4 more)
+Cohesion: 0.11
+Nodes (18): embed_texts(), Embedder, ndarray, Embedding generation for ProblemObservation text using sentence-transformers., Protocol for anything that can embed text into vectors., Production embedder using sentence-transformers (local, free)., Embed a list of texts in batches. Returns an (N, EMBEDDING_DIM) float32 array., SentenceTransformerEmbedder (+10 more)
 
 ### Community 24 - "clean_db"
 Cohesion: 0.40
 Nodes (5): clean_db(), db_session(), AsyncSession, fixture, Truncate all tables before a test, then yield a fresh session.
 
-### Community 25 - "NormalizedContent"
-Cohesion: 0.17
-Nodes (9): AcquisitionCollector, AsyncSession, Find the ContentItem a comment/reply belongs to., Update CreatorPlatformAccount with channel-level metadata., Persists adapter output into ContentItem, AudienceInteraction, and Evidence…, Collect all data for a creator and persist to DB. Args: identifier: Platform-…, NormalizedContent, BaseModel (+1 more)
+### Community 25 - "AcquisitionCollector"
+Cohesion: 0.20
+Nodes (6): AcquisitionCollector, AsyncSession, Find the ContentItem a comment/reply belongs to., Update CreatorPlatformAccount with channel-level metadata., Persists adapter output into ContentItem, AudienceInteraction, and Evidence…, Collect all data for a creator and persist to DB. Args: identifier: Platform-…
 
 ### Community 27 - "SignalLevel"
 Cohesion: 0.19
@@ -219,13 +217,9 @@ Nodes (6): CompletedProcess, Test that Alembic migrations run clean up and down.
 Cohesion: 0.33
 Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
 
-### Community 34 - "routes.py"
-Cohesion: 0.11
-Nodes (42): get_clusters(), get_competitors(), get_creator(), get_dossier(), get_dossier_json(), get_evidence(), get_observations(), get_opportunities() (+34 more)
-
-### Community 35 - "cluster_observations"
-Cohesion: 0.19
-Nodes (15): _build_clusters(), cluster_observations(), ClusterResult, _fit_bertopic(), get_topic_labels(), datetime, ndarray, Problem observation clustering via BERTopic (UMAP + HDBSCAN + c-TF-IDF). (+7 more)
+### Community 34 - "schemas/intelligence.py"
+Cohesion: 0.60
+Nodes (4): ProblemClusterResponse, ProblemObservationCreate, ProblemObservationResponse, BaseModel
 
 ### Community 36 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -239,33 +233,25 @@ Nodes (3): For git commit hook, For native CLAUDE.md integration, graphify refer
 Cohesion: 0.50
 Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
 
-### Community 72 - "ClusterPipeline"
-Cohesion: 0.24
-Nodes (6): ClusterPipeline, datetime, ndarray, Merge BERTopic cluster labels into the creator's ContentItem topics. Produces a…, Embeds ProblemObservations, clusters them, and persists results., Run clustering pipeline. Args: creator_id: Scope to a single creator, or None…
-
-### Community 73 - "Embedder"
-Cohesion: 0.17
-Nodes (7): AsyncSession, Embedder, ndarray, Protocol for anything that can embed text into vectors., Production embedder using sentence-transformers (local, free)., SentenceTransformerEmbedder, Protocol
-
 ## Knowledge Gaps
 - **105 isolated node(s):** `corp`, `FakeCluster`, `FakeOppScore`, `FakeObservation`, `graphify` (+100 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 373 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 369 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `LLMProvider` connect `LLMProvider` to `Creator`, `test_fair_provider.py`, `test_intelligence_pipeline.py`, `Evidence`, `test_intent_classifier.py`, `test_extraction.py`, `AccessMethod`, `test_topics.py`, `SignalLevel`?**
-  _High betweenness centrality (0.113) - this node is a cross-community bridge._
-- **Why does `ComplianceStatus` connect `AccessMethod` to `Creator`, `test_endpoints.py`, `test_models_db.py`, `test_intelligence_pipeline.py`, `YouTubeAdapter`, `Evidence`, `test_cluster_pipeline.py`, `test_collector.py`, `NormalizedContent`?**
-  _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **Why does `AccessMethod` connect `AccessMethod` to `Creator`, `test_endpoints.py`, `test_models_db.py`, `test_intelligence_pipeline.py`, `YouTubeAdapter`, `Evidence`, `test_cluster_pipeline.py`, `test_collector.py`, `NormalizedContent`?**
-  _High betweenness centrality (0.060) - this node is a cross-community bridge._
-- **Are the 17 inferred relationships involving `Creator` (e.g. with `create_decision()` and `get_clusters()`) actually correct?**
-  _`Creator` has 17 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 31 inferred relationships involving `SignalLevel` (e.g. with `CommercialSignalResponse` and `score_commercial_intent()`) actually correct?**
-  _`SignalLevel` has 31 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 17 inferred relationships involving `ResearchRun` (e.g. with `get_clusters()` and `get_evidence()`) actually correct?**
-  _`ResearchRun` has 17 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 13 inferred relationships involving `Evidence` (e.g. with `get_clusters()` and `get_evidence()`) actually correct?**
-  _`Evidence` has 13 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `LLMProvider` connect `LLMProvider` to `routes.py`, `test_fair_provider.py`, `test_intelligence_pipeline.py`, `test_intent_pipeline.py`, `test_intent_classifier.py`, `test_extraction.py`, `test_topics.py`, `SignalLevel`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+- **Why does `SignalLevel` connect `SignalLevel` to `routes.py`, `test_scoring_engine.py`, `test_endpoints.py`, `test_models_db.py`, `test_intent_pipeline.py`, `test_intent_classifier.py`, `test_dossier_generator.py`?**
+  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+- **Why does `AccessMethod` connect `AccessMethod` to `routes.py`, `ClusterPipeline`, `test_endpoints.py`, `test_models_db.py`, `test_intelligence_pipeline.py`, `YouTubeAdapter`, `test_intent_pipeline.py`, `test_collector.py`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **Are the 14 inferred relationships involving `Creator` (e.g. with `create_decision()` and `get_competitors()`) actually correct?**
+  _`Creator` has 14 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 30 inferred relationships involving `SignalLevel` (e.g. with `score_commercial_intent()` and `IntentClassification`) actually correct?**
+  _`SignalLevel` has 30 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 14 inferred relationships involving `ResearchRun` (e.g. with `get_evidence()` and `list_research_runs()`) actually correct?**
+  _`ResearchRun` has 14 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 12 inferred relationships involving `LLMProvider` (e.g. with `CompetitivePipeline` and `extract_observations()`) actually correct?**
+  _`LLMProvider` has 12 INFERRED edges - model-reasoned connections that need verification._

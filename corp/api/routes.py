@@ -3,12 +3,12 @@
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from corp.core.models.competitive import Competitor
-from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -17,11 +17,26 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
+from corp.core.models.workflow import ResearchRun
 from corp.core.schemas.competitive import CompetitorResponse
-from corp.core.schemas.creator import CreatorDetailResponse, CreatorResponse, PlatformAccountResponse
+from corp.core.schemas.creator import (
+    CreatorDetailResponse,
+    CreatorResponse,
+    PlatformAccountResponse,
+)
+from corp.core.schemas.dossier import (
+    DataCoverageResponse,
+    DossierCreatorResponse,
+    DossierOpportunityResponse,
+    DossierPlatformAccountResponse,
+    DossierResponse,
+    DossierScoreResponse,
+    DossierSignalResponse,
+)
 from corp.core.schemas.evidence import EvidenceResponse
-from corp.core.schemas.scoring import OpportunityScoreResponse, ScoreResponse
+from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
+from corp.core.schemas.intent import CommercialSignalResponse
+from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionCreate, DecisionResponse, ResearchRunResponse
 from corp.core.state.gates import record_gate_a_decision
 from corp.core.state.machine import InvalidTransitionError
@@ -95,6 +110,59 @@ async def get_dossier(
     except ValueError:
         raise HTTPException(status_code=404, detail="Creator not found")
     return Response(content=html, media_type="text/html")
+
+
+@router.get("/creators/{creator_id}/dossier.json", response_model=DossierResponse)
+async def get_dossier_json(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    loop = asyncio.get_running_loop()
+    gen = await loop.run_in_executor(None, lambda: DossierGenerator(session))
+    try:
+        data = await gen.generate_data(creator_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    opportunities = []
+    for opp in data.opportunities:
+        opportunities.append(DossierOpportunityResponse(
+            cluster=ProblemClusterResponse.model_validate(opp.cluster),
+            score=OpportunityScoreResponse.model_validate(opp.score),
+            signal=CommercialSignalResponse.model_validate(opp.signal) if opp.signal else None,
+            observations=[ProblemObservationResponse.model_validate(o) for o in opp.observations],
+            competitors=[CompetitorResponse.model_validate(c) for c in opp.competitors],
+        ))
+
+    signals = [
+        DossierSignalResponse(
+            cluster_label=s.cluster_label,
+            signal=CommercialSignalResponse.model_validate(s.signal),
+        )
+        for s in data.signals
+    ]
+
+    return DossierResponse(
+        creator=DossierCreatorResponse.model_validate(data.creator),
+        platform_accounts=[
+            DossierPlatformAccountResponse.model_validate(a) for a in data.platform_accounts
+        ],
+        creator_score=DossierScoreResponse.model_validate(data.creator_score)
+        if data.creator_score
+        else None,
+        score_band=data.score_band,
+        weights=data.weights,
+        opportunities=opportunities,
+        signals=signals,
+        data_coverage=DataCoverageResponse(
+            source_count=data.data_coverage.source_count,
+            evidence_count=data.data_coverage.evidence_count,
+            cluster_count=data.data_coverage.cluster_count,
+            observation_count=data.data_coverage.observation_count,
+            competitor_count=data.data_coverage.competitor_count,
+        ),
+        generated_at=data.generated_at,
+    )
 
 
 # ── Evidence ─────────────────────────────────────────────────────────
@@ -198,6 +266,106 @@ async def create_decision(
 
     await session.commit()
     return DecisionResponse.model_validate(decision)
+
+
+# ── Clusters ─────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/clusters",
+    response_model=list[ProblemClusterResponse],
+)
+async def get_clusters(
+    creator_id: str,
+    limit: int = Query(default=50, le=200),
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids_subq = (
+        select(ProblemClusterMember.cluster_id)
+        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
+        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
+        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+        .where(ResearchRun.creator_id == creator_id)
+        .distinct()
+    )
+    result = await session.execute(
+        select(ProblemCluster)
+        .where(ProblemCluster.id.in_(cluster_ids_subq))
+        .order_by(ProblemCluster.frequency.desc())
+        .limit(limit)
+    )
+    return [ProblemClusterResponse.model_validate(c) for c in result.scalars().all()]
+
+
+# ── Observations ─────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/observations",
+    response_model=list[ProblemObservationResponse],
+)
+async def get_observations(
+    creator_id: str,
+    category: str | None = None,
+    urgency: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    run_ids = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
+    evidence_ids = select(Evidence.id).where(Evidence.research_run_id.in_(run_ids))
+
+    query = (
+        select(ProblemObservation)
+        .where(ProblemObservation.evidence_id.in_(evidence_ids))
+    )
+    if category:
+        query = query.where(ProblemObservation.category == category)
+    if urgency:
+        query = query.where(ProblemObservation.urgency == urgency)
+
+    query = query.order_by(ProblemObservation.confidence.desc()).offset(offset).limit(limit)
+    result = await session.execute(query)
+    return [ProblemObservationResponse.model_validate(o) for o in result.scalars().all()]
+
+
+# ── Signals ──────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/signals",
+    response_model=list[CommercialSignalResponse],
+)
+async def get_signals(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids_subq = (
+        select(ProblemClusterMember.cluster_id)
+        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
+        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
+        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+        .where(ResearchRun.creator_id == creator_id)
+        .distinct()
+    )
+    result = await session.execute(
+        select(CommercialSignal)
+        .where(CommercialSignal.problem_cluster_id.in_(cluster_ids_subq))
+        .order_by(CommercialSignal.confidence.desc())
+    )
+    return [CommercialSignalResponse.model_validate(s) for s in result.scalars().all()]
 
 
 # ── Research Runs ────────────────────────────────────────────────────

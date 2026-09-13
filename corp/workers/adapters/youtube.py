@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -23,6 +24,15 @@ logger = logging.getLogger(__name__)
 
 class QuotaExceededError(Exception):
     """Raised when YouTube API daily quota would be exceeded."""
+
+
+def _parse_duration(iso_duration: str) -> int:
+    """Parse ISO 8601 duration (e.g. 'PT4M13S') to total seconds."""
+    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso_duration or "")
+    if not match:
+        return 0
+    h, m, s = (int(g or 0) for g in match.groups())
+    return h * 3600 + m * 60 + s
 
 
 def _is_retryable_http_error(exc: BaseException) -> bool:
@@ -177,22 +187,34 @@ class YouTubeAdapter(SourceAdapter):
             if not video_ids:
                 return []
 
-            stats: dict[str, dict] = {}
+            video_details: dict[str, dict] = {}
             for i in range(0, len(video_ids), 50):
                 batch = video_ids[i : i + 50]
                 resp = self._execute(
                     self._service.videos().list(
-                        part="statistics", id=",".join(batch)
+                        part="statistics,contentDetails,snippet",
+                        id=",".join(batch),
                     ),
                     quota_cost=1,
                 )
                 for item in resp.get("items", []):
-                    stats[item["id"]] = item.get("statistics", {})
+                    video_details[item["id"]] = item
 
             results: list[NormalizedContent] = []
             for vid_id in video_ids:
                 snip = snippets[vid_id]
-                st = stats.get(vid_id, {})
+                detail = video_details.get(vid_id, {})
+                st = detail.get("statistics", {})
+                cd = detail.get("contentDetails", {})
+                vid_snip = detail.get("snippet", {})
+
+                duration = _parse_duration(cd.get("duration", ""))
+                tags = vid_snip.get("tags", [])
+                language = (
+                    vid_snip.get("defaultAudioLanguage")
+                    or vid_snip.get("defaultLanguage")
+                )
+
                 pub = snip.get("publishedAt")
                 ts = datetime.fromisoformat(pub.replace("Z", "+00:00")) if pub else None
 
@@ -213,6 +235,11 @@ class YouTubeAdapter(SourceAdapter):
                             "like_count": int(st.get("likeCount", 0)),
                             "comment_count": int(st.get("commentCount", 0)),
                             "channel_id": snip.get("channelId"),
+                            "duration": duration,
+                            "tags": tags,
+                            "language": language,
+                            "is_short": 0 < duration <= 60,
+                            "definition": cd.get("definition"),
                         },
                     )
                 )
@@ -282,7 +309,12 @@ class YouTubeAdapter(SourceAdapter):
                             parent_id=video_id,
                             access_method=self.access_method,
                             compliance_status=self.compliance_status,
-                            metadata={"like_count": top_snip.get("likeCount", 0)},
+                            metadata={
+                                "like_count": top_snip.get("likeCount", 0),
+                                "author_channel_id": top_snip.get(
+                                    "authorChannelId", {}
+                                ).get("value"),
+                            },
                         )
                     )
                     remaining -= 1
@@ -314,7 +346,12 @@ class YouTubeAdapter(SourceAdapter):
                                 parent_id=cid,
                                 access_method=self.access_method,
                                 compliance_status=self.compliance_status,
-                                metadata={"like_count": r_snip.get("likeCount", 0)},
+                                metadata={
+                                    "like_count": r_snip.get("likeCount", 0),
+                                    "author_channel_id": r_snip.get(
+                                        "authorChannelId", {}
+                                    ).get("value"),
+                                },
                             )
                         )
 
@@ -389,11 +426,52 @@ class YouTubeAdapter(SourceAdapter):
 
         return await asyncio.to_thread(_fetch)
 
+    async def get_channel_info(self, channel_id: str) -> dict:
+        """Fetch channel-level statistics, snippet, and branding."""
+
+        def _fetch() -> dict:
+            req = self._service.channels().list(
+                part="statistics,snippet,brandingSettings", id=channel_id
+            )
+            resp = self._execute(req, quota_cost=1)
+            if not resp.get("items"):
+                return {}
+            item = resp["items"][0]
+            st = item.get("statistics", {})
+            snip = item.get("snippet", {})
+            joined = snip.get("publishedAt")
+            return {
+                "subscriber_count": int(st.get("subscriberCount", 0)),
+                "total_view_count": int(st.get("viewCount", 0)),
+                "video_count": int(st.get("videoCount", 0)),
+                "country": snip.get("country"),
+                "description": snip.get("description"),
+                "joined_at": joined,
+            }
+
+        return await asyncio.to_thread(_fetch)
+
     async def collect(self, identifier: str) -> list[NormalizedContent]:
         """Full collection: channel handle → videos + comments + captions."""
         channel_id = await self.resolve_channel(identifier)
+
+        channel_info = await self.get_channel_info(channel_id)
+        results: list[NormalizedContent] = []
+        if channel_info:
+            results.append(
+                NormalizedContent(
+                    source_platform="youtube",
+                    content_type="channel_metadata",
+                    external_id=channel_id,
+                    text="",
+                    access_method=self.access_method,
+                    compliance_status=self.compliance_status,
+                    metadata=channel_info,
+                )
+            )
+
         videos = await self.list_videos(channel_id)
-        results: list[NormalizedContent] = list(videos)
+        results.extend(videos)
 
         async def _collect_video_extras(video: NormalizedContent) -> list[NormalizedContent]:
             extras: list[NormalizedContent] = []

@@ -7,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
-from corp.core.models.creator import Creator, CreatorStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.evidence import Evidence
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 
@@ -92,12 +92,22 @@ class AcquisitionCollector:
         creator_id: str,
         research_run_id: str,
     ) -> None:
-        _CONTENT_TYPES = set(_CONTENT_TYPE_MAP.keys())
-        _INTERACTION_TYPES = set(_INTERACTION_TYPE_MAP.keys())
+        content_types = set(_CONTENT_TYPE_MAP.keys())
+        interaction_types = set(_INTERACTION_TYPE_MAP.keys())
+        meta_types = {"channel_metadata"}
 
-        content_items = [i for i in items if i.content_type in _CONTENT_TYPES]
-        interactions = [i for i in items if i.content_type in _INTERACTION_TYPES]
-        evidence_only = [i for i in items if i.content_type not in _CONTENT_TYPES and i.content_type not in _INTERACTION_TYPES]
+        for item in items:
+            if item.content_type in meta_types:
+                await self._update_platform_account(item, creator_id)
+
+        content_items = [i for i in items if i.content_type in content_types]
+        interactions = [i for i in items if i.content_type in interaction_types]
+        evidence_only = [
+            i for i in items
+            if i.content_type not in content_types
+            and i.content_type not in interaction_types
+            and i.content_type not in meta_types
+        ]
 
         content_map: dict[str, ContentItem] = {}
         for item in content_items:
@@ -128,6 +138,7 @@ class AcquisitionCollector:
         item: NormalizedContent,
         creator_id: str,
     ) -> ContentItem:
+        meta = item.metadata or {}
         result = await self._session.execute(
             select(ContentItem).where(
                 ContentItem.platform == item.source_platform,
@@ -136,21 +147,29 @@ class AcquisitionCollector:
         )
         existing = result.scalar_one_or_none()
         if existing:
+            existing.view_count = meta.get("view_count", existing.view_count)
+            existing.like_count = meta.get("like_count", existing.like_count)
+            existing.comment_count = meta.get("comment_count", existing.comment_count)
+            await self._session.flush()
             return existing
 
         ct = _CONTENT_TYPE_MAP.get(item.content_type, ContentType.VIDEO)
-        meta = item.metadata or {}
         ci = ContentItem(
             creator_id=creator_id,
             platform=item.source_platform,
             external_id=item.external_id,
             title=item.text[:500] if item.text else None,
+            description=meta.get("description"),
             content_type=ct,
             published_at=item.timestamp,
             view_count=meta.get("view_count"),
             like_count=meta.get("like_count"),
             comment_count=meta.get("comment_count"),
             url=item.url,
+            duration=meta.get("duration"),
+            tags=meta.get("tags"),
+            language=meta.get("language"),
+            is_short=meta.get("is_short"),
         )
         self._session.add(ci)
         await self._session.flush()
@@ -211,6 +230,7 @@ class AcquisitionCollector:
             external_id=item.external_id,
             text=item.text,
             author_handle=item.author,
+            author_channel_id=meta.get("author_channel_id"),
             interaction_type=it,
             posted_at=item.timestamp,
             like_count=meta.get("like_count"),
@@ -228,6 +248,41 @@ class AcquisitionCollector:
         if creator:
             creator.status = status
             await self._session.flush()
+
+    async def _update_platform_account(
+        self,
+        item: NormalizedContent,
+        creator_id: str,
+    ) -> None:
+        """Update CreatorPlatformAccount with channel-level metadata."""
+        meta = item.metadata or {}
+        result = await self._session.execute(
+            select(CreatorPlatformAccount).where(
+                CreatorPlatformAccount.creator_id == creator_id,
+                CreatorPlatformAccount.platform == item.source_platform,
+            )
+        )
+        account = result.scalar_one_or_none()
+        if not account:
+            return
+        if meta.get("subscriber_count"):
+            account.subscriber_count = meta["subscriber_count"]
+        if meta.get("total_view_count"):
+            account.total_view_count = meta["total_view_count"]
+        if meta.get("video_count"):
+            account.video_count = meta["video_count"]
+        if meta.get("country"):
+            account.country = meta["country"]
+        if meta.get("description"):
+            account.description = meta["description"][:5000] if meta["description"] else None
+        if meta.get("joined_at"):
+            from datetime import datetime as dt
+            joined = meta["joined_at"]
+            if isinstance(joined, str):
+                account.joined_at = dt.fromisoformat(joined.replace("Z", "+00:00"))
+            else:
+                account.joined_at = joined
+        await self._session.flush()
 
     async def _upsert_evidence(
         self,
