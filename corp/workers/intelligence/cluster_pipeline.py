@@ -1,4 +1,4 @@
-"""Clustering pipeline — embed observations, cluster, persist to DB."""
+"""Clustering pipeline — embed observations, cluster, persist to DB, unify topics."""
 
 import logging
 from datetime import datetime, timezone
@@ -7,6 +7,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.content import ContentItem
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
@@ -20,7 +21,7 @@ from corp.workers.intelligence.clustering import (
     ClusterResult,
     cluster_observations,
 )
-from corp.workers.intelligence.embeddings import EMBEDDING_DIM, Embedder, embed_texts
+from corp.workers.intelligence.embeddings import Embedder, embed_texts
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ class ClusterPipeline:
                 texts, embeddings, timestamps, self._config
             )
             await self._persist_clusters(observations, clusters, embeddings, model_name)
+
+            if creator_id and clusters:
+                await self._unify_topics(creator_id, clusters)
 
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
@@ -176,3 +180,55 @@ class ClusterPipeline:
                 self._session.add(member)
 
             await self._session.flush()
+
+    async def _unify_topics(
+        self,
+        creator_id: str,
+        clusters: list[ClusterResult],
+    ) -> None:
+        """Merge BERTopic cluster labels into the creator's ContentItem topics.
+
+        Produces a unified topic list: cluster-derived topics (with frequency
+        and evidence strength) are merged with any existing LLM-classified
+        topics, deduplicating by similarity.
+        """
+        result = await self._session.execute(
+            select(ContentItem).where(ContentItem.creator_id == creator_id)
+        )
+        content_items = result.scalars().all()
+        if not content_items:
+            return
+
+        cluster_topics = []
+        for cr in clusters:
+            cluster_topics.append({
+                "name": cr.label,
+                "confidence": round(cr.evidence_strength, 2),
+                "evidence_count": cr.frequency,
+                "source": "cluster",
+            })
+
+        cluster_topics.sort(key=lambda t: t["evidence_count"], reverse=True)
+
+        existing_topics = content_items[0].topics if content_items[0].topics else []
+
+        unified = list(cluster_topics)
+        cluster_names_lower = {t["name"].lower() for t in cluster_topics}
+        for et in existing_topics:
+            if isinstance(et, dict) and et.get("name", "").lower() not in cluster_names_lower:
+                et_copy = dict(et)
+                et_copy["source"] = "llm"
+                unified.append(et_copy)
+
+        unified = unified[:15]
+
+        for ci in content_items:
+            ci.topics = unified
+        await self._session.flush()
+        logger.info(
+            "Unified topics for creator %s: %d cluster + %d LLM → %d total",
+            creator_id,
+            len(cluster_topics),
+            len(existing_topics),
+            len(unified),
+        )

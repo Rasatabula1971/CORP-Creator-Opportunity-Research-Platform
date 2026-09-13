@@ -23,6 +23,8 @@ class ProblemObservation(TimestampMixin, Base):
     extraction_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
+    sentiment: Mapped[str | None] = mapped_column(String(20))
+    urgency: Mapped[str | None] = mapped_column(String(20))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(

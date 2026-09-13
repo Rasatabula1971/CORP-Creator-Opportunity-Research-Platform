@@ -14,11 +14,14 @@ from corp.core.models.workflow import ResearchRun
 from corp.workers.intelligence.extraction import (
     EXTRACTION_PROMPT_VERSION,
     extract_observations,
+    extract_observations_batch,
 )
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+BATCH_SIZE = 15
 
 
 class IntelligencePipeline:
@@ -31,8 +34,9 @@ class IntelligencePipeline:
     async def run(self, creator_id: str) -> ResearchRun:
         """Run intelligence pipeline for a creator.
 
-        Loads all interactions + evidence, extracts ProblemObservations,
-        classifies topics, and pins prompt/model versions on the ResearchRun.
+        Loads all interactions + evidence, extracts ProblemObservations
+        in batches with cross-comment synthesis, classifies topics,
+        and pins prompt/model versions on the ResearchRun.
         """
         run = ResearchRun(
             creator_id=creator_id,
@@ -70,51 +74,128 @@ class IntelligencePipeline:
 
     async def _extract_problems(self, creator_id: str, research_run_id: str) -> None:
         result = await self._session.execute(
-            select(AudienceInteraction, ContentItem.title, ContentItem.platform)
+            select(AudienceInteraction, ContentItem.title, ContentItem.platform, ContentItem.id)
             .join(ContentItem, AudienceInteraction.content_item_id == ContentItem.id)
             .where(ContentItem.creator_id == creator_id)
         )
         rows = result.all()
 
-        for interaction, content_title, platform in rows:
-            evidence = await self._find_evidence(interaction.external_id)
-            if evidence is None:
-                logger.warning(
-                    "No evidence for interaction %s, skipping extraction",
-                    interaction.external_id,
-                )
-                continue
+        if not rows:
+            return
 
-            observations = await extract_observations(
-                provider=self._provider,
-                comment_text=interaction.text,
-                author=interaction.author_handle,
-                content_title=content_title,
-                platform=platform,
+        evidence_map = await self._load_evidence_map(
+            [interaction.external_id for interaction, *_ in rows]
+        )
+
+        groups: dict[str, list[tuple]] = {}
+        for interaction, content_title, platform, content_item_id in rows:
+            key = content_item_id
+            groups.setdefault(key, []).append((interaction, content_title, platform))
+
+        for content_item_id, group_rows in groups.items():
+            _, content_title, platform = group_rows[0]
+            await self._extract_batch(
+                group_rows, content_title, platform, evidence_map, research_run_id
             )
 
-            for obs in observations:
-                po = ProblemObservation(
-                    evidence_id=evidence.id,
-                    text=obs.text,
-                    category=obs.category,
-                    is_inferred=obs.is_inferred,
-                    extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
-                    model_version=self._provider.model_name,
-                    confidence=obs.confidence,
+    async def _extract_batch(
+        self,
+        rows: list[tuple],
+        content_title: str | None,
+        platform: str,
+        evidence_map: dict[str, Evidence],
+        research_run_id: str,
+    ) -> None:
+        """Extract observations from a group of comments in batches."""
+        valid_rows = [
+            (interaction, evidence_map[interaction.external_id])
+            for interaction, _, _ in rows
+            if interaction.external_id in evidence_map
+        ]
+
+        if not valid_rows:
+            return
+
+        for batch_start in range(0, len(valid_rows), BATCH_SIZE):
+            batch = valid_rows[batch_start : batch_start + BATCH_SIZE]
+
+            if len(batch) >= 3:
+                comments = [
+                    {"text": interaction.text, "author": interaction.author_handle}
+                    for interaction, _ in batch
+                ]
+                observations = await extract_observations_batch(
+                    provider=self._provider,
+                    comments=comments,
+                    content_title=content_title,
+                    platform=platform,
                 )
-                self._session.add(po)
+                for obs in observations:
+                    evidence = self._pick_evidence_for_observation(obs, batch)
+                    po = ProblemObservation(
+                        evidence_id=evidence.id,
+                        text=obs.text,
+                        category=obs.category,
+                        is_inferred=obs.is_inferred,
+                        sentiment=obs.sentiment,
+                        urgency=obs.urgency,
+                        extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
+                        model_version=self._provider.model_name,
+                        confidence=obs.confidence,
+                    )
+                    self._session.add(po)
+            else:
+                for interaction, evidence in batch:
+                    observations = await extract_observations(
+                        provider=self._provider,
+                        comment_text=interaction.text,
+                        author=interaction.author_handle,
+                        content_title=content_title,
+                        platform=platform,
+                    )
+                    for obs in observations:
+                        po = ProblemObservation(
+                            evidence_id=evidence.id,
+                            text=obs.text,
+                            category=obs.category,
+                            is_inferred=obs.is_inferred,
+                            sentiment=obs.sentiment,
+                            urgency=obs.urgency,
+                            extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
+                            model_version=self._provider.model_name,
+                            confidence=obs.confidence,
+                        )
+                        self._session.add(po)
 
             await self._session.flush()
 
-    async def _find_evidence(self, external_id: str) -> Evidence | None:
+    def _pick_evidence_for_observation(
+        self,
+        obs,
+        batch: list[tuple],
+    ) -> "Evidence":
+        """Pick the best evidence row for a batch-extracted observation."""
+        if obs.source_indices:
+            for idx in obs.source_indices:
+                if 0 <= idx < len(batch):
+                    return batch[idx][1]
+        return batch[0][1]
+
+    async def _load_evidence_map(self, external_ids: list[str]) -> dict[str, "Evidence"]:
+        """Load the most recent Evidence row for each external_id."""
+        if not external_ids:
+            return {}
         result = await self._session.execute(
             select(Evidence)
-            .where(Evidence.source_id == external_id)
+            .where(Evidence.source_id.in_(external_ids))
             .order_by(Evidence.collected_at.desc())
-            .limit(1)
         )
-        return result.scalars().first()
+        evidence_list = result.scalars().all()
+        evidence_map: dict[str, Evidence] = {}
+        for ev in evidence_list:
+            if ev.source_id not in evidence_map:
+                evidence_map[ev.source_id] = ev
+        return evidence_map
 
     async def _classify_creator_topics(self, creator_id: str) -> list[dict]:
         result = await self._session.execute(
