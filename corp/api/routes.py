@@ -1,23 +1,21 @@
 """API routes — CORP Step 8 endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.evidence import Evidence
-from corp.core.models.intelligence import (
-    ProblemCluster,
-    ProblemClusterMember,
-    ProblemObservation,
-)
-from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
-from corp.core.schemas.creator import CreatorDetailResponse, CreatorResponse, PlatformAccountResponse
+from corp.core.models.workflow import ResearchRun
+from corp.core.schemas.creator import (
+    CreatorDetailResponse,
+    CreatorResponse,
+    PlatformAccountResponse,
+)
 from corp.core.schemas.evidence import EvidenceResponse
-from corp.core.schemas.scoring import OpportunityScoreResponse, ScoreResponse
+from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionCreate, DecisionResponse, ResearchRunResponse
 from corp.core.state.gates import record_gate_a_decision
 from corp.core.state.machine import InvalidTransitionError
@@ -46,7 +44,10 @@ async def list_creators(
     if min_score is not None:
         scored_ids = (
             select(CreatorScore.creator_id)
-            .where(CreatorScore.aggregate_score >= min_score)
+            .where(
+                CreatorScore.aggregate_score >= min_score,
+                CreatorScore.superseded_at.is_(None),
+            )
             .distinct()
         )
         query = query.where(Creator.id.in_(scored_ids))
@@ -132,7 +133,10 @@ async def get_opportunities(
 
     result = await session.execute(
         select(OpportunityScore)
-        .where(OpportunityScore.creator_id == creator_id)
+        .where(
+            OpportunityScore.creator_id == creator_id,
+            OpportunityScore.superseded_at.is_(None),
+        )
         .order_by(OpportunityScore.aggregate_score.desc())
     )
     return [OpportunityScoreResponse.model_validate(o) for o in result.scalars().all()]

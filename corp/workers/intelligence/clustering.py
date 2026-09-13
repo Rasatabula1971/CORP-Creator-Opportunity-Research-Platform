@@ -1,8 +1,8 @@
 """Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling."""
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -97,7 +97,7 @@ def _build_clusters(
     labels: np.ndarray,
     timestamps: list[datetime | None] | None,
 ) -> list[ClusterResult]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     unique_labels = set(labels)
     unique_labels.discard(-1)
 

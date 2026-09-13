@@ -1,15 +1,22 @@
 """Acquisition orchestrator — adapter output → DB rows with evidence chain."""
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.creator import CreatorStatus
+from corp.core.models.evidence import Evidence
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.intelligence.runs import (
+    PipelineStats,
+    fail_run,
+    finish_run,
+    stage,
+    start_run,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,32 +57,31 @@ class AcquisitionCollector:
         Returns:
             The completed ResearchRun.
         """
-        run = ResearchRun(
+        run = await start_run(
+            self._session,
+            pipeline="collect",
             creator_id=creator_id,
-            status="running",
-            config_snapshot={
-                "adapter": self._adapter.platform,
-                "identifier": identifier,
-            },
-            prompt_versions={},
-            model_versions={},
+            config={"adapter": self._adapter.platform, "identifier": identifier},
         )
-        self._session.add(run)
-        await self._session.flush()
+        stats = PipelineStats()
 
         try:
-            items = await self._adapter.collect(identifier)
-            await self._persist_items(items, creator_id, run.id)
-            run.status = "completed"
-            run.completed_at = datetime.now(timezone.utc)
+            async with stage(
+                self._session,
+                creator_id,
+                working=CreatorStatus.COLLECTING,
+                done=CreatorStatus.COLLECTED,
+            ):
+                items = await self._adapter.collect(identifier)
+                counts = await self._persist_items(items, creator_id, run.id)
+                stats.extra.update(counts)
+                stats.ok()
+                await finish_run(self._session, run, stats)
         except Exception as exc:
-            run.status = "failed"
-            run.error_message = str(exc)[:2000]
-            run.completed_at = datetime.now(timezone.utc)
+            if run.status == "running":
+                await fail_run(self._session, run, exc)
             logger.exception("Collection failed for %s", identifier)
             raise
-        finally:
-            await self._session.flush()
 
         return run
 
@@ -84,10 +90,13 @@ class AcquisitionCollector:
         items: list[NormalizedContent],
         creator_id: str,
         research_run_id: str,
-    ) -> None:
-        videos = [i for i in items if i.content_type == "video"]
-        comments = [i for i in items if i.content_type in ("comment", "reply")]
+    ) -> dict[str, int]:
+        # Any adapter content type with a ContentType mapping is a content item
+        # (video, post, short, ...); comments and replies hang off those.
+        videos = [i for i in items if i.content_type in _CONTENT_TYPE_MAP]
+        comments = [i for i in items if i.content_type in _INTERACTION_TYPE_MAP]
         captions = [i for i in items if i.content_type == "caption"]
+        orphaned = 0
 
         content_map: dict[str, ContentItem] = {}
         for item in videos:
@@ -96,10 +105,6 @@ class AcquisitionCollector:
             await self._create_evidence(item, research_run_id)
 
         for item in comments:
-            video_ext_id = item.parent_id
-            if item.content_type == "reply":
-                pass  # parent_id is the comment id, not the video id
-
             ci = await self._find_content_item_for_interaction(
                 item, content_map
             )
@@ -109,6 +114,7 @@ class AcquisitionCollector:
                     item.external_id,
                     item.parent_id,
                 )
+                orphaned += 1
                 continue
 
             await self._upsert_interaction(item, ci.id)
@@ -116,6 +122,13 @@ class AcquisitionCollector:
 
         for item in captions:
             await self._create_evidence(item, research_run_id)
+
+        return {
+            "content_items": len(videos),
+            "interactions": len(comments) - orphaned,
+            "captions": len(captions),
+            "orphaned_interactions": orphaned,
+        }
 
     async def _upsert_content_item(
         self,
@@ -138,7 +151,8 @@ class AcquisitionCollector:
             creator_id=creator_id,
             platform=item.source_platform,
             external_id=item.external_id,
-            title=item.text[:500] if item.text else None,
+            title=(meta.get("title") or item.text or "")[:500] or None,
+            description=(meta.get("description") or None),
             content_type=ct,
             published_at=item.timestamp,
             view_count=meta.get("view_count"),

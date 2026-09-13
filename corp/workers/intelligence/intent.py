@@ -3,10 +3,10 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from corp.core.intent.hierarchy import classify_signal_level, load_intent_rules
 from corp.core.models.intent import SignalLevel
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -136,15 +136,12 @@ async def _llm_classify(
 
     try:
         result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT)
-    except Exception:
-        logger.exception("LLM intent classification failed for cluster: %s", label)
-        return IntentClassification(
-            signal_level=SignalLevel.WEAK,
-            rationale="LLM classification failed, defaulting to weak",
-            confidence=0.0,
-            key_indicators=[],
-        )
+    except Exception as exc:
+        logger.warning("LLM intent classification failed for cluster %s: %s", label, exc)
+        raise LLMCallError("intent", exc) from exc
 
+    if not isinstance(result, dict):
+        result = {}
     level_str = str(result.get("signal_level", "weak")).lower()
     try:
         level = SignalLevel(level_str)

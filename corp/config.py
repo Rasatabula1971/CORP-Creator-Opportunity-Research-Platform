@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     youtube_daily_quota_units: int = 10000
     youtube_requests_per_second: int = 5
 
+    # Reddit public JSON feeds (no credentials). Reddit asks for a descriptive UA
+    # and limits unauthenticated clients to roughly 10 requests per minute.
+    reddit_user_agent: str = "corp-research/0.1 (creator opportunity research)"
+    reddit_posts_per_creator: int = 25
+    reddit_request_interval_seconds: float = 6.0
+
     # LLM provider selection: auto | fair | gemini (auto prefers FAIR when FAIR_URL is set)
     llm_provider: str = "auto"
 
@@ -27,6 +33,10 @@ class Settings(BaseSettings):
 
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
+
+    # A run whose per-item failure rate exceeds this is marked "partial", not "completed".
+    pipeline_max_failure_rate: float = 0.2
+    embedding_model: str = "all-MiniLM-L6-v2"
 
     app_env: str = "development"
     log_level: str = "INFO"

@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -65,11 +66,11 @@ async def extract_observations(
 
     try:
         result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT)
-    except Exception:
-        logger.exception("Extraction failed for comment: %.80s", comment_text)
-        return []
+    except Exception as exc:
+        logger.warning("Extraction failed for comment %.80r: %s", comment_text, exc)
+        raise LLMCallError("extraction", exc) from exc
 
-    raw_obs = result.get("observations", [])
+    raw_obs = result.get("observations", []) if isinstance(result, dict) else []
     observations: list[ExtractedObservation] = []
     for item in raw_obs:
         if not isinstance(item, dict) or not item.get("text"):

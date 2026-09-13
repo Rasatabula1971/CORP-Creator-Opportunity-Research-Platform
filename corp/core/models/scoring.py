@@ -1,6 +1,7 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Enum, Float, ForeignKey, Index, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +30,8 @@ class CreatorScore(TimestampMixin, Base):
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     research_run_id: Mapped[str | None] = mapped_column(String(36))
+    # Set when a newer scoring run replaces this row. Active rows have NULL here.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class OpportunityScore(TimestampMixin, Base):
@@ -52,3 +55,5 @@ class OpportunityScore(TimestampMixin, Base):
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     research_run_id: Mapped[str | None] = mapped_column(String(36))
+    # Set when a newer scoring run replaces this row. Active rows have NULL here.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

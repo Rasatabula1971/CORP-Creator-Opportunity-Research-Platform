@@ -45,13 +45,33 @@ class HumanDecision(Base):
     decided_by: Mapped[str | None] = mapped_column(String(255))
 
 
+class RunScope(str, enum.Enum):
+    CREATOR = "creator"
+    NICHE = "niche"
+    CROSS = "cross"
+
+
+class RunStatus(str, enum.Enum):
+    """Stored as plain strings on ResearchRun.status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    PARTIAL = "partial"  # finished, but the failure rate exceeded the threshold
+    FAILED = "failed"
+
+
 class ResearchRun(TimestampMixin, Base):
     __tablename__ = "research_runs"
     __table_args__ = (Index("ix_runs_creator_id", "creator_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
+    creator_id: Mapped[str | None] = mapped_column(ForeignKey("creators.id"), nullable=True)
+    scope: Mapped[str] = mapped_column(
+        String(20), default=RunScope.CREATOR.value, server_default="creator", nullable=False
+    )
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
+    stats: Mapped[dict | None] = mapped_column(JSONB)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     config_snapshot: Mapped[dict | None] = mapped_column(JSONB)

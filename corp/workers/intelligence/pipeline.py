@@ -1,18 +1,27 @@
 """Intelligence pipeline — orchestrates extraction and topic classification."""
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem
+from corp.core.models.creator import CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.workflow import ResearchRun
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.extraction import (
     EXTRACTION_PROMPT_VERSION,
     extract_observations,
+)
+from corp.workers.intelligence.runs import (
+    DEFAULT_MAX_FAILURE_RATE,
+    PipelineStats,
+    fail_run,
+    finish_run,
+    stage,
+    start_run,
 )
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
 from corp.workers.providers.registry import LLMProvider
@@ -21,115 +30,154 @@ logger = logging.getLogger(__name__)
 
 
 class IntelligencePipeline:
-    """Runs extraction + topic classification for a creator's collected data."""
+    """Runs extraction + topic classification for a creator's collected data.
 
-    def __init__(self, provider: LLMProvider, session: AsyncSession) -> None:
+    Idempotent: an interaction that already has observations from the same
+    prompt version and model is skipped, so re-runs only extract new comments.
+    """
+
+    def __init__(
+        self,
+        provider: LLMProvider,
+        session: AsyncSession,
+        max_failure_rate: float = DEFAULT_MAX_FAILURE_RATE,
+    ) -> None:
         self._provider = provider
         self._session = session
+        self._max_failure_rate = max_failure_rate
 
     async def run(self, creator_id: str) -> ResearchRun:
-        """Run intelligence pipeline for a creator.
-
-        Loads all interactions + evidence, extracts ProblemObservations,
-        classifies topics, and pins prompt/model versions on the ResearchRun.
-        """
-        run = ResearchRun(
+        run = await start_run(
+            self._session,
+            pipeline="intelligence",
             creator_id=creator_id,
-            status="running",
-            config_snapshot={"pipeline": "intelligence", "provider": self._provider.model_name},
+            config={"provider": self._provider.model_name},
             prompt_versions={
                 "extraction": EXTRACTION_PROMPT_VERSION,
                 "topics": TOPIC_PROMPT_VERSION,
             },
             model_versions={"primary": self._provider.model_name},
         )
-        self._session.add(run)
-        await self._session.flush()
+        stats = PipelineStats()
 
         try:
-            await self._extract_problems(creator_id, run.id)
-            topics = await self._classify_creator_topics(creator_id)
-            await self._store_topics(creator_id, topics)
-            run.status = "completed"
-            run.completed_at = datetime.now(timezone.utc)
+            async with stage(
+                self._session,
+                creator_id,
+                working=CreatorStatus.EXTRACTING,
+                done=CreatorStatus.EXTRACTED,
+            ):
+                await self._extract_problems(creator_id, stats)
+                await self._classify_and_store_topics(creator_id, stats)
+                await finish_run(
+                    self._session, run, stats, max_failure_rate=self._max_failure_rate
+                )
         except Exception as exc:
-            run.status = "failed"
-            run.error_message = str(exc)[:2000]
-            run.completed_at = datetime.now(timezone.utc)
+            if run.status == "running":
+                await fail_run(self._session, run, exc)
             logger.exception("Intelligence pipeline failed for creator %s", creator_id)
             raise
-        finally:
-            await self._session.flush()
 
         return run
 
-    async def _extract_problems(self, creator_id: str, research_run_id: str) -> None:
+    # ── Extraction ───────────────────────────────────────────────────
+
+    async def _extract_problems(self, creator_id: str, stats: PipelineStats) -> None:
         result = await self._session.execute(
-            select(AudienceInteraction, ContentItem.title)
+            select(AudienceInteraction, ContentItem.title, ContentItem.platform)
             .join(ContentItem, AudienceInteraction.content_item_id == ContentItem.id)
             .where(ContentItem.creator_id == creator_id)
         )
-        rows = result.all()
 
-        for interaction, content_title in rows:
+        for interaction, content_title, platform in result.all():
             evidence = await self._find_evidence(interaction.external_id)
             if evidence is None:
                 logger.warning(
                     "No evidence for interaction %s, skipping extraction",
                     interaction.external_id,
                 )
+                stats.skip()
                 continue
 
-            observations = await extract_observations(
-                provider=self._provider,
-                comment_text=interaction.text,
-                author=interaction.author_handle,
-                content_title=content_title,
-                platform="youtube",
-            )
+            if await self._already_extracted(interaction.external_id):
+                stats.skip()
+                continue
+
+            try:
+                observations = await extract_observations(
+                    provider=self._provider,
+                    comment_text=interaction.text,
+                    author=interaction.author_handle,
+                    content_title=content_title,
+                    platform=platform or "unknown",
+                )
+            except LLMCallError as exc:
+                stats.fail(exc)
+                continue
 
             for obs in observations:
-                po = ProblemObservation(
-                    evidence_id=evidence.id,
-                    text=obs.text,
-                    category=obs.category,
-                    is_inferred=obs.is_inferred,
-                    extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
-                    model_version=self._provider.model_name,
-                    confidence=obs.confidence,
+                self._session.add(
+                    ProblemObservation(
+                        evidence_id=evidence.id,
+                        text=obs.text,
+                        category=obs.category,
+                        is_inferred=obs.is_inferred,
+                        extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
+                        model_version=self._provider.model_name,
+                        confidence=obs.confidence,
+                    )
                 )
-                self._session.add(po)
-
+            stats.ok()
             await self._session.flush()
 
     async def _find_evidence(self, external_id: str) -> Evidence | None:
+        """Newest evidence row for a source id (re-collection appends, never updates)."""
         result = await self._session.execute(
-            select(Evidence).where(Evidence.source_id == external_id)
+            select(Evidence)
+            .where(Evidence.source_id == external_id)
+            .order_by(Evidence.collected_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
-    async def _classify_creator_topics(self, creator_id: str) -> list[dict]:
+    async def _already_extracted(self, external_id: str) -> bool:
+        result = await self._session.execute(
+            select(ProblemObservation.id)
+            .join(Evidence, Evidence.id == ProblemObservation.evidence_id)
+            .where(
+                Evidence.source_id == external_id,
+                ProblemObservation.extraction_prompt_version == EXTRACTION_PROMPT_VERSION,
+                ProblemObservation.model_version == self._provider.model_name,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    # ── Topics ───────────────────────────────────────────────────────
+
+    async def _classify_and_store_topics(self, creator_id: str, stats: PipelineStats) -> None:
         result = await self._session.execute(
             select(ContentItem).where(ContentItem.creator_id == creator_id)
         )
-        content_items = result.scalars().all()
-
+        content_items = list(result.scalars().all())
         if not content_items:
-            return []
+            return
 
         items_data = [
             {"title": ci.title or "", "description": ci.description or ""}
             for ci in content_items
         ]
-        return await classify_topics(self._provider, items_data)
+        platform = content_items[0].platform or "unknown"
+        try:
+            topics = await classify_topics(self._provider, items_data, platform=platform)
+        except LLMCallError as exc:
+            stats.fail(exc)
+            return
 
-    async def _store_topics(self, creator_id: str, topics: list[dict]) -> None:
+        stats.ok()
+        stats.extra["topics"] = len(topics)
         if not topics:
             return
-        result = await self._session.execute(
-            select(ContentItem).where(ContentItem.creator_id == creator_id)
-        )
-        content_items = result.scalars().all()
         for ci in content_items:
             ci.topics = topics
         await self._session.flush()

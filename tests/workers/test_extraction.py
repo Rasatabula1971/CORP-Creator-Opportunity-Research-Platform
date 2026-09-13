@@ -2,6 +2,7 @@
 
 import pytest
 
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.extraction import (
     EXTRACTION_PROMPT_VERSION,
     ExtractedObservation,
@@ -102,15 +103,18 @@ async def test_extract_observations_negative_confidence():
     assert obs[0].confidence == 0.0
 
 
-async def test_extract_observations_provider_failure():
+async def test_extract_observations_provider_failure_raises():
+    """A dead provider must not look like an empty comment."""
     provider = FailingProvider()
-    obs = await extract_observations(
-        provider=provider,
-        comment_text="Some text",
-        author="a",
-        content_title="b",
-    )
-    assert obs == []
+    with pytest.raises(LLMCallError, match="extraction: API exploded") as info:
+        await extract_observations(
+            provider=provider,
+            comment_text="Some text",
+            author="a",
+            content_title="b",
+        )
+    assert info.value.stage == "extraction"
+    assert isinstance(info.value.cause, RuntimeError)
 
 
 async def test_extract_observations_text_truncation():

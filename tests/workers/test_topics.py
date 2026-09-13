@@ -1,5 +1,8 @@
 """Unit tests for topic classification — LLM calls mocked."""
 
+import pytest
+
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
 from corp.workers.providers.registry import LLMProvider
 
@@ -56,10 +59,10 @@ async def test_classify_topics_malformed_response():
     assert topics == []
 
 
-async def test_classify_topics_provider_failure():
+async def test_classify_topics_provider_failure_raises():
     provider = FailingProvider()
-    topics = await classify_topics(provider, [{"title": "X"}])
-    assert topics == []
+    with pytest.raises(LLMCallError, match="topics:"):
+        await classify_topics(provider, [{"title": "X"}])
 
 
 async def test_classify_topics_clamps_confidence():

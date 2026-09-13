@@ -2,6 +2,7 @@
 
 import logging
 
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -63,11 +64,11 @@ async def classify_topics(
 
     try:
         result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT)
-    except Exception:
-        logger.exception("Topic classification failed")
-        return []
+    except Exception as exc:
+        logger.warning("Topic classification failed: %s", exc)
+        raise LLMCallError("topics", exc) from exc
 
-    raw_topics = result.get("topics", [])
+    raw_topics = result.get("topics", []) if isinstance(result, dict) else []
     topics: list[dict] = []
     for t in raw_topics:
         if not isinstance(t, dict) or not t.get("name"):

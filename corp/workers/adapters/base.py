@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Protocol
 
 from pydantic import BaseModel, Field
 

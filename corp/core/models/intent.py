@@ -1,6 +1,7 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Enum, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -26,3 +27,5 @@ class CommercialSignal(TimestampMixin, Base):
     confidence: Mapped[float | None] = mapped_column(Float)
     classification_model: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Set when a newer intent run re-classifies the cluster. Active rows have NULL here.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -3,6 +3,7 @@
 import pytest
 
 from corp.core.models.intent import SignalLevel
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.intent import (
     INTENT_PROMPT_VERSION,
     IntentClassification,
@@ -76,21 +77,19 @@ async def test_classify_cluster_intent_validation_level():
     assert result.signal_level == SignalLevel.VALIDATION
 
 
-async def test_classify_cluster_intent_llm_failure():
+async def test_classify_cluster_intent_llm_failure_raises():
+    """LLM failure propagates so the pipeline can count it, not silently weak."""
     provider = FailingProvider()
-    result = await classify_cluster_intent(
-        provider=provider,
-        label="Test",
-        description="Test",
-        frequency=1,
-        evidence_strength=0.1,
-        representative_texts=["something annoying happened"],
-        rules_path=None,
-    )
-
-    # Rules-table classifies "annoying" as weak; LLM fails → floor is weak
-    assert result.signal_level == SignalLevel.WEAK
-    assert result.confidence == 0.0
+    with pytest.raises(LLMCallError, match="intent:"):
+        await classify_cluster_intent(
+            provider=provider,
+            label="Test",
+            description="Test",
+            frequency=1,
+            evidence_strength=0.1,
+            representative_texts=["something annoying happened"],
+            rules_path=None,
+        )
 
 
 async def test_classify_cluster_intent_invalid_level():
