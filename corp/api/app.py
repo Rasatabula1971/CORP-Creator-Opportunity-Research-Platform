@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from corp.api.dashboard import dashboard_router
 from corp.api.routes import router
 
 
@@ -15,6 +16,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(dashboard_router)
     return app
 
 
