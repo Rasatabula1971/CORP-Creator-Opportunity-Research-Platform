@@ -184,17 +184,14 @@ class AcquisitionCollector:
             # The parent_id for a reply is the comment_id.
             # We need to find which video that comment belongs to.
             # Look through all interactions with that external_id.
-            result = await self._session.execute(
-                select(AudienceInteraction.content_item_id).where(
-                    AudienceInteraction.external_id == item.parent_id
-                )
+            parent_result = await self._session.execute(
+                select(AudienceInteraction.content_item_id)
+                .where(AudienceInteraction.external_id == item.parent_id)
+                .limit(1)
             )
-            ci_id = result.scalar_one_or_none()
+            ci_id = parent_result.scalar_one_or_none()
             if ci_id:
-                result = await self._session.execute(
-                    select(ContentItem).where(ContentItem.id == ci_id)
-                )
-                return result.scalar_one_or_none()
+                return await self._session.get(ContentItem, ci_id)
 
         return None
 

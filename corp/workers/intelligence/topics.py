@@ -69,6 +69,8 @@ async def classify_topics(
         raise LLMCallError("topics", exc) from exc
 
     raw_topics = result.get("topics", []) if isinstance(result, dict) else []
+    if not isinstance(raw_topics, list):
+        raw_topics = []
     topics: list[dict] = []
     for t in raw_topics:
         if not isinstance(t, dict) or not t.get("name"):

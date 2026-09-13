@@ -71,6 +71,8 @@ async def extract_observations(
         raise LLMCallError("extraction", exc) from exc
 
     raw_obs = result.get("observations", []) if isinstance(result, dict) else []
+    if not isinstance(raw_obs, list):
+        raw_obs = []
     observations: list[ExtractedObservation] = []
     for item in raw_obs:
         if not isinstance(item, dict) or not item.get("text"):

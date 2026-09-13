@@ -17,7 +17,10 @@ class ConfidenceBand(str, enum.Enum):
 
 class CreatorScore(TimestampMixin, Base):
     __tablename__ = "creator_scores"
-    __table_args__ = (Index("ix_creator_scores_creator_id", "creator_id"),)
+    __table_args__ = (
+        Index("ix_creator_scores_creator_id", "creator_id"),
+        Index("ix_creator_scores_active", "superseded_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
@@ -39,6 +42,7 @@ class OpportunityScore(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_opp_scores_creator_id", "creator_id"),
         Index("ix_opp_scores_cluster_id", "problem_cluster_id"),
+        Index("ix_opportunity_scores_active", "superseded_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)

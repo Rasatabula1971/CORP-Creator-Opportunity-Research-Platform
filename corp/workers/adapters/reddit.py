@@ -18,6 +18,7 @@ tagged ``ComplianceStatus.VERIFY`` until that is confirmed.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 from tenacity import (
@@ -97,10 +98,15 @@ class RedditAdapter(SourceAdapter):
         after: str | None = None
 
         while len(posts) < self._posts_per_creator:
-            params = {"limit": min(100, self._posts_per_creator - len(posts)), "raw_json": 1}
+            params: dict[str, int | str] = {
+                "limit": min(100, self._posts_per_creator - len(posts)),
+                "raw_json": 1,
+            }
             if after:
                 params["after"] = after
             data = await self._get_json(path, params)
+            if not isinstance(data, dict):
+                break
             children = data.get("data", {}).get("children", [])
             for child in children:
                 if child.get("kind") != "t3":
@@ -128,7 +134,7 @@ class RedditAdapter(SourceAdapter):
 
     # ── Mapping ──────────────────────────────────────────────────────
 
-    def _post_to_content(self, d: dict) -> NormalizedContent:
+    def _post_to_content(self, d: dict[str, Any]) -> NormalizedContent:
         title = d.get("title") or ""
         body = d.get("selftext") or ""
         text = f"{title}\n\n{body}".strip() if body else title
@@ -156,7 +162,7 @@ class RedditAdapter(SourceAdapter):
         )
 
     def _walk_comments(
-        self, children: list[dict], post_id: str, out: list[NormalizedContent]
+        self, children: list[dict[str, Any]], post_id: str, out: list[NormalizedContent]
     ) -> None:
         for child in children:
             if child.get("kind") != "t1":
@@ -223,7 +229,9 @@ class RedditAdapter(SourceAdapter):
         wait=wait_exponential(multiplier=5, min=5, max=60),
         reraise=True,
     )
-    async def _get_json(self, path: str, params: dict) -> dict | list:
+    async def _get_json(
+        self, path: str, params: dict[str, int | str]
+    ) -> dict[str, Any] | list[Any]:
         await self._throttle()
         client = self._get_client()
         resp = await client.get(path, params=params)
@@ -232,7 +240,8 @@ class RedditAdapter(SourceAdapter):
             retry_after = resp.headers.get("Retry-After")
             logger.warning("Reddit rate limit hit on %s (Retry-After=%s)", path, retry_after)
         resp.raise_for_status()
-        return resp.json()
+        body: dict[str, Any] | list[Any] = resp.json()
+        return body
 
 
 def _ts(created_utc: float | None) -> datetime | None:

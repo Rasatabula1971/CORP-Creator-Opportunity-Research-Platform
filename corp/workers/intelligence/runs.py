@@ -197,9 +197,5 @@ async def supersede(session: AsyncSession, model, *conditions) -> int:
         .where(model.superseded_at.is_(None), *conditions)
         .values(superseded_at=now)
     )
-    return result.rowcount or 0
+    return int(getattr(result, "rowcount", 0) or 0)
 
-
-def active(stmt, model):
-    """Restrict a select on ``model`` to rows not yet superseded."""
-    return stmt.where(model.superseded_at.is_(None))

@@ -110,6 +110,11 @@ _LEVEL_ORDER = {
 }
 
 
+def _as_list(value: object) -> list:
+    """Model output is untrusted: only a real list is iterated as indicators."""
+    return value if isinstance(value, list) else []
+
+
 def _reconcile(rules_level: SignalLevel, llm_level: SignalLevel) -> SignalLevel:
     """Take the higher of rules-table and LLM classifications."""
     if _LEVEL_ORDER.get(llm_level, 0) >= _LEVEL_ORDER.get(rules_level, 0):
@@ -152,5 +157,5 @@ async def _llm_classify(
         signal_level=level,
         rationale=str(result.get("rationale", ""))[:500],
         confidence=min(1.0, max(0.0, float(result.get("confidence", 0.5)))),
-        key_indicators=[str(k)[:200] for k in result.get("key_indicators", [])[:10]],
+        key_indicators=[str(k)[:200] for k in _as_list(result.get("key_indicators"))[:10]],
     )
