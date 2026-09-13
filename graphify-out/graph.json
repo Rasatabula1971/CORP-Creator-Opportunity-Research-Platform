@@ -131,7 +131,7 @@
       "file_type": "code",
       "norm_label": "problemcluster",
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L33"
+      "source_location": "L35"
     },
     {
       "id": "corp_core_models_intelligence_problemclustermember",
@@ -144,7 +144,7 @@
       "file_type": "code",
       "norm_label": "problemclustermember",
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L50"
+      "source_location": "L52"
     },
     {
       "id": "corp_core_models_intelligence_problemobservation",
@@ -303,6 +303,19 @@
       "source_location": "L41"
     },
     {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "label": "CompetitivePipeline",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "competitivepipeline",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L71"
+    },
+    {
       "id": "corp_core_models_creator_creatorstatus",
       "label": "CreatorStatus",
       "_callable": true,
@@ -446,39 +459,13 @@
       "source_location": "L21"
     },
     {
-      "id": "corp_core_models_intent_signallevel",
-      "label": "SignalLevel",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "signallevel",
-      "source_file": "corp/core/models/intent.py",
-      "source_location": "L9"
-    },
-    {
-      "id": "corp_workers_intelligence_intent_intentclassification",
-      "label": "IntentClassification",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "intentclassification",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L50"
-    },
-    {
       "id": "tests_workers_test_intent_classifier_failingprovider",
       "label": "FailingProvider",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "failingprovider",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -491,7 +478,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "fakeprovider",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -508,7 +495,7 @@
       "file_type": "code",
       "norm_label": "extractedobservation",
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L39"
+      "source_location": "L69"
     },
     {
       "id": "tests_workers_test_extraction_failingprovider",
@@ -563,30 +550,17 @@
       "source_location": "L16"
     },
     {
-      "id": "corp_core_schemas_evidence_evidencecreate",
-      "label": "EvidenceCreate",
+      "id": "corp_workers_adapters_base_normalizedcontent",
+      "label": "NormalizedContent",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 15,
       "community_name": "AccessMethod",
       "file_type": "code",
-      "norm_label": "evidencecreate",
-      "source_file": "corp/core/schemas/evidence.py",
-      "source_location": "L8"
-    },
-    {
-      "id": "corp_core_schemas_evidence_evidenceresponse",
-      "label": "EvidenceResponse",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "AccessMethod",
-      "file_type": "code",
-      "norm_label": "evidenceresponse",
-      "source_file": "corp/core/schemas/evidence.py",
-      "source_location": "L20"
+      "norm_label": "normalizedcontent",
+      "source_file": "corp/workers/adapters/base.py",
+      "source_location": "L10"
     },
     {
       "id": "corp_workers_adapters_base_sourceadapter",
@@ -881,24 +855,37 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "acquisitioncollector",
       "source_file": "corp/workers/acquisition/collector.py",
       "source_location": "L35"
     },
     {
-      "id": "corp_workers_adapters_base_normalizedcontent",
-      "label": "NormalizedContent",
+      "id": "corp_core_models_intent_signallevel",
+      "label": "SignalLevel",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 25,
-      "community_name": "NormalizedContent",
+      "community": 27,
+      "community_name": "SignalLevel",
       "file_type": "code",
-      "norm_label": "normalizedcontent",
-      "source_file": "corp/workers/adapters/base.py",
-      "source_location": "L10"
+      "norm_label": "signallevel",
+      "source_file": "corp/core/models/intent.py",
+      "source_location": "L9"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_intentclassification",
+      "label": "IntentClassification",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "intentclassification",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L50"
     },
     {
       "id": "corp_core_schemas_intelligence_problemclusterresponse",
@@ -1028,7 +1015,7 @@
       "file_type": "code",
       "norm_label": "clusterpipeline",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L28"
+      "source_location": "L29"
     },
     {
       "id": "corp_workers_intelligence_clustering_clusteringconfig",
@@ -1055,6 +1042,19 @@
       "norm_label": "clusterresult",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L17"
+    },
+    {
+      "id": "corp_workers_intelligence_clustering_topicmodelcache",
+      "label": "_TopicModelCache",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "code",
+      "norm_label": "_topicmodelcache",
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L110"
     },
     {
       "id": "tests_integration_test_cluster_pipeline_fakeembedder",
@@ -1226,6 +1226,32 @@
       "source_location": "L35"
     },
     {
+      "id": "corp_core_schemas_evidence_evidencecreate",
+      "label": "EvidenceCreate",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "test_models_db.py",
+      "file_type": "code",
+      "norm_label": "evidencecreate",
+      "source_file": "corp/core/schemas/evidence.py",
+      "source_location": "L8"
+    },
+    {
+      "id": "corp_core_schemas_evidence_evidenceresponse",
+      "label": "EvidenceResponse",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "test_models_db.py",
+      "file_type": "code",
+      "norm_label": "evidenceresponse",
+      "source_file": "corp/core/schemas/evidence.py",
+      "source_location": "L20"
+    },
+    {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline",
       "label": "IntelligencePipeline",
       "_callable": true,
@@ -1236,7 +1262,7 @@
       "file_type": "code",
       "norm_label": "intelligencepipeline",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L24"
+      "source_location": "L27"
     },
     {
       "id": "tests_integration_test_intelligence_pipeline_fakeprovider",
@@ -1525,7 +1551,67 @@
       "file_type": "code",
       "norm_label": "._persist_clusters()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L139"
+      "source_location": "L143"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "label": "._discover_competitors()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "._discover_competitors()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L155"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_get_representative_texts",
+      "label": "._get_representative_texts()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "._get_representative_texts()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L143"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_clusters",
+      "label": "._load_clusters()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "._load_clusters()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L118"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_descriptions",
+      "label": "._load_descriptions()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "._load_descriptions()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L132"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "label": ".run()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": ".run()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L82"
     },
     {
       "id": "migrations_env_run_migrations_offline",
@@ -2368,52 +2454,16 @@
       "source_location": "L161"
     },
     {
-      "id": "corp_core_intent_hierarchy_classify_signal_level",
-      "label": "classify_signal_level()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "classify_signal_level()",
-      "source_file": "corp/core/intent/hierarchy.py",
-      "source_location": "L17"
-    },
-    {
-      "id": "corp_core_intent_hierarchy_load_intent_rules",
-      "label": "load_intent_rules()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "load_intent_rules()",
-      "source_file": "corp/core/intent/hierarchy.py",
-      "source_location": "L9"
-    },
-    {
       "id": "corp_workers_intelligence_intent_classify_cluster_intent",
       "label": "classify_cluster_intent()",
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "classify_cluster_intent()",
       "source_file": "corp/workers/intelligence/intent.py",
       "source_location": "L59"
-    },
-    {
-      "id": "corp_workers_intelligence_intent_llm_classify",
-      "label": "_llm_classify()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "_llm_classify()",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L120"
     },
     {
       "id": "corp_workers_intelligence_intent_reconcile",
@@ -2421,95 +2471,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "_reconcile()",
       "source_file": "corp/workers/intelligence/intent.py",
       "source_location": "L113"
-    },
-    {
-      "id": "corp_workers_intelligence_intent_rules_classify",
-      "label": "_rules_classify()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "_rules_classify()",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L89"
-    },
-    {
-      "id": "tests_core_test_intent_test_highest_match_wins",
-      "label": "test_highest_match_wins()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_highest_match_wins()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L40"
-    },
-    {
-      "id": "tests_core_test_intent_test_moderate_signal",
-      "label": "test_moderate_signal()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_moderate_signal()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L25"
-    },
-    {
-      "id": "tests_core_test_intent_test_strong_signal",
-      "label": "test_strong_signal()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_strong_signal()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L20"
-    },
-    {
-      "id": "tests_core_test_intent_test_unknown_defaults_to_weak",
-      "label": "test_unknown_defaults_to_weak()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_unknown_defaults_to_weak()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L35"
-    },
-    {
-      "id": "tests_core_test_intent_test_validation_signal",
-      "label": "test_validation_signal()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_validation_signal()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L15"
-    },
-    {
-      "id": "tests_core_test_intent_test_weak_signal",
-      "label": "test_weak_signal()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_weak_signal()",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L30"
     },
     {
       "id": "tests_workers_test_intent_classifier_failingprovider_generate_json",
@@ -2517,7 +2483,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": ".generate_json()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2529,7 +2495,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": ".model_name()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2541,7 +2507,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": ".generate_json()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2553,7 +2519,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": ".__init__()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2565,7 +2531,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": ".model_name()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2577,7 +2543,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_cluster_intent_basic()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2589,7 +2555,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_cluster_intent_invalid_level()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2601,7 +2567,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_cluster_intent_llm_failure()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2613,7 +2579,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_cluster_intent_validation_level()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2625,7 +2591,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_confidence_clamping()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2637,7 +2603,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_classify_key_indicators_truncated()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2649,7 +2615,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_prompt_version_constant()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2661,7 +2627,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_reconcile_equal()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2673,7 +2639,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_reconcile_llm_higher()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2685,7 +2651,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_reconcile_rules_higher()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2697,7 +2663,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_reconcile_validation_wins()",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -2713,7 +2679,31 @@
       "file_type": "code",
       "norm_label": "extract_observations()",
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L48"
+      "source_location": "L110"
+    },
+    {
+      "id": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "label": "extract_observations_batch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "test_extraction.py",
+      "file_type": "code",
+      "norm_label": "extract_observations_batch()",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L139"
+    },
+    {
+      "id": "corp_workers_intelligence_extraction_parse_observation",
+      "label": "_parse_observation()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "test_extraction.py",
+      "file_type": "code",
+      "norm_label": "_parse_observation()",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L81"
     },
     {
       "id": "tests_workers_test_extraction_failingprovider_generate_json",
@@ -3122,6 +3112,18 @@
       "norm_label": "test_stubs_present()",
       "source_file": "tests/workers/test_dossier_generator.py",
       "source_location": "L222"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_init",
+      "label": ".__init__()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "LLMProvider",
+      "file_type": "code",
+      "norm_label": ".__init__()",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L74"
     },
     {
       "id": "corp_workers_providers_registry_geminiprovider_generate_json",
@@ -4432,6 +4434,30 @@
       "source_location": "L32"
     },
     {
+      "id": "tests_integration_test_collector_fakeadapter_default_items",
+      "label": "._default_items()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "test_collector.py",
+      "file_type": "code",
+      "norm_label": "._default_items()",
+      "source_file": "tests/integration/test_collector.py",
+      "source_location": "L39"
+    },
+    {
+      "id": "tests_integration_test_collector_fakeadapter_init",
+      "label": ".__init__()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "test_collector.py",
+      "file_type": "code",
+      "norm_label": ".__init__()",
+      "source_file": "tests/integration/test_collector.py",
+      "source_location": "L20"
+    },
+    {
       "id": "tests_integration_test_collector_fakeadapter_platform",
       "label": ".platform()",
       "_callable": true,
@@ -4713,7 +4739,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": ".collect_creator_data()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4725,7 +4751,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._find_content_item_for_interaction()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4737,7 +4763,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": ".__init__()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4749,7 +4775,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._persist_items()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4761,7 +4787,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._transition_status()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4773,7 +4799,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._update_platform_account()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4785,7 +4811,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._upsert_content_item()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4797,7 +4823,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._upsert_evidence()",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -4809,35 +4835,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "._upsert_interaction()",
       "source_file": "corp/workers/acquisition/collector.py",
       "source_location": "L212"
-    },
-    {
-      "id": "tests_integration_test_collector_fakeadapter_default_items",
-      "label": "._default_items()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "NormalizedContent",
-      "file_type": "code",
-      "norm_label": "._default_items()",
-      "source_file": "tests/integration/test_collector.py",
-      "source_location": "L39"
-    },
-    {
-      "id": "tests_integration_test_collector_fakeadapter_init",
-      "label": ".__init__()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "NormalizedContent",
-      "file_type": "code",
-      "norm_label": ".__init__()",
-      "source_file": "tests/integration/test_collector.py",
-      "source_location": "L20"
     },
     {
       "id": "migrations_versions_e5f3a7b2c4d6_enrich_content_and_creator_fields_downgrade",
@@ -4864,28 +4866,124 @@
       "source_location": "L19"
     },
     {
-      "id": "tests_workers_test_fair_provider_test_generate_json_with_system_prompt",
-      "label": "test_generate_json_with_system_prompt()",
+      "id": "corp_core_intent_hierarchy_classify_signal_level",
+      "label": "classify_signal_level()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "test_generate_json_with_system_prompt",
+      "community_name": "SignalLevel",
       "file_type": "code",
-      "norm_label": "test_generate_json_with_system_prompt()",
-      "source_file": "tests/workers/test_fair_provider.py",
-      "source_location": "L122"
+      "norm_label": "classify_signal_level()",
+      "source_file": "corp/core/intent/hierarchy.py",
+      "source_location": "L17"
     },
     {
-      "id": "tests_workers_test_fair_provider_test_generate_json_with_system_prompt_capturing_handler",
-      "label": "capturing_handler()",
+      "id": "corp_core_intent_hierarchy_load_intent_rules",
+      "label": "load_intent_rules()",
       "_callable": true,
       "_origin": "ast",
       "community": 27,
-      "community_name": "test_generate_json_with_system_prompt",
+      "community_name": "SignalLevel",
       "file_type": "code",
-      "norm_label": "capturing_handler()",
-      "source_file": "tests/workers/test_fair_provider.py",
-      "source_location": "L127"
+      "norm_label": "load_intent_rules()",
+      "source_file": "corp/core/intent/hierarchy.py",
+      "source_location": "L9"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_llm_classify",
+      "label": "_llm_classify()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "_llm_classify()",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L120"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_rules_classify",
+      "label": "_rules_classify()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "_rules_classify()",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L89"
+    },
+    {
+      "id": "tests_core_test_intent_test_highest_match_wins",
+      "label": "test_highest_match_wins()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_highest_match_wins()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L40"
+    },
+    {
+      "id": "tests_core_test_intent_test_moderate_signal",
+      "label": "test_moderate_signal()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_moderate_signal()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L25"
+    },
+    {
+      "id": "tests_core_test_intent_test_strong_signal",
+      "label": "test_strong_signal()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_strong_signal()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L20"
+    },
+    {
+      "id": "tests_core_test_intent_test_unknown_defaults_to_weak",
+      "label": "test_unknown_defaults_to_weak()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_unknown_defaults_to_weak()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L35"
+    },
+    {
+      "id": "tests_core_test_intent_test_validation_signal",
+      "label": "test_validation_signal()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_validation_signal()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L15"
+    },
+    {
+      "id": "tests_core_test_intent_test_weak_signal",
+      "label": "test_weak_signal()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_weak_signal()",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L30"
     },
     {
       "id": "corp_core_rules_loader_get_rule_version",
@@ -4958,6 +5056,30 @@
       "norm_label": "test_missing_file_raises()",
       "source_file": "tests/core/test_rules_loader.py",
       "source_location": "L24"
+    },
+    {
+      "id": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations_downgrade",
+      "label": "downgrade()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "file_type": "code",
+      "norm_label": "downgrade()",
+      "source_file": "migrations/versions/f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_location": "L30"
+    },
+    {
+      "id": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations_upgrade",
+      "label": "upgrade()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "file_type": "code",
+      "norm_label": "upgrade()",
+      "source_file": "migrations/versions/f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_location": "L19"
     },
     {
       "id": "tests_integration_test_migration_run_alembic",
@@ -5260,6 +5382,30 @@
       "source_location": "L173"
     },
     {
+      "id": "tests_workers_test_fair_provider_test_generate_json_with_system_prompt",
+      "label": "test_generate_json_with_system_prompt()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "test_fair_provider.py",
+      "file_type": "code",
+      "norm_label": "test_generate_json_with_system_prompt()",
+      "source_file": "tests/workers/test_fair_provider.py",
+      "source_location": "L122"
+    },
+    {
+      "id": "tests_workers_test_fair_provider_test_generate_json_with_system_prompt_capturing_handler",
+      "label": "capturing_handler()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "test_fair_provider.py",
+      "file_type": "code",
+      "norm_label": "capturing_handler()",
+      "source_file": "tests/workers/test_fair_provider.py",
+      "source_location": "L127"
+    },
+    {
       "id": "tests_workers_test_fair_provider_test_implements_llm_provider",
       "label": "test_implements_llm_provider()",
       "_callable": true,
@@ -5557,7 +5703,7 @@
       "file_type": "code",
       "norm_label": "._get_timestamps()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L134"
+      "source_location": "L138"
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_init",
@@ -5569,7 +5715,7 @@
       "file_type": "code",
       "norm_label": ".__init__()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L31"
+      "source_location": "L32"
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_load_observations",
@@ -5581,7 +5727,7 @@
       "file_type": "code",
       "norm_label": "._load_observations()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L112"
+      "source_location": "L116"
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_run",
@@ -5593,7 +5739,7 @@
       "file_type": "code",
       "norm_label": ".run()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L41"
+      "source_location": "L42"
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_store_embeddings",
@@ -5605,7 +5751,7 @@
       "file_type": "code",
       "norm_label": "._store_embeddings()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L125"
+      "source_location": "L129"
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_transition_status",
@@ -5617,7 +5763,19 @@
       "file_type": "code",
       "norm_label": "._transition_status()",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L103"
+      "source_location": "L107"
+    },
+    {
+      "id": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_unify_topics",
+      "label": "._unify_topics()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "code",
+      "norm_label": "._unify_topics()",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L184"
     },
     {
       "id": "corp_workers_intelligence_clustering_build_clusters",
@@ -5629,7 +5787,7 @@
       "file_type": "code",
       "norm_label": "_build_clusters()",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L95"
+      "source_location": "L134"
     },
     {
       "id": "corp_workers_intelligence_clustering_cluster_observations",
@@ -5644,16 +5802,28 @@
       "source_location": "L39"
     },
     {
-      "id": "corp_workers_intelligence_clustering_generate_label",
-      "label": "_generate_label()",
+      "id": "corp_workers_intelligence_clustering_fit_bertopic",
+      "label": "_fit_bertopic()",
       "_callable": true,
       "_origin": "ast",
       "community": 6,
       "community_name": "ClusterPipeline",
       "file_type": "code",
-      "norm_label": "_generate_label()",
+      "norm_label": "_fit_bertopic()",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L147"
+      "source_location": "L69"
+    },
+    {
+      "id": "corp_workers_intelligence_clustering_get_topic_labels",
+      "label": "get_topic_labels()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "code",
+      "norm_label": "get_topic_labels()",
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L117"
     },
     {
       "id": "corp_workers_intelligence_clustering_pick_representative",
@@ -5665,31 +5835,7 @@
       "file_type": "code",
       "norm_label": "_pick_representative()",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L142"
-    },
-    {
-      "id": "corp_workers_intelligence_clustering_reduce_dimensions",
-      "label": "_reduce_dimensions()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 6,
-      "community_name": "ClusterPipeline",
-      "file_type": "code",
-      "norm_label": "_reduce_dimensions()",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L67"
-    },
-    {
-      "id": "corp_workers_intelligence_clustering_run_hdbscan",
-      "label": "_run_hdbscan()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 6,
-      "community_name": "ClusterPipeline",
-      "file_type": "code",
-      "norm_label": "_run_hdbscan()",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L83"
+      "source_location": "L191"
     },
     {
       "id": "tests_integration_test_cluster_pipeline_fakeembedder_encode",
@@ -6373,7 +6519,19 @@
       "file_type": "code",
       "norm_label": "._classify_creator_topics()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L119"
+      "source_location": "L200"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "label": "._extract_batch()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "code",
+      "norm_label": "._extract_batch()",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L101"
     },
     {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_problems",
@@ -6385,19 +6543,7 @@
       "file_type": "code",
       "norm_label": "._extract_problems()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L71"
-    },
-    {
-      "id": "corp_workers_intelligence_pipeline_intelligencepipeline_find_evidence",
-      "label": "._find_evidence()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 9,
-      "community_name": "test_intelligence_pipeline.py",
-      "file_type": "code",
-      "norm_label": "._find_evidence()",
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L110"
+      "source_location": "L75"
     },
     {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline_init",
@@ -6409,7 +6555,31 @@
       "file_type": "code",
       "norm_label": ".__init__()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L27"
+      "source_location": "L30"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_intelligencepipeline_load_evidence_map",
+      "label": "._load_evidence_map()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "code",
+      "norm_label": "._load_evidence_map()",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L184"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_intelligencepipeline_pick_evidence_for_observation",
+      "label": "._pick_evidence_for_observation()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "code",
+      "norm_label": "._pick_evidence_for_observation()",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L172"
     },
     {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline_run",
@@ -6421,7 +6591,7 @@
       "file_type": "code",
       "norm_label": ".run()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L31"
+      "source_location": "L34"
     },
     {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline_store_topics",
@@ -6433,7 +6603,7 @@
       "file_type": "code",
       "norm_label": "._store_topics()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L143"
+      "source_location": "L224"
     },
     {
       "id": "corp_workers_intelligence_pipeline_intelligencepipeline_transition_status",
@@ -6445,7 +6615,7 @@
       "file_type": "code",
       "norm_label": "._transition_status()",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L134"
+      "source_location": "L215"
     },
     {
       "id": "tests_integration_test_intelligence_pipeline_fakeprovider_generate_json",
@@ -6636,17 +6806,6 @@
       "source_location": "L1"
     },
     {
-      "id": "corp_core_models_competitive_py_str",
-      "label": "str",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "routes.py",
-      "file_type": "code",
-      "norm_label": "str",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "corp_core_models_content",
       "label": "models/content.py",
       "_origin": "ast",
@@ -6787,6 +6946,17 @@
       "file_type": "code",
       "norm_label": "cluster_pipeline.py",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline",
+      "label": "competitive_pipeline.py",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "code",
+      "norm_label": "competitive_pipeline.py",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
       "source_location": "L1"
     },
     {
@@ -7022,14 +7192,47 @@
     },
     {
       "id": "corp_workers_intelligence_cluster_pipeline_rationale_1",
-      "label": "Clustering pipeline \u2014 embed observations, cluster, persist to DB.",
+      "label": "Clustering pipeline \u2014 embed observations, cluster, persist to DB, unify topics.",
       "_origin": "ast",
       "community": 0,
       "community_name": "routes.py",
       "file_type": "rationale",
-      "norm_label": "clustering pipeline \u2014 embed observations, cluster, persist to db.",
+      "norm_label": "clustering pipeline \u2014 embed observations, cluster, persist to db, unify topics.",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
       "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_rationale_1",
+      "label": "Competitive discovery pipeline \u2014 clusters + descriptions \u2192 Competitor rows.",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "rationale",
+      "norm_label": "competitive discovery pipeline \u2014 clusters + descriptions \u2192 competitor rows.",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_rationale_72",
+      "label": "Discovers competitors for each ProblemCluster via LLM analysis.",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "rationale",
+      "norm_label": "discovers competitors for each problemcluster via llm analysis.",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L72"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_rationale_83",
+      "label": "Run competitive discovery for all clusters belonging to a creator.",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "routes.py",
+      "file_type": "rationale",
+      "norm_label": "run competitive discovery for all clusters belonging to a creator.",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L83"
     },
     {
       "id": "corp_workers_intelligence_intent_pipeline_rationale_1",
@@ -7439,113 +7642,14 @@
       "source_location": "L39"
     },
     {
-      "id": "corp_core_intent_hierarchy",
-      "label": "hierarchy.py",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "hierarchy.py",
-      "source_file": "corp/core/intent/hierarchy.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "corp_core_intent_hierarchy_py_any",
-      "label": "Any",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "any",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "corp_core_intent_hierarchy_py_path",
-      "label": "Path",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "corp_core_models_intent_py_str",
-      "label": "str",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "str",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "corp_workers_intelligence_intent",
-      "label": "intelligence/intent.py",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "intelligence/intent.py",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "corp_workers_intelligence_intent_py_path",
-      "label": "Path",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "tests_core_test_intent",
-      "label": "test_intent.py",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "code",
-      "norm_label": "test_intent.py",
-      "source_file": "tests/core/test_intent.py",
-      "source_location": "L1"
-    },
-    {
       "id": "tests_workers_test_intent_classifier",
       "label": "test_intent_classifier.py",
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "code",
       "norm_label": "test_intent_classifier.py",
       "source_file": "tests/workers/test_intent_classifier.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "corp_core_intent_hierarchy_rationale_18",
-      "label": "Rules-table classification. Match indicators against the hierarchy.",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "rationale",
-      "norm_label": "rules-table classification. match indicators against the hierarchy.",
-      "source_file": "corp/core/intent/hierarchy.py",
-      "source_location": "L18"
-    },
-    {
-      "id": "corp_workers_intelligence_intent_rationale_1",
-      "label": "Commercial intent classification via LLM + rules hierarchy.",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "rationale",
-      "norm_label": "commercial intent classification via llm + rules hierarchy.",
-      "source_file": "corp/workers/intelligence/intent.py",
       "source_location": "L1"
     },
     {
@@ -7553,51 +7657,29 @@
       "label": "Take the higher of rules-table and LLM classifications.",
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "rationale",
       "norm_label": "take the higher of rules-table and llm classifications.",
       "source_file": "corp/workers/intelligence/intent.py",
       "source_location": "L114"
     },
     {
-      "id": "corp_workers_intelligence_intent_rationale_51",
-      "label": "DTO for a classified commercial signal.",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "rationale",
-      "norm_label": "dto for a classified commercial signal.",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L51"
-    },
-    {
       "id": "corp_workers_intelligence_intent_rationale_68",
       "label": "Classify a problem cluster's commercial intent. Uses both LLM classification\u2026",
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "rationale",
       "norm_label": "classify a problem cluster's commercial intent. uses both llm classification...",
       "source_file": "corp/workers/intelligence/intent.py",
       "source_location": "L68"
     },
     {
-      "id": "corp_workers_intelligence_intent_rationale_93",
-      "label": "Classify using the YAML rules table as a baseline.",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "SignalLevel",
-      "file_type": "rationale",
-      "norm_label": "classify using the yaml rules table as a baseline.",
-      "source_file": "corp/workers/intelligence/intent.py",
-      "source_location": "L93"
-    },
-    {
       "id": "tests_workers_test_intent_classifier_rationale_1",
       "label": "Unit tests for commercial intent classification \u2014 LLM calls mocked.",
       "_origin": "ast",
       "community": 12,
-      "community_name": "SignalLevel",
+      "community_name": "test_intent_classifier.py",
       "file_type": "rationale",
       "norm_label": "unit tests for commercial intent classification \u2014 llm calls mocked.",
       "source_file": "tests/workers/test_intent_classifier.py",
@@ -7931,17 +8013,39 @@
     },
     {
       "id": "corp_workers_intelligence_extraction_rationale_1",
-      "label": "Per-comment problem/question/pain extraction via LLM.",
+      "label": "Problem/question/pain extraction via LLM \u2014 single and batch modes.",
       "_origin": "ast",
       "community": 14,
       "community_name": "test_extraction.py",
       "file_type": "rationale",
-      "norm_label": "per-comment problem/question/pain extraction via llm.",
+      "norm_label": "problem/question/pain extraction via llm \u2014 single and batch modes.",
       "source_file": "corp/workers/intelligence/extraction.py",
       "source_location": "L1"
     },
     {
-      "id": "corp_workers_intelligence_extraction_rationale_40",
+      "id": "corp_workers_intelligence_extraction_rationale_117",
+      "label": "Extract problem observations from a single comment.",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "test_extraction.py",
+      "file_type": "rationale",
+      "norm_label": "extract problem observations from a single comment.",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L117"
+    },
+    {
+      "id": "corp_workers_intelligence_extraction_rationale_145",
+      "label": "Extract observations from a batch of comments with cross-comment synthesis.\u2026",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "test_extraction.py",
+      "file_type": "rationale",
+      "norm_label": "extract observations from a batch of comments with cross-comment synthesis....",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L145"
+    },
+    {
+      "id": "corp_workers_intelligence_extraction_rationale_70",
       "label": "DTO for a single extracted problem observation.",
       "_origin": "ast",
       "community": 14,
@@ -7949,18 +8053,7 @@
       "file_type": "rationale",
       "norm_label": "dto for a single extracted problem observation.",
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L40"
-    },
-    {
-      "id": "corp_workers_intelligence_extraction_rationale_55",
-      "label": "Extract problem observations from a single comment. Returns a list of\u2026",
-      "_origin": "ast",
-      "community": 14,
-      "community_name": "test_extraction.py",
-      "file_type": "rationale",
-      "norm_label": "extract problem observations from a single comment. returns a list of...",
-      "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L55"
+      "source_location": "L70"
     },
     {
       "id": "tests_workers_test_extraction_rationale_1",
@@ -8029,28 +8122,6 @@
       "source_location": ""
     },
     {
-      "id": "corp_core_schemas_evidence",
-      "label": "schemas/evidence.py",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "AccessMethod",
-      "file_type": "code",
-      "norm_label": "schemas/evidence.py",
-      "source_file": "corp/core/schemas/evidence.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "corp_core_schemas_evidence_py_basemodel",
-      "label": "BaseModel",
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "AccessMethod",
-      "file_type": "code",
-      "norm_label": "basemodel",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "corp_workers_adapters_base",
       "label": "adapters/base.py",
       "_origin": "ast",
@@ -8069,6 +8140,17 @@
       "community_name": "AccessMethod",
       "file_type": "code",
       "norm_label": "abc",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "corp_workers_adapters_base_py_basemodel",
+      "label": "BaseModel",
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "AccessMethod",
+      "file_type": "code",
+      "norm_label": "basemodel",
       "source_file": "",
       "source_location": ""
     },
@@ -8093,6 +8175,17 @@
       "norm_label": "test_adapter_schema.py",
       "source_file": "tests/workers/test_adapter_schema.py",
       "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_adapters_base_rationale_11",
+      "label": "The one schema both adapter families emit. This is the Build item.",
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "AccessMethod",
+      "file_type": "rationale",
+      "norm_label": "the one schema both adapter families emit. this is the build item.",
+      "source_file": "corp/workers/adapters/base.py",
+      "source_location": "L11"
     },
     {
       "id": "corp_workers_adapters_base_rationale_27",
@@ -8137,6 +8230,17 @@
       "norm_label": "unit tests for dossier rendering \u2014 no db, fixture data only.",
       "source_file": "tests/workers/test_dossier_generator.py",
       "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_competitive_pipeline_py_asyncsession",
+      "label": "AsyncSession",
+      "_origin": "ast",
+      "community": 17,
+      "community_name": "LLMProvider",
+      "file_type": "code",
+      "norm_label": "asyncsession",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "corp_workers_providers_registry",
@@ -8488,6 +8592,17 @@
       "norm_label": "unit tests for the youtube adapter \u2014 all api calls mocked.",
       "source_file": "tests/workers/test_youtube_adapter.py",
       "source_location": "L1"
+    },
+    {
+      "id": "corp_core_models_competitive_py_str",
+      "label": "str",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "test_scoring_engine.py",
+      "file_type": "code",
+      "norm_label": "str",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "corp_core_scoring_engine",
@@ -8934,20 +9049,9 @@
       "label": "AsyncSession",
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "code",
       "norm_label": "asyncsession",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "corp_workers_adapters_base_py_basemodel",
-      "label": "BaseModel",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "NormalizedContent",
-      "file_type": "code",
-      "norm_label": "basemodel",
       "source_file": "",
       "source_location": ""
     },
@@ -8956,7 +9060,7 @@
       "label": "Find the ContentItem a comment/reply belongs to.",
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "rationale",
       "norm_label": "find the contentitem a comment/reply belongs to.",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -8967,7 +9071,7 @@
       "label": "Update CreatorPlatformAccount with channel-level metadata.",
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "rationale",
       "norm_label": "update creatorplatformaccount with channel-level metadata.",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -8978,7 +9082,7 @@
       "label": "Persists adapter output into ContentItem, AudienceInteraction, and Evidence\u2026",
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "rationale",
       "norm_label": "persists adapter output into contentitem, audienceinteraction, and evidence...",
       "source_file": "corp/workers/acquisition/collector.py",
@@ -8989,22 +9093,11 @@
       "label": "Collect all data for a creator and persist to DB. Args: identifier: Platform-\u2026",
       "_origin": "ast",
       "community": 25,
-      "community_name": "NormalizedContent",
+      "community_name": "AcquisitionCollector",
       "file_type": "rationale",
       "norm_label": "collect all data for a creator and persist to db. args: identifier: platform-...",
       "source_file": "corp/workers/acquisition/collector.py",
       "source_location": "L47"
-    },
-    {
-      "id": "corp_workers_adapters_base_rationale_11",
-      "label": "The one schema both adapter families emit. This is the Build item.",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "NormalizedContent",
-      "file_type": "rationale",
-      "norm_label": "the one schema both adapter families emit. this is the build item.",
-      "source_file": "corp/workers/adapters/base.py",
-      "source_location": "L11"
     },
     {
       "id": "migrations_versions_e5f3a7b2c4d6_enrich_content_and_creator_fields",
@@ -9018,15 +9111,125 @@
       "source_location": "L1"
     },
     {
-      "id": "tests_workers_test_fair_provider_rationale_123",
-      "label": "System prompt is prepended to the task.",
+      "id": "corp_core_intent_hierarchy",
+      "label": "hierarchy.py",
       "_origin": "ast",
       "community": 27,
-      "community_name": "test_generate_json_with_system_prompt",
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "hierarchy.py",
+      "source_file": "corp/core/intent/hierarchy.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_core_intent_hierarchy_py_any",
+      "label": "Any",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "any",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "corp_core_intent_hierarchy_py_path",
+      "label": "Path",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "corp_core_models_intent_py_str",
+      "label": "str",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "str",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "corp_workers_intelligence_intent",
+      "label": "intelligence/intent.py",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "intelligence/intent.py",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_py_path",
+      "label": "Path",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "tests_core_test_intent",
+      "label": "test_intent.py",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "code",
+      "norm_label": "test_intent.py",
+      "source_file": "tests/core/test_intent.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_core_intent_hierarchy_rationale_18",
+      "label": "Rules-table classification. Match indicators against the hierarchy.",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
       "file_type": "rationale",
-      "norm_label": "system prompt is prepended to the task.",
-      "source_file": "tests/workers/test_fair_provider.py",
-      "source_location": "L123"
+      "norm_label": "rules-table classification. match indicators against the hierarchy.",
+      "source_file": "corp/core/intent/hierarchy.py",
+      "source_location": "L18"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_rationale_1",
+      "label": "Commercial intent classification via LLM + rules hierarchy.",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "rationale",
+      "norm_label": "commercial intent classification via llm + rules hierarchy.",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_rationale_51",
+      "label": "DTO for a classified commercial signal.",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "rationale",
+      "norm_label": "dto for a classified commercial signal.",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L51"
+    },
+    {
+      "id": "corp_workers_intelligence_intent_rationale_93",
+      "label": "Classify using the YAML rules table as a baseline.",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "SignalLevel",
+      "file_type": "rationale",
+      "norm_label": "classify using the yaml rules table as a baseline.",
+      "source_file": "corp/workers/intelligence/intent.py",
+      "source_location": "L93"
     },
     {
       "id": "corp_core_rules_loader",
@@ -9757,6 +9960,17 @@
       "source_location": "L296"
     },
     {
+      "id": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations",
+      "label": "f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "file_type": "code",
+      "norm_label": "f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_file": "migrations/versions/f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_location": "L1"
+    },
+    {
       "id": "docs_design_corp_search_before_build_checklist",
       "label": "CORP_search_before_build_checklist.md",
       "_origin": "ast",
@@ -10279,6 +10493,17 @@
       "norm_label": "unit tests for the fair provider adapter.",
       "source_file": "tests/workers/test_fair_provider.py",
       "source_location": "L1"
+    },
+    {
+      "id": "tests_workers_test_fair_provider_rationale_123",
+      "label": "System prompt is prepended to the task.",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "test_fair_provider.py",
+      "file_type": "rationale",
+      "norm_label": "system prompt is prepended to the task.",
+      "source_file": "tests/workers/test_fair_provider.py",
+      "source_location": "L123"
     },
     {
       "id": "tests_workers_test_fair_provider_rationale_13",
@@ -10819,7 +11044,18 @@
       "source_location": ""
     },
     {
-      "id": "corp_workers_intelligence_cluster_pipeline_rationale_29",
+      "id": "corp_workers_intelligence_cluster_pipeline_rationale_189",
+      "label": "Merge BERTopic cluster labels into the creator's ContentItem topics. Produces a\u2026",
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "rationale",
+      "norm_label": "merge bertopic cluster labels into the creator's contentitem topics. produces a...",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L189"
+    },
+    {
+      "id": "corp_workers_intelligence_cluster_pipeline_rationale_30",
       "label": "Embeds ProblemObservations, clusters them, and persists results.",
       "_origin": "ast",
       "community": 6,
@@ -10827,10 +11063,10 @@
       "file_type": "rationale",
       "norm_label": "embeds problemobservations, clusters them, and persists results.",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L29"
+      "source_location": "L30"
     },
     {
-      "id": "corp_workers_intelligence_cluster_pipeline_rationale_45",
+      "id": "corp_workers_intelligence_cluster_pipeline_rationale_46",
       "label": "Run clustering pipeline. Args: creator_id: Scope to a single creator, or None\u2026",
       "_origin": "ast",
       "community": 6,
@@ -10838,40 +11074,40 @@
       "file_type": "rationale",
       "norm_label": "run clustering pipeline. args: creator_id: scope to a single creator, or none...",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L45"
+      "source_location": "L46"
     },
     {
       "id": "corp_workers_intelligence_clustering_rationale_1",
-      "label": "Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling.",
+      "label": "Problem observation clustering via BERTopic (UMAP + HDBSCAN + c-TF-IDF).",
       "_origin": "ast",
       "community": 6,
       "community_name": "ClusterPipeline",
       "file_type": "rationale",
-      "norm_label": "problem observation clustering via umap + hdbscan with c-tf-idf labeling.",
+      "norm_label": "problem observation clustering via bertopic (umap + hdbscan + c-tf-idf).",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L1"
     },
     {
-      "id": "corp_workers_intelligence_clustering_rationale_143",
-      "label": "Pick the longest text as the representative description.",
+      "id": "corp_workers_intelligence_clustering_rationale_111",
+      "label": "Holds the last fitted BERTopic model for label extraction.",
       "_origin": "ast",
       "community": 6,
       "community_name": "ClusterPipeline",
       "file_type": "rationale",
-      "norm_label": "pick the longest text as the representative description.",
+      "norm_label": "holds the last fitted bertopic model for label extraction.",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L143"
+      "source_location": "L111"
     },
     {
-      "id": "corp_workers_intelligence_clustering_rationale_148",
-      "label": "Generate a cluster label from the most common words across texts.",
+      "id": "corp_workers_intelligence_clustering_rationale_118",
+      "label": "Return topic_id \u2192 c-TF-IDF label mapping from the last fit.",
       "_origin": "ast",
       "community": 6,
       "community_name": "ClusterPipeline",
       "file_type": "rationale",
-      "norm_label": "generate a cluster label from the most common words across texts.",
+      "norm_label": "return topic_id \u2192 c-tf-idf label mapping from the last fit.",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L148"
+      "source_location": "L118"
     },
     {
       "id": "corp_workers_intelligence_clustering_rationale_18",
@@ -10883,6 +11119,17 @@
       "norm_label": "output of the clustering step.",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L18"
+    },
+    {
+      "id": "corp_workers_intelligence_clustering_rationale_192",
+      "label": "Pick the longest text as the representative description.",
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "rationale",
+      "norm_label": "pick the longest text as the representative description.",
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L192"
     },
     {
       "id": "corp_workers_intelligence_clustering_rationale_30",
@@ -10897,14 +11144,25 @@
     },
     {
       "id": "corp_workers_intelligence_clustering_rationale_45",
-      "label": "Cluster observation texts using UMAP + HDBSCAN. Args: texts:\u2026",
+      "label": "Cluster observation texts using BERTopic (UMAP + HDBSCAN + c-TF-IDF). Uses pre-\u2026",
       "_origin": "ast",
       "community": 6,
       "community_name": "ClusterPipeline",
       "file_type": "rationale",
-      "norm_label": "cluster observation texts using umap + hdbscan. args: texts:...",
+      "norm_label": "cluster observation texts using bertopic (umap + hdbscan + c-tf-idf). uses pre-...",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L45"
+    },
+    {
+      "id": "corp_workers_intelligence_clustering_rationale_74",
+      "label": "Run BERTopic with pre-computed embeddings and return topic assignments.",
+      "_origin": "ast",
+      "community": 6,
+      "community_name": "ClusterPipeline",
+      "file_type": "rationale",
+      "norm_label": "run bertopic with pre-computed embeddings and return topic assignments.",
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L74"
     },
     {
       "id": "tests_integration_test_cluster_pipeline_rationale_1",
@@ -11295,6 +11553,28 @@
       "source_location": ""
     },
     {
+      "id": "corp_core_schemas_evidence",
+      "label": "schemas/evidence.py",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "test_models_db.py",
+      "file_type": "code",
+      "norm_label": "schemas/evidence.py",
+      "source_file": "corp/core/schemas/evidence.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "corp_core_schemas_evidence_py_basemodel",
+      "label": "BaseModel",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "test_models_db.py",
+      "file_type": "code",
+      "norm_label": "basemodel",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "tests_integration_test_models_db",
       "label": "test_models_db.py",
       "_origin": "ast",
@@ -11394,7 +11674,40 @@
       "source_location": ""
     },
     {
-      "id": "corp_workers_intelligence_pipeline_rationale_25",
+      "id": "corp_workers_intelligence_pipeline_rationale_109",
+      "label": "Extract observations from a group of comments in batches.",
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "rationale",
+      "norm_label": "extract observations from a group of comments in batches.",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L109"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_rationale_177",
+      "label": "Pick the best evidence row for a batch-extracted observation.",
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "rationale",
+      "norm_label": "pick the best evidence row for a batch-extracted observation.",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L177"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_rationale_185",
+      "label": "Load the most recent Evidence row for each external_id.",
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "test_intelligence_pipeline.py",
+      "file_type": "rationale",
+      "norm_label": "load the most recent evidence row for each external_id.",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L185"
+    },
+    {
+      "id": "corp_workers_intelligence_pipeline_rationale_28",
       "label": "Runs extraction + topic classification for a creator's collected data.",
       "_origin": "ast",
       "community": 9,
@@ -11402,10 +11715,10 @@
       "file_type": "rationale",
       "norm_label": "runs extraction + topic classification for a creator's collected data.",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L25"
+      "source_location": "L28"
     },
     {
-      "id": "corp_workers_intelligence_pipeline_rationale_32",
+      "id": "corp_workers_intelligence_pipeline_rationale_35",
       "label": "Run intelligence pipeline for a creator. Loads all interactions + evidence,\u2026",
       "_origin": "ast",
       "community": 9,
@@ -11413,7 +11726,7 @@
       "file_type": "rationale",
       "norm_label": "run intelligence pipeline for a creator. loads all interactions + evidence,...",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L32"
+      "source_location": "L35"
     },
     {
       "id": "tests_integration_test_intelligence_pipeline_rationale_1",
@@ -12189,7 +12502,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L39",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -12201,7 +12514,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L147",
+      "source_location": "L151",
       "weight": 1.0
     },
     {
@@ -12213,7 +12526,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L171",
+      "source_location": "L175",
       "weight": 1.0
     },
     {
@@ -12225,7 +12538,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L51",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -12237,7 +12550,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L67",
+      "source_location": "L68",
       "weight": 1.0
     },
     {
@@ -12249,7 +12562,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L70",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -12261,7 +12574,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L78",
+      "source_location": "L79",
       "weight": 1.0
     },
     {
@@ -12273,7 +12586,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L80",
+      "source_location": "L81",
       "weight": 1.0
     },
     {
@@ -12285,7 +12598,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L82",
+      "source_location": "L83",
       "weight": 1.0
     },
     {
@@ -12297,7 +12610,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L83",
+      "source_location": "L84",
       "weight": 1.0
     },
     {
@@ -12309,7 +12622,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L86",
+      "source_location": "L87",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_run",
+      "target": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_unify_topics",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L90",
       "weight": 1.0
     },
     {
@@ -12321,19 +12646,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L109",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_clustering_build_clusters",
-      "target": "corp_workers_intelligence_clustering_generate_label",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L110",
+      "source_location": "L159",
       "weight": 1.0
     },
     {
@@ -12345,7 +12658,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L123",
+      "source_location": "L172",
       "weight": 1.0
     },
     {
@@ -12357,31 +12670,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L56",
+      "source_location": "L59",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_clustering_cluster_observations",
-      "target": "corp_workers_intelligence_clustering_reduce_dimensions",
+      "target": "corp_workers_intelligence_clustering_fit_bertopic",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L62",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_clustering_cluster_observations",
-      "target": "corp_workers_intelligence_clustering_run_hdbscan",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L63",
+      "source_location": "L65",
       "weight": 1.0
     },
     {
@@ -12393,11 +12694,119 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L64",
+      "source_location": "L66",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_get_representative_texts",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L161",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "target": "corp_core_models_evidence_evidence",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L191",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "target": "corp_core_models_competitive_competitor",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L217",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_descriptions",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L100",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L103",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "target": "corp_core_models_workflow_researchrun",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L84",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_clusters",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L99",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_extraction_extract_observations",
+      "target": "corp_workers_intelligence_extraction_parse_observation",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L133",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "target": "corp_workers_intelligence_extraction_parse_observation",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L180",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_parse_observation",
       "target": "corp_workers_intelligence_extraction_extractedobservation",
       "relation": "calls",
       "_origin": "ast",
@@ -12405,7 +12814,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L78",
+      "source_location": "L99",
       "weight": 1.0
     },
     {
@@ -12609,23 +13018,47 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L132",
+      "source_location": "L213",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_problems",
-      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_find_evidence",
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "target": "corp_workers_intelligence_extraction_extract_observations_batch",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L80",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_problems",
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_pick_evidence_for_observation",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L134",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "target": "corp_core_models_intelligence_problemobservation",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L135",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
       "target": "corp_workers_intelligence_extraction_extract_observations",
       "relation": "calls",
       "_origin": "ast",
@@ -12633,12 +13066,24 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L88",
+      "source_location": "L149",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_problems",
-      "target": "corp_core_models_intelligence_problemobservation",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_load_evidence_map",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L86",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_problems",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -12657,7 +13102,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L37",
+      "source_location": "L41",
       "weight": 1.0
     },
     {
@@ -12669,7 +13114,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L51",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -12681,7 +13126,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L54",
+      "source_location": "L58",
       "weight": 1.0
     },
     {
@@ -12693,7 +13138,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L55",
+      "source_location": "L59",
       "weight": 1.0
     },
     {
@@ -12705,7 +13150,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L56",
+      "source_location": "L60",
       "weight": 1.0
     },
     {
@@ -15550,30 +15995,6 @@
       "context": "call",
       "source_file": "tests/workers/test_clustering.py",
       "source_location": "L67",
-      "weight": 1.0
-    },
-    {
-      "source": "tests_workers_test_clustering_test_generate_label",
-      "target": "corp_workers_intelligence_clustering_generate_label",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "tests/workers/test_clustering.py",
-      "source_location": "L119",
-      "weight": 1.0
-    },
-    {
-      "source": "tests_workers_test_clustering_test_generate_label_empty",
-      "target": "corp_workers_intelligence_clustering_generate_label",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "tests/workers/test_clustering.py",
-      "source_location": "L125",
       "weight": 1.0
     },
     {
@@ -19017,7 +19438,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L134",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -19029,7 +19450,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L134",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -19041,7 +19462,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L112",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -19053,7 +19474,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L139",
+      "source_location": "L143",
       "weight": 1.0
     },
     {
@@ -19065,7 +19486,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L139",
+      "source_location": "L143",
       "weight": 1.0
     },
     {
@@ -19077,7 +19498,19 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L125",
+      "source_location": "L129",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_unify_topics",
+      "target": "corp_workers_intelligence_clustering_clusterresult",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "generic_arg",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -19089,7 +19522,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L95",
+      "source_location": "L134",
       "weight": 1.0
     },
     {
@@ -19114,6 +19547,42 @@
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_clusters",
+      "target": "corp_core_models_intelligence_problemcluster",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "generic_arg",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L118",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_extract_observations",
+      "target": "corp_workers_intelligence_extraction_extractedobservation",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "generic_arg",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L110",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "target": "corp_workers_intelligence_extraction_extractedobservation",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "generic_arg",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L139",
       "weight": 1.0
     },
     {
@@ -19126,6 +19595,18 @@
       "context": "generic_arg",
       "source_file": "corp/workers/intelligence/intent_pipeline.py",
       "source_location": "L77",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "target": "corp_core_models_evidence_evidence",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "generic_arg",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L101",
       "weight": 1.0
     },
     {
@@ -20810,31 +21291,19 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
+      "target": "corp_core_models_content_contentitem",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline",
       "target": "corp_core_models_creator_creator",
-      "relation": "imports",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L10",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_creator_creatorstatus",
-      "relation": "imports",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L10",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_evidence_evidence",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -20846,7 +21315,19 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_intelligence_problemcluster",
+      "target": "corp_core_models_creator_creatorstatus",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline",
+      "target": "corp_core_models_evidence_evidence",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -20854,6 +21335,18 @@
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
       "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline",
+      "target": "corp_core_models_intelligence_problemcluster",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L13",
       "weight": 1.0
     },
     {
@@ -20865,7 +21358,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0
     },
     {
@@ -20877,7 +21370,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0
     },
     {
@@ -20889,7 +21382,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L17",
+      "source_location": "L18",
       "weight": 1.0
     },
     {
@@ -20901,7 +21394,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -20913,7 +21406,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -20925,7 +21418,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -20937,7 +21430,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L23",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -20949,7 +21442,151 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L23",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_content_contentitem",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_evidence_accessmethod",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_evidence_compliancestatus",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_evidence_evidence",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_intelligence_problemcluster",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_intelligence_problemclustermember",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_intelligence_problemobservation",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_workflow_researchrun",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_workers_providers_registry_llmprovider",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_competitive_competitor",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_competitive_competitorstrength",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_competitive_competitortype",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L9",
       "weight": 1.0
     },
     {
@@ -21206,6 +21843,18 @@
     },
     {
       "source": "corp_workers_intelligence_pipeline",
+      "target": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline",
       "target": "corp_workers_intelligence_topics_classify_topics",
       "relation": "imports",
       "_origin": "ast",
@@ -21213,7 +21862,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -21225,7 +21874,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L19",
+      "source_location": "L20",
       "weight": 1.0
     },
     {
@@ -23354,18 +24003,6 @@
     },
     {
       "source": "tests_workers_test_clustering",
-      "target": "corp_workers_intelligence_clustering_generate_label",
-      "relation": "imports",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "tests/workers/test_clustering.py",
-      "source_location": "L7",
-      "weight": 1.0
-    },
-    {
-      "source": "tests_workers_test_clustering",
       "target": "corp_workers_intelligence_clustering_pick_representative",
       "relation": "imports",
       "_origin": "ast",
@@ -24530,7 +25167,7 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_creator",
+      "target": "corp_core_models_content",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24542,7 +25179,7 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_evidence",
+      "target": "corp_core_models_creator",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24554,7 +25191,7 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_intelligence",
+      "target": "corp_core_models_evidence",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24566,19 +25203,19 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_core_models_workflow",
+      "target": "corp_core_models_intelligence",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L17",
+      "source_location": "L13",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
-      "target": "corp_workers_intelligence_clustering",
+      "target": "corp_core_models_workflow",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24590,6 +25227,18 @@
     },
     {
       "source": "corp_workers_intelligence_cluster_pipeline",
+      "target": "corp_workers_intelligence_clustering",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L19",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline",
       "target": "corp_workers_intelligence_embeddings",
       "relation": "imports_from",
       "_origin": "ast",
@@ -24597,7 +25246,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L23",
+      "source_location": "L24",
       "weight": 1.0
     },
     {
@@ -24622,6 +25271,78 @@
       "context": "import",
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_content",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_evidence",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_intelligence",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_workflow",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_workers_providers_registry",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_core_models_competitive",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L9",
       "weight": 1.0
     },
     {
@@ -24813,7 +25534,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L18",
+      "source_location": "L19",
       "weight": 1.0
     },
     {
@@ -24825,7 +25546,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L19",
+      "source_location": "L20",
       "weight": 1.0
     },
     {
@@ -26457,7 +27178,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -26469,7 +27190,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -26481,7 +27202,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L139",
+      "source_location": "L143",
       "weight": 1.0
     },
     {
@@ -26493,7 +27214,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L125",
+      "source_location": "L129",
       "weight": 1.0
     },
     {
@@ -26505,19 +27226,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L103",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_clustering_build_clusters",
-      "target": "corp_workers_intelligence_clustering_py_ndarray",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "parameter_type",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L95",
+      "source_location": "L107",
       "weight": 1.0
     },
     {
@@ -26533,7 +27242,7 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering_reduce_dimensions",
+      "source": "corp_workers_intelligence_clustering_fit_bertopic",
       "target": "corp_workers_intelligence_clustering_clusteringconfig",
       "relation": "references",
       "_origin": "ast",
@@ -26541,19 +27250,55 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L67",
+      "source_location": "L69",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering_run_hdbscan",
-      "target": "corp_workers_intelligence_clustering_clusteringconfig",
+      "source": "corp_workers_intelligence_clustering_fit_bertopic",
+      "target": "corp_workers_intelligence_clustering_py_ndarray",
       "relation": "references",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L83",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "target": "corp_core_models_intelligence_problemcluster",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L155",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_init",
+      "target": "corp_workers_intelligence_competitive_pipeline_py_asyncsession",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L74",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_init",
+      "target": "corp_workers_providers_registry_llmprovider",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -26625,7 +27370,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L27",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -26637,7 +27382,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L27",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -26649,7 +27394,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L134",
+      "source_location": "L215",
       "weight": 1.0
     },
     {
@@ -27769,30 +28514,6 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering_reduce_dimensions",
-      "target": "corp_workers_intelligence_clustering_py_ndarray",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "return_type",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L67",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_clustering_run_hdbscan",
-      "target": "corp_workers_intelligence_clustering_py_ndarray",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "return_type",
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L83",
-      "weight": 1.0
-    },
-    {
       "source": "corp_workers_intelligence_embeddings_embed_texts",
       "target": "corp_workers_intelligence_embeddings_py_ndarray",
       "relation": "references",
@@ -27826,18 +28547,6 @@
       "context": "return_type",
       "source_file": "corp/workers/intelligence/embeddings.py",
       "source_location": "L33",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline_find_evidence",
-      "target": "corp_core_models_evidence_evidence",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "return_type",
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L110",
       "weight": 1.0
     },
     {
@@ -28867,7 +29576,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L33",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -28878,7 +29587,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L50",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -29571,29 +30280,40 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L28",
+      "source_location": "L29",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_clustering",
-      "target": "corp_workers_intelligence_clustering_pick_representative",
+      "target": "corp_workers_intelligence_clustering_topicmodelcache",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L142",
+      "source_location": "L110",
       "weight": 1.0
     },
     {
       "source": "corp_workers_intelligence_clustering",
-      "target": "corp_workers_intelligence_clustering_generate_label",
+      "target": "corp_workers_intelligence_clustering_get_topic_labels",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L147",
+      "source_location": "L117",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_clustering",
+      "target": "corp_workers_intelligence_clustering_build_clusters",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L134",
       "weight": 1.0
     },
     {
@@ -29605,6 +30325,17 @@
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_clustering",
+      "target": "corp_workers_intelligence_clustering_pick_representative",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L191",
       "weight": 1.0
     },
     {
@@ -29631,35 +30362,24 @@
     },
     {
       "source": "corp_workers_intelligence_clustering",
-      "target": "corp_workers_intelligence_clustering_reduce_dimensions",
+      "target": "corp_workers_intelligence_clustering_fit_bertopic",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L67",
+      "source_location": "L69",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering",
-      "target": "corp_workers_intelligence_clustering_run_hdbscan",
+      "source": "corp_workers_intelligence_competitive_pipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L83",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_clustering",
-      "target": "corp_workers_intelligence_clustering_build_clusters",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L95",
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L71",
       "weight": 1.0
     },
     {
@@ -29697,24 +30417,46 @@
     },
     {
       "source": "corp_workers_intelligence_extraction",
-      "target": "corp_workers_intelligence_extraction_extractedobservation",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L39",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_extraction",
       "target": "corp_workers_intelligence_extraction_extract_observations",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L48",
+      "source_location": "L110",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction",
+      "target": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L139",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction",
+      "target": "corp_workers_intelligence_extraction_extractedobservation",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction",
+      "target": "corp_workers_intelligence_extraction_parse_observation",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L81",
       "weight": 1.0
     },
     {
@@ -29791,7 +30533,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L24",
+      "source_location": "L27",
       "weight": 1.0
     },
     {
@@ -30859,6 +31601,28 @@
       "confidence_score": 1.0,
       "source_file": "migrations/versions/e5f3a7b2c4d6_enrich_content_and_creator_fields.py",
       "source_location": "L64",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations",
+      "target": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations_upgrade",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "migrations/versions/f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_location": "L19",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations",
+      "target": "migrations_versions_f7a4b8c6d2e1_add_sentiment_urgency_to_observations_downgrade",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "migrations/versions/f7a4b8c6d2e1_add_sentiment_urgency_to_observations.py",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -34125,7 +34889,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L33",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -34136,7 +34900,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L33",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -34147,7 +34911,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/core/models/intelligence.py",
-      "source_location": "L50",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -35225,7 +35989,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L103",
+      "source_location": "L107",
       "weight": 1.0
     },
     {
@@ -35236,7 +36000,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L112",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -35247,7 +36011,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L125",
+      "source_location": "L129",
       "weight": 1.0
     },
     {
@@ -35258,7 +36022,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L134",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -35269,7 +36033,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L139",
+      "source_location": "L143",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline_clusterpipeline",
+      "target": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_unify_topics",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -35280,7 +36055,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -35291,7 +36066,73 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L41",
+      "source_location": "L42",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_clusters",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L118",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_load_descriptions",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L132",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_get_representative_texts",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L143",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_discover_competitors",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L155",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_init",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L74",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -35395,13 +36236,35 @@
     },
     {
       "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_find_evidence",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
       "relation": "method",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L110",
+      "source_location": "L101",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_pick_evidence_for_observation",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L172",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_load_evidence_map",
+      "relation": "method",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -35412,7 +36275,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L119",
+      "source_location": "L200",
       "weight": 1.0
     },
     {
@@ -35423,7 +36286,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L134",
+      "source_location": "L215",
       "weight": 1.0
     },
     {
@@ -35434,7 +36297,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L143",
+      "source_location": "L224",
       "weight": 1.0
     },
     {
@@ -35445,7 +36308,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L27",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -35456,7 +36319,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L31",
+      "source_location": "L34",
       "weight": 1.0
     },
     {
@@ -35467,7 +36330,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L71",
+      "source_location": "L75",
       "weight": 1.0
     },
     {
@@ -36406,25 +37269,36 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_cluster_pipeline_rationale_29",
+      "source": "corp_workers_intelligence_cluster_pipeline_rationale_189",
+      "target": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_unify_topics",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L189",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline_rationale_30",
       "target": "corp_workers_intelligence_cluster_pipeline_clusterpipeline",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L29",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_cluster_pipeline_rationale_45",
+      "source": "corp_workers_intelligence_cluster_pipeline_rationale_46",
       "target": "corp_workers_intelligence_cluster_pipeline_clusterpipeline_run",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L45",
+      "source_location": "L46",
       "weight": 1.0
     },
     {
@@ -36439,25 +37313,25 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering_rationale_143",
-      "target": "corp_workers_intelligence_clustering_pick_representative",
+      "source": "corp_workers_intelligence_clustering_rationale_111",
+      "target": "corp_workers_intelligence_clustering_topicmodelcache",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L143",
+      "source_location": "L111",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_clustering_rationale_148",
-      "target": "corp_workers_intelligence_clustering_generate_label",
+      "source": "corp_workers_intelligence_clustering_rationale_118",
+      "target": "corp_workers_intelligence_clustering_get_topic_labels",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
-      "source_location": "L148",
+      "source_location": "L118",
       "weight": 1.0
     },
     {
@@ -36469,6 +37343,17 @@
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_clustering_rationale_192",
+      "target": "corp_workers_intelligence_clustering_pick_representative",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L192",
       "weight": 1.0
     },
     {
@@ -36491,6 +37376,50 @@
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/clustering.py",
       "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_clustering_rationale_74",
+      "target": "corp_workers_intelligence_clustering_fit_bertopic",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/clustering.py",
+      "source_location": "L74",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_rationale_1",
+      "target": "corp_workers_intelligence_competitive_pipeline",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_rationale_72",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L72",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_rationale_83",
+      "target": "corp_workers_intelligence_competitive_pipeline_competitivepipeline_run",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L83",
       "weight": 1.0
     },
     {
@@ -36549,25 +37478,36 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_extraction_rationale_40",
-      "target": "corp_workers_intelligence_extraction_extractedobservation",
-      "relation": "rationale_for",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L40",
-      "weight": 1.0
-    },
-    {
-      "source": "corp_workers_intelligence_extraction_rationale_55",
+      "source": "corp_workers_intelligence_extraction_rationale_117",
       "target": "corp_workers_intelligence_extraction_extract_observations",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L55",
+      "source_location": "L117",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_rationale_145",
+      "target": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L145",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_rationale_70",
+      "target": "corp_workers_intelligence_extraction_extractedobservation",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L70",
       "weight": 1.0
     },
     {
@@ -36670,25 +37610,58 @@
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_pipeline_rationale_25",
+      "source": "corp_workers_intelligence_pipeline_rationale_109",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_extract_batch",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L109",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_rationale_177",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_pick_evidence_for_observation",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L177",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_rationale_185",
+      "target": "corp_workers_intelligence_pipeline_intelligencepipeline_load_evidence_map",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L185",
+      "weight": 1.0
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_rationale_28",
       "target": "corp_workers_intelligence_pipeline_intelligencepipeline",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L25",
+      "source_location": "L28",
       "weight": 1.0
     },
     {
-      "source": "corp_workers_intelligence_pipeline_rationale_32",
+      "source": "corp_workers_intelligence_pipeline_rationale_35",
       "target": "corp_workers_intelligence_pipeline_intelligencepipeline_run",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L32",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -37403,7 +38376,7 @@
       "confidence_score": 0.85,
       "context": "getattr",
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L50",
+      "source_location": "L51",
       "weight": 1.0
     },
     {
@@ -37523,7 +38496,19 @@
       "confidence_score": 0.95,
       "context": "parameter_type",
       "source_file": "corp/workers/intelligence/extraction.py",
-      "source_location": "L49",
+      "source_location": "L111",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_extraction_extract_observations_batch",
+      "target": "corp_workers_providers_registry_llmprovider",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "context": "parameter_type",
+      "source_file": "corp/workers/intelligence/extraction.py",
+      "source_location": "L140",
       "weight": 0.8
     },
     {
@@ -38453,7 +39438,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L105",
+      "source_location": "L109",
       "weight": 0.8
     },
     {
@@ -38464,7 +39449,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L114",
+      "source_location": "L118",
       "weight": 0.8
     },
     {
@@ -38475,7 +39460,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L118",
+      "source_location": "L122",
       "weight": 0.8
     },
     {
@@ -38486,7 +39471,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L142",
+      "source_location": "L146",
       "weight": 0.8
     },
     {
@@ -38497,7 +39482,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L147",
+      "source_location": "L151",
       "weight": 0.8
     },
     {
@@ -38508,7 +39493,18 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L171",
+      "source_location": "L175",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_cluster_pipeline_clusterpipeline",
+      "target": "corp_core_models_content_contentitem",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/cluster_pipeline.py",
+      "source_location": "L196",
       "weight": 0.8
     },
     {
@@ -38519,7 +39515,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L33",
+      "source_location": "L34",
       "weight": 0.8
     },
     {
@@ -38530,7 +39526,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L35",
+      "source_location": "L36",
       "weight": 0.8
     },
     {
@@ -38541,7 +39537,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L44",
+      "source_location": "L45",
       "weight": 0.8
     },
     {
@@ -38552,7 +39548,139 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/cluster_pipeline.py",
-      "source_location": "L67",
+      "source_location": "L68",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_intelligence_problemcluster",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L118",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_intelligence_problemclustermember",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L120",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_intelligence_problemobservation",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L121",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_evidence_evidence",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L122",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_content_contentitem",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L134",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_evidence_accessmethod",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L196",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_evidence_compliancestatus",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L197",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_competitive_competitor",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L217",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_competitive_competitortype",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L220",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_competitive_competitorstrength",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L221",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_workers_providers_registry_llmprovider",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L76",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_competitive_pipeline_competitivepipeline",
+      "target": "corp_core_models_workflow_researchrun",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/competitive_pipeline.py",
+      "source_location": "L82",
       "weight": 0.8
     },
     {
@@ -38673,73 +39801,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L110",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_core_models_creator_creator",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L136",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_workers_providers_registry_llmprovider",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L27",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_core_models_workflow_researchrun",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L31",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_core_models_creator_creatorstatus",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L51",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_core_models_content_audienceinteraction",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L73",
-      "weight": 0.8
-    },
-    {
-      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
-      "target": "corp_core_models_content_contentitem",
-      "relation": "uses",
-      "_origin": "ast",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L73",
+      "source_location": "L106",
       "weight": 0.8
     },
     {
@@ -38750,7 +39812,73 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "corp/workers/intelligence/pipeline.py",
-      "source_location": "L97",
+      "source_location": "L135",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_core_models_creator_creator",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L217",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_workers_providers_registry_llmprovider",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L30",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_core_models_workflow_researchrun",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L34",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_core_models_creator_creatorstatus",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L55",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_core_models_content_audienceinteraction",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L77",
+      "weight": 0.8
+    },
+    {
+      "source": "corp_workers_intelligence_pipeline_intelligencepipeline",
+      "target": "corp_core_models_content_contentitem",
+      "relation": "uses",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "corp/workers/intelligence/pipeline.py",
+      "source_location": "L77",
       "weight": 0.8
     },
     {
@@ -41296,5 +42424,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "d8c58d9711971647aadc4f1eee4cfaeb0b638190"
+  "built_at_commit": "0fbb2a40870830c901320c5b08afee71080e00a8"
 }
