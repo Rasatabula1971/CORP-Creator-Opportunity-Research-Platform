@@ -3,12 +3,21 @@
 import hashlib
 import json
 import logging
+import re
 
 import httpx
 
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
+
+
+def _strip_code_fence(text: str) -> str:
+    """FAIR has no JSON mode; free models often wrap JSON in a markdown fence."""
+    match = _FENCE_RE.match(text)
+    return match.group(1) if match else text
 
 
 class FairProviderError(Exception):
@@ -34,11 +43,15 @@ class FairProvider(LLMProvider):
         client_id: str,
         api_key: str,
         timeout: float = 60.0,
+        quality_level: str = "standard",
+        priority: str = "P2",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client_id = client_id
         self._api_key = api_key
         self._timeout = timeout
+        self._quality_level = quality_level
+        self._priority = priority
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -64,8 +77,8 @@ class FairProvider(LLMProvider):
         payload = {
             "client_id": self._client_id,
             "task": task,
-            "quality_level": "standard",
-            "priority": "P2",
+            "quality_level": self._quality_level,
+            "priority": self._priority,
         }
 
         client = await self._get_client()
@@ -86,7 +99,7 @@ class FairProvider(LLMProvider):
             raise FairProviderError(status, reason_code)
 
         raw = result["output"]
-        parsed = json.loads(raw)
+        parsed = json.loads(_strip_code_fence(raw))
 
         provider_id = result.get("provider_id", "unknown")
         model_id = result.get("model_id", "unknown")

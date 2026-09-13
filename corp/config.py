@@ -12,11 +12,18 @@ class Settings(BaseSettings):
     youtube_daily_quota_units: int = 10000
     youtube_requests_per_second: int = 5
 
+    # LLM provider selection: auto | fair | gemini (auto prefers FAIR when FAIR_URL is set)
+    llm_provider: str = "auto"
+
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
 
     fair_url: str = ""
     fair_client_id: str = "corp"
     fair_api_key: str = ""
+    fair_quality_level: str = "standard"
+    fair_priority: str = "P2"
+    fair_timeout_seconds: float = 60.0
 
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"

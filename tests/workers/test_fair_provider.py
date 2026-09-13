@@ -245,3 +245,21 @@ async def test_close_idempotent():
     )
     await provider.close()
     await provider.close()
+
+
+async def test_generate_json_strips_markdown_fence():
+    """Free models often wrap JSON in a markdown fence; the provider tolerates that."""
+    fenced = "```json\n{\"observations\": [{\"text\": \"x\"}]}\n```"
+    transport = _mock_transport(200, _fair_response(output=fenced))
+    provider = FairProvider(
+        base_url="http://fair-test:8000",
+        client_id="corp-test",
+        api_key="test-key",
+    )
+    provider._client = httpx.AsyncClient(
+        base_url="http://fair-test:8000",
+        transport=transport,
+    )
+    result = await provider.generate_json("test")
+    assert result == {"observations": [{"text": "x"}]}
+    await provider.close()
