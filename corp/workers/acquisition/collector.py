@@ -40,6 +40,21 @@ _INTERACTION_TYPE_MAP = {
 }
 
 
+_EXTRA_KEYS = ("commerce_signals", "tags", "music", "domain", "duration", "flair", "subreddit")
+
+
+def _content_extra(meta: dict) -> dict | None:
+    """Whitelist adapter metadata that scoring or the dossier can use later."""
+    extra = {k: meta[k] for k in _EXTRA_KEYS if meta.get(k) not in (None, "", [], {})}
+    links = meta.get("links")
+    if isinstance(links, list):
+        extra["link_kinds"] = sorted({k for link in links for k in link.get("kinds", [])})
+        extra["commerce_links"] = [
+            {"url": link["url"], "kinds": link["kinds"]} for link in links if link.get("kinds")
+        ][:20]
+    return extra or None
+
+
 def _int_or_none(value: object) -> int | None:
     try:
         return int(value) if value is not None else None  # type: ignore[call-overload]
@@ -191,7 +206,8 @@ class AcquisitionCollector:
         self, ci: ContentItem, item: NormalizedContent, research_run_id: str
     ) -> None:
         meta = item.metadata or {}
-        # Keep the latest counts on the row; the snapshot preserves history.
+        # Keep the latest counts and metadata on the row; the snapshot preserves history.
+        ci.extra = _content_extra(meta) or ci.extra
         for field in ("view_count", "like_count", "comment_count"):
             value = meta.get(field)
             if value is not None:
@@ -236,6 +252,7 @@ class AcquisitionCollector:
             like_count=meta.get("like_count"),
             comment_count=meta.get("comment_count"),
             url=item.url,
+            extra=_content_extra(meta),
         )
         self._session.add(ci)
         await self._session.flush()

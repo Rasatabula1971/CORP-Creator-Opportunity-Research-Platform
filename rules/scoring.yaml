@@ -1,12 +1,19 @@
-version: "1.0.0"
+version: "2.0.0"
 
+# scoring_v2 — nine components, weights sum to 1.0.
+# Frequency and commercial intent stay the largest levers. Saturation, alignment
+# and cross-platform consistency are new and read creator-web pages, the
+# creator's own content, and multi-platform evidence respectively.
 weights:
-  audience_problem_frequency: 0.25
-  recency_trend: 0.15
+  audience_problem_frequency: 0.20
+  recency_trend: 0.05
+  engagement_velocity: 0.10
   commercial_intent_strength: 0.20
-  evidence_depth: 0.15
+  evidence_depth: 0.10
   creator_reach: 0.10
-  competition_saturation: 0.15
+  competition_saturation: 0.10
+  creator_content_alignment: 0.10
+  cross_platform_consistency: 0.05
 
 confidence_thresholds:
   high:

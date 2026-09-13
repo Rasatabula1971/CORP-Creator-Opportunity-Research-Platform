@@ -35,6 +35,8 @@ class CreatorScore(TimestampMixin, Base):
     research_run_id: Mapped[str | None] = mapped_column(String(36))
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.
+    diagnostics: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class OpportunityScore(TimestampMixin, Base):
@@ -61,3 +63,5 @@ class OpportunityScore(TimestampMixin, Base):
     research_run_id: Mapped[str | None] = mapped_column(String(36))
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.
+    diagnostics: Mapped[dict | None] = mapped_column(JSONB)
