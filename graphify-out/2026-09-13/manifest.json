@@ -84,15 +84,15 @@
     "semantic_hash": ""
   },
   "corp/core/models/content.py": {
-    "mtime": 1789259294.3585663,
-    "seen": 1789259307.8321614,
-    "ast_hash": "3efbc838a1008f440e749d85ce9408f6",
+    "mtime": 1789225512.5826662,
+    "seen": 1789257624.783152,
+    "ast_hash": "9c06b405fc93db1fd278db92a5cb2832",
     "semantic_hash": ""
   },
   "corp/core/models/creator.py": {
-    "mtime": 1789259294.3585663,
-    "seen": 1789259307.832163,
-    "ast_hash": "f436872a9c9cdf3422580b3d26f1c6c4",
+    "mtime": 1789225512.5826662,
+    "seen": 1789257624.783153,
+    "ast_hash": "282447b11f5fceff04999381bfe733ea",
     "semantic_hash": ""
   },
   "corp/core/models/evidence.py": {
@@ -240,9 +240,9 @@
     "semantic_hash": ""
   },
   "corp/workers/acquisition/collector.py": {
-    "mtime": 1789259294.3585663,
-    "seen": 1789259307.8321905,
-    "ast_hash": "ffa863e6a18f9d2f224ae33cb4f5b84f",
+    "mtime": 1789257583.2534323,
+    "seen": 1789257624.7831774,
+    "ast_hash": "c091c00ff9d05ac6735ffb811f67a71b",
     "semantic_hash": ""
   },
   "corp/workers/adapters/__init__.py": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "corp/workers/adapters/youtube.py": {
-    "mtime": 1789259294.3585663,
-    "seen": 1789259307.8321936,
-    "ast_hash": "68fadfea30f63eba36ffb1d587c53aa2",
+    "mtime": 1789257583.2534323,
+    "seen": 1789257624.7831821,
+    "ast_hash": "0132db7b3a32369896a30db052765458",
     "semantic_hash": ""
   },
   "corp/workers/dossier/__init__.py": {
@@ -705,12 +705,6 @@
     "mtime": 1789225512.6073134,
     "seen": 1789257624.783249,
     "ast_hash": "7c74e0b87a02445d2d072ca70c4ffb6f",
-    "semantic_hash": ""
-  },
-  "migrations/versions/e5f3a7b2c4d6_enrich_content_and_creator_fields.py": {
-    "mtime": 1789259294.3665662,
-    "seen": 1789259307.8322203,
-    "ast_hash": "0584cade1d281c2759a2a03aa341c798",
     "semantic_hash": ""
   }
 }
