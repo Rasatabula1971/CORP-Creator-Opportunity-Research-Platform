@@ -14,6 +14,7 @@ class ProblemObservation(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_observations_evidence_id", "evidence_id"),
         Index("ix_observations_category", "category"),
+        Index("ix_observations_source_side", "source_side"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -24,6 +25,10 @@ class ProblemObservation(TimestampMixin, Base):
     extraction_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
+    # "audience" (comments) or "creator" (own titles/descriptions/transcripts)
+    source_side: Mapped[str] = mapped_column(
+        String(20), default="audience", server_default="audience", nullable=False
+    )
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(

@@ -1,3 +1,4 @@
+import enum
 from abc import ABC, abstractmethod
 from datetime import datetime
 
@@ -6,8 +7,23 @@ from pydantic import BaseModel, Field
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 
 
+class AdapterFamily(str, enum.Enum):
+    """What an adapter's output attaches to."""
+
+    CREATOR_BOUND = "creator_bound"  # own content + audience (YouTube, Reddit, TikTok)
+    NICHE = "niche"  # keyword-keyed problem reservoirs (Stack Exchange, reviews)
+    CREATOR_WEB = "creator_web"  # the creator's web presence (shop, course, media kit)
+
+
 class NormalizedContent(BaseModel):
-    """The one schema both adapter families emit. This is the Build item."""
+    """The one schema every adapter family emits. This is the Build item.
+
+    ``content_type`` values the collector understands:
+    * content: video, short, post, reel, article, thread, story, page
+    * interactions: comment, reply, question, review
+    * creator profile: profile (metadata.follower_count, handle, display_name)
+    * transcript: caption (parent_id = content external_id)
+    """
 
     source_platform: str
     content_type: str
@@ -28,6 +44,10 @@ class SourceAdapter(ABC):
     @property
     @abstractmethod
     def platform(self) -> str: ...
+
+    @property
+    def family(self) -> AdapterFamily:
+        return AdapterFamily.CREATOR_BOUND
 
     @property
     @abstractmethod

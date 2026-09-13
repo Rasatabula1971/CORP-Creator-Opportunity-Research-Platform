@@ -16,6 +16,7 @@ class ContentType(str, enum.Enum):
     SHORT = "short"
     ARTICLE = "article"
     THREAD = "thread"
+    PAGE = "page"  # creator-web: linktree, shop, course, media kit
 
 
 class InteractionType(str, enum.Enum):

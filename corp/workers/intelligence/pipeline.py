@@ -10,6 +10,10 @@ from corp.core.models.creator import CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.workflow import ResearchRun
+from corp.workers.intelligence.creator_content import (
+    CREATOR_PROMPT_VERSION,
+    extract_creator_problems,
+)
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.extraction import (
     EXTRACTION_PROMPT_VERSION,
@@ -54,6 +58,7 @@ class IntelligencePipeline:
             config={"provider": self._provider.model_name},
             prompt_versions={
                 "extraction": EXTRACTION_PROMPT_VERSION,
+                "creator_extraction": CREATOR_PROMPT_VERSION,
                 "topics": TOPIC_PROMPT_VERSION,
             },
             model_versions={"primary": self._provider.model_name},
@@ -68,6 +73,7 @@ class IntelligencePipeline:
                 done=CreatorStatus.EXTRACTED,
             ):
                 await self._extract_problems(creator_id, stats)
+                await self._extract_creator_side(creator_id, stats)
                 await self._classify_and_store_topics(creator_id, stats)
                 await finish_run(
                     self._session, run, stats, max_failure_rate=self._max_failure_rate
@@ -125,6 +131,7 @@ class IntelligencePipeline:
                         extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
                         model_version=self._provider.model_name,
                         confidence=obs.confidence,
+                        source_side="audience",
                     )
                 )
             stats.ok()
@@ -140,18 +147,74 @@ class IntelligencePipeline:
         )
         return result.scalar_one_or_none()
 
-    async def _already_extracted(self, external_id: str) -> bool:
+    async def _already_extracted(
+        self,
+        external_id: str,
+        prompt_version: str = EXTRACTION_PROMPT_VERSION,
+        source_side: str = "audience",
+    ) -> bool:
         result = await self._session.execute(
             select(ProblemObservation.id)
             .join(Evidence, Evidence.id == ProblemObservation.evidence_id)
             .where(
                 Evidence.source_id == external_id,
-                ProblemObservation.extraction_prompt_version == EXTRACTION_PROMPT_VERSION,
+                ProblemObservation.extraction_prompt_version == prompt_version,
                 ProblemObservation.model_version == self._provider.model_name,
+                ProblemObservation.source_side == source_side,
             )
             .limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+    # ── Creator-side extraction ──────────────────────────────────────
+
+    async def _extract_creator_side(self, creator_id: str, stats: PipelineStats) -> None:
+        """What the creator's own titles, descriptions and transcripts address."""
+        result = await self._session.execute(
+            select(ContentItem).where(ContentItem.creator_id == creator_id)
+        )
+        for ci in result.scalars().all():
+            evidence = await self._find_evidence(ci.external_id)
+            if evidence is None:
+                stats.skip()
+                continue
+            if await self._already_extracted(
+                ci.external_id, CREATOR_PROMPT_VERSION, source_side="creator"
+            ):
+                stats.skip()
+                continue
+
+            caption = await self._find_evidence(f"caption_{ci.external_id}")
+            body = "\n\n".join(
+                part for part in (ci.description, caption.raw_text if caption else None) if part
+            )
+            if not body and not ci.title:
+                stats.skip()
+                continue
+
+            try:
+                observations = await extract_creator_problems(
+                    self._provider, ci.title, body, platform=ci.platform or "unknown"
+                )
+            except LLMCallError as exc:
+                stats.fail(exc)
+                continue
+
+            for obs in observations:
+                self._session.add(
+                    ProblemObservation(
+                        evidence_id=evidence.id,
+                        text=obs.text,
+                        category=obs.category,
+                        is_inferred=obs.is_inferred,
+                        extraction_prompt_version=CREATOR_PROMPT_VERSION,
+                        model_version=self._provider.model_name,
+                        confidence=obs.confidence,
+                        source_side="creator",
+                    )
+                )
+            stats.ok()
+            await self._session.flush()
 
     # ── Topics ───────────────────────────────────────────────────────
 

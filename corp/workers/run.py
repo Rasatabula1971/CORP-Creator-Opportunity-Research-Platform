@@ -114,8 +114,8 @@ def main(argv: list[str] | None = None) -> int:
 
     add = sub.add_parser("add-creator", help="register a creator and one platform account")
     add.add_argument("name")
-    add.add_argument("--platform", required=True, help="youtube | reddit")
-    add.add_argument("--handle", required=True, help="@channel, r/<sub>, or u/<user>")
+    add.add_argument("--platform", required=True, help="youtube | reddit | tiktok | web")
+    add.add_argument("--handle", required=True, help="@channel, r/<sub>, u/<user>, or a URL")
     add.add_argument("--niche")
 
     research = sub.add_parser("research", help="run every stage for a creator, in order")
@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     research.add_argument("--skip-collect", action="store_true")
 
     collect = sub.add_parser("collect", help="collect a creator's public data via an adapter")
-    collect.add_argument("platform", help="youtube | reddit")
+    collect.add_argument("platform", help="youtube | reddit | tiktok | web")
     collect.add_argument("identifier", help="channel handle, r/<sub>, or u/<user>")
     collect.add_argument("creator_id")
 

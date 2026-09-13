@@ -6,8 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
-from corp.core.models.creator import CreatorStatus
+from corp.core.models.creator import CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import Evidence
+from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.intelligence.runs import (
@@ -26,6 +27,9 @@ _CONTENT_TYPE_MAP = {
     "short": ContentType.SHORT,
     "reel": ContentType.REEL,
     "article": ContentType.ARTICLE,
+    "story": ContentType.STORY,
+    "thread": ContentType.THREAD,
+    "page": ContentType.PAGE,
 }
 
 _INTERACTION_TYPE_MAP = {
@@ -34,6 +38,13 @@ _INTERACTION_TYPE_MAP = {
     "question": InteractionType.QUESTION,
     "review": InteractionType.REVIEW,
 }
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value) if value is not None else None  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return None
 
 
 class AcquisitionCollector:
@@ -96,13 +107,18 @@ class AcquisitionCollector:
         videos = [i for i in items if i.content_type in _CONTENT_TYPE_MAP]
         comments = [i for i in items if i.content_type in _INTERACTION_TYPE_MAP]
         captions = [i for i in items if i.content_type == "caption"]
+        profiles = [i for i in items if i.content_type == "profile"]
         orphaned = 0
+
+        for item in profiles:
+            await self._record_profile(item, creator_id, research_run_id)
 
         content_map: dict[str, ContentItem] = {}
         for item in videos:
             ci = await self._upsert_content_item(item, creator_id)
             content_map[item.external_id] = ci
             await self._create_evidence(item, research_run_id)
+            await self._snapshot_content(ci, item, research_run_id)
 
         for item in comments:
             ci = await self._find_content_item_for_interaction(
@@ -127,8 +143,69 @@ class AcquisitionCollector:
             "content_items": len(videos),
             "interactions": len(comments) - orphaned,
             "captions": len(captions),
+            "profiles": len(profiles),
             "orphaned_interactions": orphaned,
         }
+
+    async def _record_profile(
+        self, item: NormalizedContent, creator_id: str, research_run_id: str
+    ) -> None:
+        """Update the platform account's follower count and append a snapshot."""
+        meta = item.metadata or {}
+        followers = meta.get("follower_count")
+        result = await self._session.execute(
+            select(CreatorPlatformAccount).where(
+                CreatorPlatformAccount.creator_id == creator_id,
+                CreatorPlatformAccount.platform == item.source_platform,
+            )
+        )
+        account = result.scalars().first()
+        if account is None:
+            logger.info(
+                "No %s account row for creator %s; profile snapshot stored without account link",
+                item.source_platform,
+                creator_id,
+            )
+        else:
+            if followers is not None:
+                account.subscriber_count = int(followers)
+            if meta.get("handle") and not account.external_id:
+                account.external_id = str(meta["handle"])[:255]
+
+        self._session.add(
+            MetricsSnapshot(
+                research_run_id=research_run_id,
+                platform_account_id=account.id if account else None,
+                follower_count=int(followers) if followers is not None else None,
+                extra={
+                    "platform": item.source_platform,
+                    "display_name": meta.get("display_name"),
+                    "video_count": meta.get("video_count"),
+                },
+            )
+        )
+        await self._create_evidence(item, research_run_id)
+        await self._session.flush()
+
+    async def _snapshot_content(
+        self, ci: ContentItem, item: NormalizedContent, research_run_id: str
+    ) -> None:
+        meta = item.metadata or {}
+        # Keep the latest counts on the row; the snapshot preserves history.
+        for field in ("view_count", "like_count", "comment_count"):
+            value = meta.get(field)
+            if value is not None:
+                setattr(ci, field, int(value))
+        self._session.add(
+            MetricsSnapshot(
+                research_run_id=research_run_id,
+                content_item_id=ci.id,
+                view_count=_int_or_none(meta.get("view_count")),
+                like_count=_int_or_none(meta.get("like_count")),
+                comment_count=_int_or_none(meta.get("comment_count")),
+                share_count=_int_or_none(meta.get("share_count")),
+            )
+        )
 
     async def _upsert_content_item(
         self,

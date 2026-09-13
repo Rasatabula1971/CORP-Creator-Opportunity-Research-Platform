@@ -4,6 +4,7 @@ from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorSta
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
+from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
 
@@ -30,6 +31,7 @@ __all__ = [
     "ConfidenceBand",
     "HumanDecision",
     "ResearchRun",
+    "MetricsSnapshot",
     "DecisionType",
     "Gate",
 ]

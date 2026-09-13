@@ -16,6 +16,7 @@ dependencies = [
     "pyrate-limiter>=3.6,<5",
     "google-api-python-client>=2.130,<3",
     "youtube-transcript-api>=0.6,<2",
+    "yt-dlp>=2025.1",
     "google-generativeai>=0.7,<1",
     "sentence-transformers>=3.0,<4",
     "hdbscan>=0.8,<1",

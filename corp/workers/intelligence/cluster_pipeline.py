@@ -102,7 +102,8 @@ class ClusterPipeline:
         return run
 
     async def _load_observations(self, creator_id: str | None) -> list[ProblemObservation]:
-        stmt = select(ProblemObservation)
+        # Audience observations only; creator-side ones feed alignment scoring instead.
+        stmt = select(ProblemObservation).where(ProblemObservation.source_side == "audience")
         if creator_id:
             stmt = (
                 stmt.join(Evidence, ProblemObservation.evidence_id == Evidence.id)
