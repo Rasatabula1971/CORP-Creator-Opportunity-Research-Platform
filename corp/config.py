@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
 
+    instagram_username: str = ""
+    instagram_password: str = ""
+
     fair_url: str = ""
     fair_client_id: str = "corp"
     fair_api_key: str = ""
