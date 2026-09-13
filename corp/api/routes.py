@@ -1,7 +1,7 @@
 """API routes — CORP Step 8 endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +30,7 @@ router = APIRouter()
 
 @router.get("/creators", response_model=list[CreatorResponse])
 async def list_creators(
+    response: Response,
     status: CreatorStatus | None = None,
     min_score: float | None = None,
     limit: int = Query(default=50, le=200),
@@ -52,6 +53,8 @@ async def list_creators(
         )
         query = query.where(Creator.id.in_(scored_ids))
 
+    total = (await session.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
     query = query.order_by(Creator.created_at.desc()).offset(offset).limit(limit)
     result = await session.execute(query)
     return [CreatorResponse.model_validate(c) for c in result.scalars().all()]

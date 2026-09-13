@@ -50,6 +50,10 @@ class Settings(BaseSettings):
 
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000)
+    # When set, every endpoint except /health requires header X-Api-Key to match.
+    api_key: str = ""
+    # Comma-separated origins for CORS; "*" allows all (fine for local dev only).
+    cors_origins: str = "*"
 
 
 settings = Settings()
