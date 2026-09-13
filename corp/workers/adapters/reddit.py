@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 import time
 from datetime import datetime, timezone
 
@@ -19,7 +20,8 @@ from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "CORP-Research/1.0 (educational; non-commercial)"
-_REQUEST_INTERVAL = 2.0  # seconds between requests to stay polite
+_MIN_REQUEST_INTERVAL = 2.0
+_MAX_REQUEST_INTERVAL = 4.0
 
 
 class RedditAdapter(SourceAdapter):
@@ -49,9 +51,10 @@ class RedditAdapter(SourceAdapter):
         return ComplianceStatus.COMPLIANT
 
     def _throttle(self) -> None:
+        interval = random.uniform(_MIN_REQUEST_INTERVAL, _MAX_REQUEST_INTERVAL)
         elapsed = time.monotonic() - self._last_request
-        if elapsed < _REQUEST_INTERVAL:
-            time.sleep(_REQUEST_INTERVAL - elapsed)
+        if elapsed < interval:
+            time.sleep(interval - elapsed)
         self._last_request = time.monotonic()
 
     @retry(

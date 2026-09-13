@@ -1,9 +1,20 @@
-"""TikTok adapter using yt-dlp — no API key required."""
+"""TikTok adapter using yt-dlp — no API key required.
+
+IMPORTANT PRECAUTIONS (read before running):
+- Space out scraping sessions by 2-5 seconds between videos.
+- If you scrape more than ~500 comments at a time, TikTok may trigger
+  slide-CAPTCHAs — keep max_videos low (10-20) for initial runs.
+- Rotate IP or use a VPN for large-scale collection to avoid 24h rate limits.
+- Run from your home connection, not datacenter IPs.
+- yt-dlp must be installed: pip install yt-dlp
+"""
 
 import asyncio
 import json
 import logging
+import random
 import subprocess
+import time
 from datetime import datetime, timezone
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
@@ -11,17 +22,31 @@ from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 
 logger = logging.getLogger(__name__)
 
+_MIN_VIDEO_DELAY = 2.0
+_MAX_VIDEO_DELAY = 5.0
+
 
 class TikTokAdapter(SourceAdapter):
-    """Collects videos and comments from a TikTok creator via yt-dlp."""
+    """Collects videos and comments from a TikTok creator via yt-dlp.
+
+    Rate-limit precautions:
+    - Randomized 2-5s delay between video fetches
+    - 5-minute timeout per yt-dlp call to handle hangs
+    - Graceful degradation: returns partial results on failure
+    - Cookies file support for authenticated sessions
+    """
 
     def __init__(
         self,
-        max_videos: int = 50,
+        max_videos: int = 20,
         include_comments: bool = True,
+        cookies_file: str | None = None,
+        sleep_between_videos: bool = True,
     ) -> None:
         self._max_videos = max_videos
         self._include_comments = include_comments
+        self._cookies_file = cookies_file
+        self._sleep_between = sleep_between_videos
 
     @property
     def platform(self) -> str:
@@ -35,6 +60,11 @@ class TikTokAdapter(SourceAdapter):
     def compliance_status(self) -> ComplianceStatus:
         return ComplianceStatus.TOS_RISK
 
+    def _sleep_between_videos(self) -> None:
+        if self._sleep_between:
+            delay = random.uniform(_MIN_VIDEO_DELAY, _MAX_VIDEO_DELAY)
+            time.sleep(delay)
+
     def _run_ytdlp(self, url: str, extra_args: list[str] | None = None) -> list[dict]:
         cmd = [
             "yt-dlp",
@@ -43,20 +73,38 @@ class TikTokAdapter(SourceAdapter):
             "--playlist-end", str(self._max_videos),
             "--no-warnings",
             "--quiet",
+            "--sleep-interval", "2",
+            "--max-sleep-interval", "5",
         ]
         if self._include_comments:
             cmd.append("--write-comments")
+        if self._cookies_file:
+            cmd.extend(["--cookies", self._cookies_file])
         if extra_args:
             cmd.extend(extra_args)
         cmd.append(url)
 
-        logger.info("Running: %s", " ".join(cmd))
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300
-        )
+        logger.info("Running yt-dlp for %s (max %d videos)", url, self._max_videos)
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("yt-dlp timed out after 5 minutes for %s", url)
+            return []
 
         if result.returncode != 0 and not result.stdout.strip():
-            logger.error("yt-dlp failed: %s", result.stderr[:500])
+            stderr = result.stderr[:500] if result.stderr else ""
+            if "captcha" in stderr.lower() or "verify" in stderr.lower():
+                logger.error(
+                    "TikTok CAPTCHA triggered — reduce max_videos or wait before retrying"
+                )
+            elif "429" in stderr or "rate" in stderr.lower():
+                logger.error(
+                    "TikTok rate-limited — wait 1-24h before retrying, or use a VPN"
+                )
+            else:
+                logger.error("yt-dlp failed: %s", stderr)
             return []
 
         entries = []
@@ -75,8 +123,8 @@ class TikTokAdapter(SourceAdapter):
         text = f"{title}\n\n{description}".strip() if description else title
 
         ts = None
-        upload_date = entry.get("upload_date")
         timestamp_epoch = entry.get("timestamp")
+        upload_date = entry.get("upload_date")
         if timestamp_epoch:
             ts = datetime.fromtimestamp(timestamp_epoch, tz=timezone.utc)
         elif upload_date and len(upload_date) == 8:
