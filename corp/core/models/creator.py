@@ -1,6 +1,7 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -62,5 +63,10 @@ class CreatorPlatformAccount(TimestampMixin, Base):
     external_id: Mapped[str | None] = mapped_column(String(255))
     subscriber_count: Mapped[int | None] = mapped_column()
     verified: Mapped[bool] = mapped_column(default=False)
+    total_view_count: Mapped[int | None] = mapped_column(BigInteger)
+    video_count: Mapped[int | None] = mapped_column(Integer)
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    country: Mapped[str | None] = mapped_column(String(10))
+    description: Mapped[str | None] = mapped_column(Text)
 
     creator: Mapped["Creator"] = relationship(back_populates="platform_accounts")

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +45,10 @@ class ContentItem(TimestampMixin, Base):
     comment_count: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String(500))
     topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    duration: Mapped[int | None] = mapped_column(Integer)
+    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(10))
+    is_short: Mapped[bool | None] = mapped_column(Boolean)
 
     interactions: Mapped[list["AudienceInteraction"]] = relationship(
         back_populates="content_item", cascade="all, delete-orphan"
@@ -71,5 +75,6 @@ class AudienceInteraction(TimestampMixin, Base):
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     like_count: Mapped[int | None] = mapped_column(Integer)
     parent_id: Mapped[str | None] = mapped_column(String(255))
+    author_channel_id: Mapped[str | None] = mapped_column(String(255))
 
     content_item: Mapped["ContentItem"] = relationship(back_populates="interactions")
