@@ -10,7 +10,7 @@ from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
-from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
+from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
 
 __all__ = [
     "Base",
@@ -40,6 +40,7 @@ __all__ = [
     "ConfidenceBand",
     "HumanDecision",
     "ResearchRun",
+    "RunType",
     "MetricsSnapshot",
     "Niche",
     "NicheAlias",

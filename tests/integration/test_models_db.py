@@ -19,7 +19,7 @@ from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, 
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
-from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
+from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheResponse
 from corp.core.schemas.creator import CreatorResponse
@@ -345,6 +345,74 @@ async def test_research_run(clean_db: AsyncSession):
     await session.flush()
     assert run.id is not None
     assert run.prompt_versions["extraction"] == "v1.0"
+    # Slice 5 must not change this: every pre-existing creator-run call site
+    # still gets run_type=CREATOR_RESEARCH by default, unmodified.
+    assert run.run_type == RunType.CREATOR_RESEARCH.value
+
+
+@pytest.mark.asyncio
+async def test_niche_verification_run_with_niche_and_no_creator(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    run = ResearchRun(
+        run_type=RunType.NICHE_VERIFICATION.value,
+        niche_id=niche.id,
+        status="running",
+    )
+    session.add(run)
+    await session.flush()
+
+    assert run.id is not None
+    assert run.creator_id is None
+    assert run.niche_id == niche.id
+
+
+@pytest.mark.asyncio
+async def test_niche_discovery_run_without_creator_or_niche(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Discovery Sweep")
+    session.add(campaign)
+    await session.flush()
+
+    run = ResearchRun(
+        run_type=RunType.NICHE_DISCOVERY.value,
+        campaign_id=campaign.id,
+        status="running",
+    )
+    session.add(run)
+    await session.flush()
+
+    assert run.id is not None
+    assert run.creator_id is None
+    assert run.niche_id is None
+    assert run.campaign_id == campaign.id
+
+
+@pytest.mark.asyncio
+async def test_niche_verification_without_niche_id_rejected(clean_db: AsyncSession):
+    """The one rule this slice enforces at the DB level (§11)."""
+    session = clean_db
+    session.add(ResearchRun(run_type=RunType.NICHE_VERIFICATION.value, status="running"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_cross_creator_research_run_still_allowed(clean_db: AsyncSession):
+    """The existing, designed cross-creator clustering capability
+    (ClusterPipeline.run(creator_id=None), run_type defaults to
+    CREATOR_RESEARCH) must not be broken by the new CHECK constraint —
+    see docs/DECISIONS/0005."""
+    session = clean_db
+    run = ResearchRun(scope="cross", status="running")
+    session.add(run)
+    await session.flush()
+
+    assert run.creator_id is None
+    assert run.run_type == RunType.CREATOR_RESEARCH.value
 
 
 # ---------- Full chain: Creator → Content → Interaction → Evidence → Observation ----------

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,12 +61,49 @@ class RunStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class RunType(str, enum.Enum):
+    """What kind of research this run is (§11), distinct from RunScope, which
+    describes the breadth of an existing creator-pipeline run (one creator vs
+    cross-creator). Defaults to CREATOR_RESEARCH so every pre-Slice-5 run
+    (and every existing call site, none of which are retrofitted by this
+    slice — that is "creator collector redesign", explicitly out of scope)
+    keeps its current meaning unchanged."""
+
+    NICHE_DISCOVERY = "niche_discovery"
+    NICHE_VERIFICATION = "niche_verification"
+    CREATOR_RESEARCH = "creator_research"
+
+
 class ResearchRun(TimestampMixin, Base):
     __tablename__ = "research_runs"
-    __table_args__ = (Index("ix_runs_creator_id", "creator_id"),)
+    __table_args__ = (
+        Index("ix_runs_creator_id", "creator_id"),
+        Index("ix_runs_campaign_id", "campaign_id"),
+        Index("ix_runs_niche_id", "niche_id"),
+        Index("ix_runs_run_type", "run_type"),
+        # Only the unambiguous half of §11's validation rules is enforced at
+        # the DB level: NICHE_VERIFICATION requires niche_id. CREATOR_RESEARCH
+        # is deliberately NOT constrained to require creator_id here, because
+        # cross-creator clustering (ClusterPipeline.run(creator_id=None)) is
+        # existing, designed creator-pipeline behavior that must keep working
+        # unmodified — see docs/DECISIONS/0005. New call sites that need the
+        # full rule set should use corp.core.state.research_run.validate_run_type.
+        CheckConstraint(
+            "run_type != 'niche_verification' OR niche_id IS NOT NULL",
+            name="ck_research_runs_niche_verification_requires_niche",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    campaign_id: Mapped[str | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
+    niche_id: Mapped[str | None] = mapped_column(ForeignKey("niches.id"), nullable=True)
     creator_id: Mapped[str | None] = mapped_column(ForeignKey("creators.id"), nullable=True)
+    run_type: Mapped[str] = mapped_column(
+        String(30),
+        default=RunType.CREATOR_RESEARCH.value,
+        server_default="creator_research",
+        nullable=False,
+    )
     scope: Mapped[str] = mapped_column(
         String(20), default=RunScope.CREATOR.value, server_default="creator", nullable=False
     )

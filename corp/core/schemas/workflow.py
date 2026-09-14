@@ -31,7 +31,10 @@ class ResearchRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    campaign_id: str | None = None
+    niche_id: str | None = None
     creator_id: str | None
+    run_type: str = "creator_research"
     scope: str = "creator"
     status: str
     started_at: datetime | None
