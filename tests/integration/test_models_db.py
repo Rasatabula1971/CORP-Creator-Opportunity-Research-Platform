@@ -6,6 +6,7 @@ schema round-trips, and scoring determinism at the DB level.
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign, CampaignStatus
@@ -14,11 +15,13 @@ from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorSta
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
+from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.creator import CreatorResponse
 from corp.core.schemas.evidence import EvidenceResponse
+from corp.core.schemas.niche import NicheDetailResponse
 
 # ---------- Creator + PlatformAccount ----------
 
@@ -475,3 +478,112 @@ async def test_creator_creation_unaffected_by_campaign_addition(clean_db: AsyncS
     creator = await _create_creator(session, "Unaffected Creator")
     assert creator.status == CreatorStatus.DISCOVERED
     assert creator.id is not None
+
+
+# ---------- Niche + NicheAlias ----------
+
+
+@pytest.mark.asyncio
+async def test_create_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    assert niche.id is not None
+    assert niche.policy_class == NichePolicyClass.STANDARD
+    assert niche.lifecycle_status == NicheLifecycleStatus.CANDIDATE
+    assert niche.first_discovered_at is not None
+    assert niche.last_researched_at is None
+    assert niche.next_recheck_at is None
+
+
+@pytest.mark.asyncio
+async def test_niche_aliases_map_to_one_canonical_niche(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    alias1 = NicheAlias(niche_id=niche.id, alias="home barista")
+    alias2 = NicheAlias(niche_id=niche.id, alias="espresso hobbyist")
+    session.add_all([alias1, alias2])
+    await session.flush()
+
+    await session.refresh(niche, ["aliases"])
+    assert len(niche.aliases) == 2
+    assert {a.alias for a in niche.aliases} == {"home barista", "espresso hobbyist"}
+    assert all(a.niche_id == niche.id for a in niche.aliases)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_canonical_name_case_insensitive_rejected(clean_db: AsyncSession):
+    session = clean_db
+    session.add(Niche(canonical_name="DIY Performance Tuning"))
+    await session.flush()
+
+    session.add(Niche(canonical_name="diy performance tuning"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_alias_across_different_niches_rejected(clean_db: AsyncSession):
+    session = clean_db
+    niche_a = Niche(canonical_name="Home Espresso")
+    niche_b = Niche(canonical_name="Sim Racing")
+    session.add_all([niche_a, niche_b])
+    await session.flush()
+
+    session.add(NicheAlias(niche_id=niche_a.id, alias="hobby corner"))
+    await session.flush()
+
+    session.add(NicheAlias(niche_id=niche_b.id, alias="Hobby Corner"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_niche_lifecycle_and_restricted_policy_persist(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(
+        canonical_name="Home Supplement Stacking",
+        policy_class=NichePolicyClass.RESTRICTED,
+        lifecycle_status=NicheLifecycleStatus.ACTIVE,
+    )
+    session.add(niche)
+    await session.flush()
+    niche_id = niche.id
+
+    result = await session.execute(select(Niche).where(Niche.id == niche_id))
+    loaded = result.scalar_one()
+    assert loaded.policy_class == NichePolicyClass.RESTRICTED
+    assert loaded.lifecycle_status == NicheLifecycleStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Reef Aquariums", parent_domain="Fish Keeping")
+    session.add(niche)
+    await session.flush()
+    session.add(NicheAlias(niche_id=niche.id, alias="saltwater tank hobby"))
+    await session.flush()
+    await session.refresh(niche, ["aliases"])
+
+    response = NicheDetailResponse.model_validate(niche)
+    assert response.canonical_name == "Reef Aquariums"
+    assert response.parent_domain == "Fish Keeping"
+    assert len(response.aliases) == 1
+    assert response.aliases[0].alias == "saltwater tank hobby"
+
+
+@pytest.mark.asyncio
+async def test_campaign_creation_unaffected_by_niche_addition(clean_db: AsyncSession):
+    """Slice 2 must not change existing campaign (or earlier) behavior."""
+    session = clean_db
+    campaign = Campaign(name="Unaffected Campaign")
+    session.add(campaign)
+    await session.flush()
+    assert campaign.status == CampaignStatus.DRAFT
+    assert campaign.id is not None
