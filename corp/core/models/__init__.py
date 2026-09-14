@@ -3,6 +3,7 @@ from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
@@ -21,6 +22,7 @@ __all__ = [
     "Creator",
     "CreatorPlatformAccount",
     "CreatorStatus",
+    "CreatorNiche",
     "ContentItem",
     "AudienceInteraction",
     "ContentType",

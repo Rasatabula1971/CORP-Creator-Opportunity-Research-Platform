@@ -9,6 +9,7 @@ from corp.core.models.base import Base, TimestampMixin, generate_uuid
 
 if TYPE_CHECKING:
     from corp.core.models.campaign_niche import CampaignNiche
+    from corp.core.models.creator_niche import CreatorNiche
 
 
 class NichePolicyClass(str, enum.Enum):
@@ -67,6 +68,7 @@ class Niche(TimestampMixin, Base):
     # No delete cascade: a niche's cross-campaign history must survive even if
     # a campaign referencing it were ever removed (Core Research Invariant #5).
     campaign_niches: Mapped[list["CampaignNiche"]] = relationship(back_populates="niche")
+    creator_niches: Mapped[list["CreatorNiche"]] = relationship(back_populates="niche")
 
 
 class NicheAlias(TimestampMixin, Base):

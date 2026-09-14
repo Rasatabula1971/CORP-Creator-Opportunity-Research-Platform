@@ -13,6 +13,7 @@ from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
@@ -22,6 +23,7 @@ from corp.core.models.workflow import DecisionType, Gate, HumanDecision, Researc
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheResponse
 from corp.core.schemas.creator import CreatorResponse
+from corp.core.schemas.creator_niche import CreatorNicheResponse
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.niche import NicheDetailResponse
 
@@ -733,3 +735,152 @@ async def test_niche_creation_unaffected_by_campaign_niche_addition(clean_db: As
     await session.flush()
     assert niche.lifecycle_status == NicheLifecycleStatus.CANDIDATE
     assert niche.id is not None
+
+
+# ---------- CreatorNiche ----------
+
+
+@pytest.mark.asyncio
+async def test_create_creator_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session, "Espresso Creator")
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    cn = CreatorNiche(creator_id=creator.id, niche_id=niche.id)
+    session.add(cn)
+    await session.flush()
+
+    assert cn.id is not None
+    assert cn.confidence is None
+    assert cn.discovery_run_id is None
+    assert cn.first_observed_at is not None
+    assert cn.last_observed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_creator_maps_to_several_niches(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session, "Crossover Creator")
+    niche_a = Niche(canonical_name="Home Espresso")
+    niche_b = Niche(canonical_name="Sim Racing")
+    session.add_all([niche_a, niche_b])
+    await session.flush()
+
+    session.add_all(
+        [
+            CreatorNiche(creator_id=creator.id, niche_id=niche_a.id),
+            CreatorNiche(creator_id=creator.id, niche_id=niche_b.id),
+        ]
+    )
+    await session.flush()
+
+    result = await session.execute(
+        select(CreatorNiche).where(CreatorNiche.creator_id == creator.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.niche_id for r in rows} == {niche_a.id, niche_b.id}
+
+
+@pytest.mark.asyncio
+async def test_niche_maps_to_several_creators(clean_db: AsyncSession):
+    session = clean_db
+    creator_a = await _create_creator(session, "Creator A")
+    creator_b = await _create_creator(session, "Creator B")
+    niche = Niche(canonical_name="Reef Aquariums")
+    session.add(niche)
+    await session.flush()
+
+    session.add_all(
+        [
+            CreatorNiche(creator_id=creator_a.id, niche_id=niche.id),
+            CreatorNiche(creator_id=creator_b.id, niche_id=niche.id),
+        ]
+    )
+    await session.flush()
+
+    result = await session.execute(
+        select(CreatorNiche).where(CreatorNiche.niche_id == niche.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.creator_id for r in rows} == {creator_a.id, creator_b.id}
+
+
+@pytest.mark.asyncio
+async def test_duplicate_creator_niche_pair_rejected(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session)
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    await session.flush()
+
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_creator_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session)
+    niche = Niche(canonical_name="Reef Aquariums")
+    session.add(niche)
+    await session.flush()
+
+    cn = CreatorNiche(creator_id=creator.id, niche_id=niche.id, confidence=0.8)
+    session.add(cn)
+    await session.flush()
+
+    response = CreatorNicheResponse.model_validate(cn)
+    assert response.creator_id == creator.id
+    assert response.niche_id == niche.id
+    assert response.confidence == 0.8
+
+
+@pytest.mark.asyncio
+async def test_existing_creator_niche_string_field_still_works(clean_db: AsyncSession):
+    """Slice 4 explicitly does not remove Creator.niche — it must keep working
+    independently of CreatorNiche rows, matching the doc's own compatibility
+    requirement."""
+    session = clean_db
+    creator = Creator(name="Legacy Niche Creator", niche="tech", discovery_source="manual")
+    session.add(creator)
+    await session.flush()
+
+    assert creator.niche == "tech"
+
+    # A CreatorNiche row can coexist with the legacy string field without
+    # either overwriting the other.
+    niche = Niche(canonical_name="Sim Racing")
+    session.add(niche)
+    await session.flush()
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    await session.flush()
+
+    result = await session.execute(select(Creator).where(Creator.id == creator.id))
+    loaded = result.scalar_one()
+    assert loaded.niche == "tech"
+
+
+@pytest.mark.asyncio
+async def test_existing_creator_creation_and_research_still_works(clean_db: AsyncSession):
+    """Full compatibility check: the pre-Slice-4 creator + research path is
+    untouched by adding CreatorNiche."""
+    session = clean_db
+    creator = await _create_creator(session, "Untouched Pipeline Creator")
+    run = ResearchRun(
+        creator_id=creator.id,
+        status="running",
+        config_snapshot={"youtube_max_videos": 50},
+    )
+    session.add(run)
+    await session.flush()
+
+    assert creator.status == CreatorStatus.DISCOVERED
+    assert run.creator_id == creator.id
