@@ -24,7 +24,7 @@ from corp.core.models.intelligence import (
     ProblemClusterMember,
     ProblemObservation,
 )
-from corp.core.models.workflow import ResearchRun, RunScope, RunStatus
+from corp.core.models.workflow import ResearchRun, RunScope, RunStatus, RunType
 from corp.core.state.transitions import advance, restore
 
 logger = logging.getLogger(__name__)
@@ -87,9 +87,18 @@ async def start_run(
     prompt_versions: dict | None = None,
     model_versions: dict | None = None,
     scope: RunScope | None = None,
+    run_type: RunType | None = None,
+    campaign_id: str | None = None,
+    niche_id: str | None = None,
 ) -> ResearchRun:
+    # run_type / campaign_id / niche_id default to None so every existing
+    # creator-pipeline call site keeps its behavior (run_type falls back to
+    # the model default, CREATOR_RESEARCH). Only new upstream call sites
+    # (niche discovery / verification) pass them.
     run = ResearchRun(
         creator_id=creator_id,
+        campaign_id=campaign_id,
+        niche_id=niche_id,
         scope=(scope or (RunScope.CREATOR if creator_id else RunScope.CROSS)).value,
         status=RunStatus.RUNNING.value,
         started_at=datetime.now(UTC),
@@ -97,6 +106,8 @@ async def start_run(
         prompt_versions=prompt_versions or {},
         model_versions=model_versions or {},
     )
+    if run_type is not None:
+        run.run_type = run_type.value
     session.add(run)
     await session.flush()
     return run

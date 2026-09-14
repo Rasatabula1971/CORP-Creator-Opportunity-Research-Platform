@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Creator-web adapter (landing page + commerce-looking outbound pages).
     web_max_pages: int = 8
 
+    # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
+    # rows stay in Postgres; this is the external SD/SSD side, so it must be
+    # configurable to move without a code change.
+    corp_data_path: str = "corp_data"
+
     # LLM provider selection: auto | fair | gemini (auto prefers FAIR when FAIR_URL is set)
     llm_provider: str = "auto"
 

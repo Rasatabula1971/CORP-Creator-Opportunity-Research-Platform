@@ -79,12 +79,20 @@ class YtDlpAdapter(SourceAdapter):
 
     # ── Sync implementation (yt-dlp is blocking) ─────────────────────
 
+    @staticmethod
+    def is_search(identifier: str) -> bool:
+        """yt-dlp's native search syntax: ``ytsearch5:query``, ``ytsearchdate3:query``.
+        A search listing spans many channels, so it has no creator profile."""
+        return identifier.strip().lower().startswith("ytsearch")
+
     def _collect_sync(self, identifier: str) -> list[NormalizedContent]:
         url = self.profile_url(identifier)
         listing = self._factory(self._opts(flat=True)).extract_info(url, download=False) or {}
 
         results: list[NormalizedContent] = []
-        profile = self._profile_item(listing, identifier)
+        # A search result is a synthetic playlist titled with the query; there is
+        # no channel behind it, so never emit a "profile" item for one.
+        profile = None if self.is_search(identifier) else self._profile_item(listing, identifier)
         if profile is not None:
             results.append(profile)
 
@@ -131,7 +139,8 @@ class YtDlpAdapter(SourceAdapter):
 
     def profile_url(self, identifier: str) -> str:
         ident = identifier.strip()
-        if ident.startswith(("http://", "https://")):
+        if ident.startswith(("http://", "https://")) or self.is_search(ident):
+            # yt-dlp takes ``ytsearchN:query`` in the URL position as-is.
             return ident
         if self._platform == "youtube":
             if ident.startswith("UC"):

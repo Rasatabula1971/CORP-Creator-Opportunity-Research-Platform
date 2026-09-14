@@ -70,6 +70,53 @@ def no_captions(monkeypatch):
     )
 
 
+SEARCH = "ytsearch2:wobbly desk fix"
+SEARCH_LISTING = {
+    # What yt-dlp returns for a search: a synthetic playlist titled with the
+    # query, no channel/uploader behind it.
+    "id": "wobbly desk fix",
+    "title": "wobbly desk fix",
+    "extractor_key": "YoutubeSearch",
+    "entries": [{"id": "v1", "url": VID1}, {"id": "v2", "url": VID2}],
+}
+
+
+def test_is_search_recognises_ytdlp_search_syntax():
+    assert YtDlpAdapter.is_search("ytsearch5:espresso")
+    assert YtDlpAdapter.is_search("  YTSEARCHDATE3:espresso  ")
+    assert not YtDlpAdapter.is_search("@maker")
+    assert not YtDlpAdapter.is_search("UCabc")
+    assert not YtDlpAdapter.is_search("https://www.youtube.com/@maker")
+
+
+def test_search_identifier_passes_through_to_ytdlp_unchanged():
+    adapter = _adapter({SEARCH: SEARCH_LISTING, VID1: INFO1, VID2: INFO2})
+    assert adapter.profile_url(SEARCH) == SEARCH
+    assert adapter.profile_url("@maker") == CHANNEL
+
+
+async def test_search_collect_yields_videos_but_no_profile():
+    """A search spans many channels, so it must never emit a creator profile
+    item — the query string is not a creator."""
+    calls = []
+    adapter = _adapter({SEARCH: SEARCH_LISTING, VID1: INFO1, VID2: INFO2}, calls)
+    items = await adapter.collect(SEARCH)
+
+    assert calls[0][0] == SEARCH  # the listing call went to yt-dlp as a search
+    types = [i.content_type for i in items]
+    assert "profile" not in types
+    assert types.count("video") + types.count("short") == 2
+    assert {i.external_id for i in items} == {"v1", "v2"}
+    assert all(i.source_platform == "youtube" for i in items)
+
+
+async def test_channel_collect_still_emits_profile():
+    """Regression: the non-search path is unchanged."""
+    items = await _adapter({CHANNEL: LISTING, VID1: INFO1, VID2: INFO2}).collect("@maker")
+    assert items[0].content_type == "profile"
+    assert items[0].metadata["follower_count"] == 123456
+
+
 def test_contract_and_tags():
     a = YtDlpAdapter(extractor_factory=lambda o: None)
     assert isinstance(a, SourceAdapter)

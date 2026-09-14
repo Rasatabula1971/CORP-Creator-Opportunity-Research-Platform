@@ -106,6 +106,40 @@ async def _run_research(creator_id: str, skip_collect: bool) -> int:
         await _close(provider)
 
 
+async def _run_add_campaign(name: str) -> int:
+    from corp.core.models.campaign import Campaign
+    from corp.database import async_session
+
+    async with async_session() as session:
+        campaign = Campaign(name=name)
+        session.add(campaign)
+        await session.commit()
+        print(f"campaign_id={campaign.id} name={name!r}")
+    return 0
+
+
+async def _run_discover(campaign_id: str, source: str, query: str) -> int:
+    from corp.database import async_session
+    from corp.workers.acquisition.discovery import NicheDiscoveryCollector
+    from corp.workers.adapters.registry import build_adapter
+
+    adapter = build_adapter(source)
+    try:
+        async with async_session() as session:
+            collector = NicheDiscoveryCollector(adapter, session, settings.corp_data_path)
+            run = await collector.discover(campaign_id, query)
+            await session.commit()
+        extra = (run.stats or {}).get("extra", {})
+        print(
+            f"research_run={run.id} status={run.status} "
+            f"seen={extra.get('results_seen')} new={extra.get('new_results')} "
+            f"duplicate={extra.get('duplicate_results')}"
+        )
+        return 0 if run.status == "completed" else 1
+    finally:
+        await _close(adapter)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -133,6 +167,18 @@ def main(argv: list[str] | None = None) -> int:
     intent = sub.add_parser("intent", help="classify commercial intent per cluster")
     intent.add_argument("creator_id", nargs="?")
 
+    add_campaign = sub.add_parser("add-campaign", help="create a research campaign")
+    add_campaign.add_argument("name")
+
+    discover = sub.add_parser(
+        "discover", help="niche discovery (light): one source, one query, under a campaign"
+    )
+    discover.add_argument("campaign_id")
+    discover.add_argument("source", help="reddit | youtube | tiktok | web")
+    discover.add_argument(
+        "query", help="youtube: 'ytsearch5:<keywords>' (yt-dlp search); reddit: r/<subreddit>"
+    )
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=settings.log_level)
 
@@ -142,6 +188,10 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_run_research(args.creator_id, args.skip_collect))
     if args.pipeline == "collect":
         return asyncio.run(_run_collect(args.platform, args.identifier, args.creator_id))
+    if args.pipeline == "add-campaign":
+        return asyncio.run(_run_add_campaign(args.name))
+    if args.pipeline == "discover":
+        return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))
 
 
