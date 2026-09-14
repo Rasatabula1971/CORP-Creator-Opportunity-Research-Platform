@@ -18,14 +18,17 @@ from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
+from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
+from corp.core.research.ledger import find_queries, record_query
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheResponse
 from corp.core.schemas.creator import CreatorResponse
 from corp.core.schemas.creator_niche import CreatorNicheResponse
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.niche import NicheDetailResponse
+from corp.core.schemas.research_query import ResearchQueryResponse
 
 # ---------- Creator + PlatformAccount ----------
 
@@ -952,3 +955,172 @@ async def test_existing_creator_creation_and_research_still_works(clean_db: Asyn
 
     assert creator.status == CreatorStatus.DISCOVERED
     assert run.creator_id == creator.id
+
+
+# ---------- ResearchQuery (research memory: the query ledger) ----------
+
+
+async def _discovery_run(session: AsyncSession) -> ResearchRun:
+    run = ResearchRun(run_type=RunType.NICHE_DISCOVERY.value, status="running")
+    session.add(run)
+    await session.flush()
+    return run
+
+
+@pytest.mark.asyncio
+async def test_record_query_persists_all_fields(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+
+    row = await record_query(
+        session,
+        research_run_id=run.id,
+        source="youtube",
+        query="home espresso setup",
+        results_seen=40,
+        new_results=25,
+        duplicate_results=15,
+        archive_reference="corp_data/raw/youtube/abc123.jsonl",
+    )
+
+    assert row.id is not None
+    assert row.research_run_id == run.id
+    assert row.source == "youtube"
+    assert row.query == "home espresso setup"
+    assert row.results_seen == 40
+    assert row.new_results == 25
+    assert row.duplicate_results == 15
+    assert row.archive_reference == "corp_data/raw/youtube/abc123.jsonl"
+    assert row.status == ResearchQueryStatus.SUCCEEDED
+    assert row.error is None
+    assert row.executed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_record_query_defaults(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(session, research_run_id=run.id, source="reddit", query="q")
+    assert (row.results_seen, row.new_results, row.duplicate_results) == (0, 0, 0)
+    assert row.status == ResearchQueryStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_lookup_queries_by_run(clean_db: AsyncSession):
+    session = clean_db
+    run_a = await _discovery_run(session)
+    run_b = await _discovery_run(session)
+    await record_query(session, research_run_id=run_a.id, source="youtube", query="q1")
+    await record_query(session, research_run_id=run_a.id, source="reddit", query="q2")
+    await record_query(session, research_run_id=run_b.id, source="youtube", query="q3")
+
+    rows = await find_queries(session, research_run_id=run_a.id)
+    assert {r.query for r in rows} == {"q1", "q2"}
+    assert all(r.research_run_id == run_a.id for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_lookup_by_source_and_exact_query(clean_db: AsyncSession):
+    """Answers §13's 'has this exact query been used, on which source, with
+    what yield?' — the ledger's primary purpose."""
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(
+        session, research_run_id=run.id, source="youtube", query="sim racing rig", new_results=12
+    )
+    await record_query(
+        session, research_run_id=run.id, source="reddit", query="sim racing rig", new_results=3
+    )
+    await record_query(session, research_run_id=run.id, source="youtube", query="reef tank")
+
+    rows = await find_queries(session, source="youtube", query="sim racing rig")
+    assert len(rows) == 1
+    assert rows[0].source == "youtube"
+    assert rows[0].new_results == 12
+
+    assert await find_queries(session, source="tiktok", query="sim racing rig") == []
+
+
+@pytest.mark.asyncio
+async def test_same_query_recorded_again_in_later_run_keeps_history(clean_db: AsyncSession):
+    """Not unique on (source, query): re-running a query in a later run is
+    expected, and the per-run yield history is what makes staleness and
+    usefulness decay judgeable later."""
+    session = clean_db
+    run_a = await _discovery_run(session)
+    run_b = await _discovery_run(session)
+    await record_query(
+        session, research_run_id=run_a.id, source="youtube", query="reef tank", new_results=30
+    )
+    await record_query(
+        session, research_run_id=run_b.id, source="youtube", query="reef tank", new_results=2
+    )
+
+    rows = await find_queries(session, source="youtube", query="reef tank")
+    assert len(rows) == 2
+    assert {r.research_run_id for r in rows} == {run_a.id, run_b.id}
+    assert {r.new_results for r in rows} == {30, 2}
+
+
+@pytest.mark.asyncio
+async def test_lookup_exact_query_is_literal(clean_db: AsyncSession):
+    """Exact means exact. Semantic/equivalent-query matching is a later slice."""
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(session, research_run_id=run.id, source="youtube", query="Home Espresso")
+    assert await find_queries(session, source="youtube", query="home espresso") == []
+    assert len(await find_queries(session, source="youtube", query="Home Espresso")) == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_query_records_error(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(
+        session,
+        research_run_id=run.id,
+        source="reddit",
+        query="rate limited query",
+        status=ResearchQueryStatus.FAILED,
+        error="429 Too Many Requests",
+    )
+    assert row.status == ResearchQueryStatus.FAILED
+    assert row.error == "429 Too Many Requests"
+    assert row.results_seen == 0
+
+
+@pytest.mark.asyncio
+async def test_query_executed_at_is_per_query_not_per_transaction(clean_db: AsyncSession):
+    """Two queries recorded in one transaction must not share a timestamp —
+    the ledger records when each search actually ran."""
+    session = clean_db
+    run = await _discovery_run(session)
+    first = await record_query(session, research_run_id=run.id, source="youtube", query="a")
+    second = await record_query(session, research_run_id=run.id, source="youtube", query="b")
+    assert second.executed_at >= first.executed_at
+    assert first.executed_at.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_research_query_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(
+        session, research_run_id=run.id, source="youtube", query="q", results_seen=5, new_results=5
+    )
+    response = ResearchQueryResponse.model_validate(row)
+    assert response.research_run_id == run.id
+    assert response.query == "q"
+    assert response.results_seen == 5
+    assert response.status == ResearchQueryStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_research_run_relationship_reaches_queries(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(session, research_run_id=run.id, source="youtube", query="q1")
+    await record_query(session, research_run_id=run.id, source="youtube", query="q2")
+    await session.refresh(run, ["research_queries"])
+    assert {q.query for q in run.research_queries} == {"q1", "q2"}
+    assert all(isinstance(q, ResearchQuery) for q in run.research_queries)

@@ -1,11 +1,15 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from corp.core.models.research_query import ResearchQuery
 
 
 class DecisionType(str, enum.Enum):
@@ -115,3 +119,9 @@ class ResearchRun(TimestampMixin, Base):
     prompt_versions: Mapped[dict | None] = mapped_column(JSONB)
     model_versions: Mapped[dict | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
+
+    # No delete cascade: query history is research memory (§13) and must
+    # outlive the run that produced it — same reasoning as Slices 3–4.
+    research_queries: Mapped[list["ResearchQuery"]] = relationship(
+        back_populates="research_run"
+    )

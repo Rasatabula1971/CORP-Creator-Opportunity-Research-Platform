@@ -9,6 +9,7 @@ from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, 
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
+from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
 
@@ -41,6 +42,8 @@ __all__ = [
     "HumanDecision",
     "ResearchRun",
     "RunType",
+    "ResearchQuery",
+    "ResearchQueryStatus",
     "MetricsSnapshot",
     "Niche",
     "NicheAlias",
