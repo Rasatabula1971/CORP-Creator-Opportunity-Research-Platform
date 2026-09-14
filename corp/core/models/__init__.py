@@ -1,5 +1,6 @@
 from corp.core.models.base import Base, TimestampMixin
 from corp.core.models.campaign import Campaign, CampaignStatus
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
@@ -15,6 +16,8 @@ __all__ = [
     "TimestampMixin",
     "Campaign",
     "CampaignStatus",
+    "CampaignNiche",
+    "CampaignNicheStatus",
     "Creator",
     "CreatorPlatformAccount",
     "CreatorStatus",

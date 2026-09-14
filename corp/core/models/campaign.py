@@ -1,10 +1,14 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, Index, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from corp.core.models.campaign_niche import CampaignNiche
 
 
 class CampaignStatus(str, enum.Enum):
@@ -39,3 +43,7 @@ class Campaign(TimestampMixin, Base):
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    campaign_niches: Mapped[list["CampaignNiche"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan"
+    )

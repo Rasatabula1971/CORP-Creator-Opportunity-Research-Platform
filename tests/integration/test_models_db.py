@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign, CampaignStatus
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
@@ -19,6 +20,7 @@ from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, Nich
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
 from corp.core.schemas.campaign import CampaignResponse
+from corp.core.schemas.campaign_niche import CampaignNicheResponse
 from corp.core.schemas.creator import CreatorResponse
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.niche import NicheDetailResponse
@@ -587,3 +589,147 @@ async def test_campaign_creation_unaffected_by_niche_addition(clean_db: AsyncSes
     await session.flush()
     assert campaign.status == CampaignStatus.DRAFT
     assert campaign.id is not None
+
+
+# ---------- CampaignNiche ----------
+
+
+async def _create_campaign_and_niche(
+    session: AsyncSession, campaign_name: str = "Q4 Sweep", niche_name: str = "Home Espresso"
+) -> tuple[Campaign, Niche]:
+    campaign = Campaign(name=campaign_name)
+    niche = Niche(canonical_name=niche_name)
+    session.add_all([campaign, niche])
+    await session.flush()
+    return campaign, niche
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+
+    cn = CampaignNiche(campaign_id=campaign.id, niche_id=niche.id)
+    session.add(cn)
+    await session.flush()
+
+    assert cn.id is not None
+    assert cn.status == CampaignNicheStatus.DISCOVERED
+    assert cn.selected is False
+    assert cn.creator_count_observed == 0
+    assert cn.qualification_score is None
+    assert cn.confidence is None
+    assert cn.research_completeness is None
+
+
+@pytest.mark.asyncio
+async def test_same_niche_appears_in_multiple_campaigns(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Reef Aquariums")
+    campaign_a = Campaign(name="Spring Sweep")
+    campaign_b = Campaign(name="Fall Sweep")
+    session.add_all([niche, campaign_a, campaign_b])
+    await session.flush()
+
+    cn_a = CampaignNiche(campaign_id=campaign_a.id, niche_id=niche.id, discovery_rank=3)
+    cn_b = CampaignNiche(campaign_id=campaign_b.id, niche_id=niche.id, discovery_rank=1)
+    session.add_all([cn_a, cn_b])
+    await session.flush()
+
+    result = await session.execute(
+        select(CampaignNiche).where(CampaignNiche.niche_id == niche.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.campaign_id for r in rows} == {campaign_a.id, campaign_b.id}
+
+
+@pytest.mark.asyncio
+async def test_duplicate_campaign_niche_pair_rejected(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+
+    session.add(CampaignNiche(campaign_id=campaign.id, niche_id=niche.id))
+    await session.flush()
+
+    session.add(CampaignNiche(campaign_id=campaign.id, niche_id=niche.id))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_campaign_niche_history_does_not_overwrite_canonical_niche(
+    clean_db: AsyncSession,
+):
+    """Two campaigns score the same niche differently; the canonical Niche row
+    and both CampaignNiche history rows must all remain independently intact."""
+    session = clean_db
+    niche = Niche(canonical_name="Sim Racing", description="Original description")
+    campaign_a = Campaign(name="Weak Pass")
+    campaign_b = Campaign(name="Strong Pass")
+    session.add_all([niche, campaign_a, campaign_b])
+    await session.flush()
+
+    cn_weak = CampaignNiche(
+        campaign_id=campaign_a.id,
+        niche_id=niche.id,
+        qualification_score=0.2,
+        status=CampaignNicheStatus.REJECTED,
+        rationale="Thin evidence in this pass",
+    )
+    cn_strong = CampaignNiche(
+        campaign_id=campaign_b.id,
+        niche_id=niche.id,
+        qualification_score=0.9,
+        status=CampaignNicheStatus.SELECTED,
+        selected=True,
+        rationale="Strong creator ecosystem this pass",
+    )
+    session.add_all([cn_weak, cn_strong])
+    await session.flush()
+
+    result = await session.execute(select(Niche).where(Niche.id == niche.id))
+    loaded_niche = result.scalar_one()
+    assert loaded_niche.description == "Original description"
+
+    result = await session.execute(
+        select(CampaignNiche).where(CampaignNiche.niche_id == niche.id)
+    )
+    rows = {r.campaign_id: r for r in result.scalars().all()}
+    assert rows[campaign_a.id].qualification_score == 0.2
+    assert rows[campaign_a.id].status == CampaignNicheStatus.REJECTED
+    assert rows[campaign_b.id].qualification_score == 0.9
+    assert rows[campaign_b.id].status == CampaignNicheStatus.SELECTED
+    assert rows[campaign_b.id].selected is True
+
+
+@pytest.mark.asyncio
+async def test_campaign_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+    cn = CampaignNiche(
+        campaign_id=campaign.id,
+        niche_id=niche.id,
+        discovery_rank=2,
+        target_band_creator_count=14,
+    )
+    session.add(cn)
+    await session.flush()
+
+    response = CampaignNicheResponse.model_validate(cn)
+    assert response.campaign_id == campaign.id
+    assert response.niche_id == niche.id
+    assert response.discovery_rank == 2
+    assert response.target_band_creator_count == 14
+    assert response.status == CampaignNicheStatus.DISCOVERED
+
+
+@pytest.mark.asyncio
+async def test_niche_creation_unaffected_by_campaign_niche_addition(clean_db: AsyncSession):
+    """Slice 3 must not change existing niche (or earlier) behavior."""
+    session = clean_db
+    niche = Niche(canonical_name="Unaffected Niche")
+    session.add(niche)
+    await session.flush()
+    assert niche.lifecycle_status == NicheLifecycleStatus.CANDIDATE
+    assert niche.id is not None

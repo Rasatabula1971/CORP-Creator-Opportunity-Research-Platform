@@ -1,10 +1,14 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from corp.core.models.campaign_niche import CampaignNiche
 
 
 class NichePolicyClass(str, enum.Enum):
@@ -60,6 +64,9 @@ class Niche(TimestampMixin, Base):
     aliases: Mapped[list["NicheAlias"]] = relationship(
         back_populates="niche", cascade="all, delete-orphan"
     )
+    # No delete cascade: a niche's cross-campaign history must survive even if
+    # a campaign referencing it were ever removed (Core Research Invariant #5).
+    campaign_niches: Mapped[list["CampaignNiche"]] = relationship(back_populates="niche")
 
 
 class NicheAlias(TimestampMixin, Base):

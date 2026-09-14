@@ -46,7 +46,7 @@ async def clean_db():
     """Truncate all tables before a test, then yield a fresh session."""
     async with engine.begin() as conn:
         await conn.execute(text(
-            "TRUNCATE TABLE campaigns, niche_aliases, niches, "
+            "TRUNCATE TABLE campaign_niches, campaigns, niche_aliases, niches, "
             "problem_cluster_members, commercial_signals, "
             "human_decisions, opportunity_scores, creator_scores, "
             "problem_observations, research_runs, audience_interactions, "
