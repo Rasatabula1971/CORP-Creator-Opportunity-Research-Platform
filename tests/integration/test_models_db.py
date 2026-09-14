@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
@@ -15,9 +16,9 @@ from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, 
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
-from corp.core.schemas.creator import CreatorResponse, PlatformAccountResponse
+from corp.core.schemas.campaign import CampaignResponse
+from corp.core.schemas.creator import CreatorResponse
 from corp.core.schemas.evidence import EvidenceResponse
-
 
 # ---------- Creator + PlatformAccount ----------
 
@@ -392,3 +393,85 @@ async def test_full_evidence_chain(clean_db: AsyncSession):
     assert evidence.source_id == comment.external_id
     assert comment.content_item_id == video.id
     assert video.creator_id == creator.id
+
+
+# ---------- Campaign ----------
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Q4 Creator Sweep")
+    session.add(campaign)
+    await session.flush()
+
+    assert campaign.id is not None
+    assert campaign.status == CampaignStatus.DRAFT
+    assert campaign.target_niche_count == 10
+    assert campaign.initial_creators_per_niche == 10
+    assert campaign.creator_min_followers == 10_000
+    assert campaign.creator_max_followers == 200_000
+    assert campaign.human_gate_capacity == 50
+    assert campaign.created_at is not None
+    assert campaign.started_at is None
+    assert campaign.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_with_custom_config(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(
+        name="Reef Aquarium Pilot",
+        research_profile_version="v1",
+        target_niche_count=5,
+        initial_creators_per_niche=15,
+        creator_min_followers=5_000,
+        creator_max_followers=100_000,
+        human_gate_capacity=25,
+        status=CampaignStatus.ACTIVE,
+    )
+    session.add(campaign)
+    await session.flush()
+
+    assert campaign.target_niche_count == 5
+    assert campaign.initial_creators_per_niche == 15
+    assert campaign.creator_min_followers == 5_000
+    assert campaign.creator_max_followers == 100_000
+    assert campaign.human_gate_capacity == 25
+    assert campaign.status == CampaignStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_campaign_can_be_retrieved(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Home Espresso Pilot")
+    session.add(campaign)
+    await session.flush()
+    campaign_id = campaign.id
+
+    result = await session.execute(select(Campaign).where(Campaign.id == campaign_id))
+    loaded = result.scalar_one()
+    assert loaded.name == "Home Espresso Pilot"
+    assert loaded.id == campaign_id
+
+
+@pytest.mark.asyncio
+async def test_campaign_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Sim Racing Pilot", target_niche_count=8)
+    session.add(campaign)
+    await session.flush()
+
+    response = CampaignResponse.model_validate(campaign)
+    assert response.name == "Sim Racing Pilot"
+    assert response.target_niche_count == 8
+    assert response.status == CampaignStatus.DRAFT
+
+
+@pytest.mark.asyncio
+async def test_creator_creation_unaffected_by_campaign_addition(clean_db: AsyncSession):
+    """Slice 1 must not change existing creator behavior."""
+    session = clean_db
+    creator = await _create_creator(session, "Unaffected Creator")
+    assert creator.status == CreatorStatus.DISCOVERED
+    assert creator.id is not None
