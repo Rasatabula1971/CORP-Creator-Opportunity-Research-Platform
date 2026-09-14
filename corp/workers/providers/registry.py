@@ -4,10 +4,24 @@ import hashlib
 import json
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
 import google.generativeai as genai
+from google.api_core.exceptions import (
+    DeadlineExceeded,
+    ResourceExhausted,
+    ServiceUnavailable,
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 logger = logging.getLogger(__name__)
+
+_RETRYABLE = (ResourceExhausted, ServiceUnavailable, DeadlineExceeded)
 
 
 class LLMProvider(ABC):
@@ -42,6 +56,19 @@ class GeminiProvider(LLMProvider):
     def model_name(self) -> str:
         return self._model_id
 
+    @retry(
+        retry=retry_if_exception_type(_RETRYABLE),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+        stop=stop_after_attempt(6),
+        reraise=True,
+    )
+    async def _generate_with_retry(self, model: Any, prompt: str, config: Any) -> Any:
+        try:
+            return await model.generate_content_async(prompt, generation_config=config)
+        except _RETRYABLE as exc:
+            logger.warning("Gemini call rate-limited/unavailable, retrying: %s", exc)
+            raise
+
     async def generate_json(self, prompt: str, system: str | None = None) -> dict:
         model = self._model
         if system:
@@ -53,7 +80,7 @@ class GeminiProvider(LLMProvider):
             response_mime_type="application/json",
             temperature=self._temperature,
         )
-        response = await model.generate_content_async(prompt, generation_config=config)
+        response = await self._generate_with_retry(model, prompt, config)
         raw = response.text
         result = json.loads(raw)
 
