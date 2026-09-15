@@ -138,6 +138,28 @@ async def _run_discover(campaign_id: str, source: str, query: str) -> int:
         await _close(adapter)
 
 
+async def _run_canonicalize(campaign_id: str, similarity_threshold: float) -> int:
+    from corp.database import async_session
+    from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
+    from corp.workers.intelligence.niche_canonicalization import CanonConfig, NicheCanonicalizer
+
+    async with async_session() as session:
+        canon = NicheCanonicalizer(
+            SentenceTransformerEmbedder(settings.embedding_model),
+            session,
+            CanonConfig(similarity_threshold=similarity_threshold),
+        )
+        run = await canon.canonicalize(campaign_id)
+        await session.commit()
+    extra = (run.stats or {}).get("extra", {})
+    print(
+        f"research_run={run.id} status={run.status} "
+        f"candidates={extra.get('candidates')} promoted={extra.get('promoted')} "
+        f"merged={extra.get('merged')} campaign_niches={extra.get('campaign_niches_created')}"
+    )
+    return 0 if run.status == "completed" else 1
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -205,6 +227,18 @@ def main(argv: list[str] | None = None) -> int:
     candidates.add_argument("--min-cluster-size", type=int, default=3)
     candidates.add_argument("--no-llm", action="store_true", help="keyword labels only")
 
+    canon = sub.add_parser(
+        "canonicalize",
+        help="promote staged candidates to canonical niches, merging duplicates",
+    )
+    canon.add_argument("campaign_id")
+    canon.add_argument(
+        "--similarity-threshold",
+        type=float,
+        default=0.82,
+        help="cosine similarity threshold for deduplication (default 0.82)",
+    )
+
     discover = sub.add_parser(
         "discover", help="niche discovery (light): one source, one query, under a campaign"
     )
@@ -227,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_run_add_campaign(args.name))
     if args.pipeline == "candidates":
         return asyncio.run(_run_candidates(args.campaign_id, args.min_cluster_size, args.no_llm))
+    if args.pipeline == "canonicalize":
+        return asyncio.run(_run_canonicalize(args.campaign_id, args.similarity_threshold))
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))
