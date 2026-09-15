@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
+  Campaign,
+  CampaignCreateInput,
+  CampaignNiche,
   ClusterDetail,
   Creator,
   CreatorCreateInput,
@@ -124,6 +127,70 @@ export function useStartPipeline() {
       api.post<Job>(`/creators/${creatorId}/runs`, { pipeline, platform, identifier }),
     onSuccess: (_data, vars) =>
       qc.invalidateQueries({ queryKey: ["jobs", vars.creatorId] }),
+  });
+}
+
+// ── Campaigns ────────────────────────────────────────────────────────
+
+export function useCampaigns() {
+  return useQuery({
+    queryKey: ["campaigns"],
+    queryFn: () => api.get<Campaign[]>("/campaigns"),
+  });
+}
+
+export function useCampaign(id: string | undefined) {
+  return useQuery({
+    queryKey: ["campaigns", id],
+    queryFn: () => api.get<Campaign>(`/campaigns/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CampaignCreateInput) =>
+      api.post<Campaign>("/campaigns", input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["campaigns"] }),
+  });
+}
+
+export function useCampaignNiches(campaignId: string | undefined) {
+  return useQuery({
+    queryKey: ["campaigns", campaignId, "niches"],
+    queryFn: () => api.get<CampaignNiche[]>(`/campaigns/${campaignId}/niches`),
+    enabled: !!campaignId,
+  });
+}
+
+export function useCampaignCreators(campaignId: string | undefined) {
+  return useQuery({
+    queryKey: ["campaigns", campaignId, "creators"],
+    queryFn: () => api.get<Creator[]>(`/campaigns/${campaignId}/creators`),
+    enabled: !!campaignId,
+  });
+}
+
+export function useStartCampaignPipeline() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      campaignId,
+      stage,
+      source,
+      query,
+    }: {
+      campaignId: string;
+      stage: string;
+      source?: string;
+      query?: string;
+    }) =>
+      api.post<Job>(`/campaigns/${campaignId}/${stage}`, { source, query }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["campaigns", vars.campaignId] });
+    },
   });
 }
 

@@ -110,7 +110,7 @@ def _build_clusters(
 
     results: list[ClusterResult] = []
     for label_id in sorted(unique_labels):
-        indices = [i for i, l in enumerate(labels) if l == label_id]
+        indices = [i for i, lbl in enumerate(labels) if lbl == label_id]
         cluster_texts = [texts[i] for i in indices]
 
         representative = _pick_representative(cluster_texts)
@@ -141,7 +141,7 @@ def _build_clusters(
         "Clustering: %d observations → %d clusters (%d noise)",
         len(texts),
         len(results),
-        sum(1 for l in labels if l == -1),
+        sum(1 for lbl in labels if lbl == -1),
     )
     return results
 

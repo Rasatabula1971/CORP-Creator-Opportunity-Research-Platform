@@ -25,10 +25,66 @@ class Settings(BaseSettings):
     # Creator-web adapter (landing page + commerce-looking outbound pages).
     web_max_pages: int = 8
 
+    # Stack Exchange adapter (niche-signal: questions = audience problems).
+    # Open API, no key required. Optional key raises quota from 300 to 10,000/day.
+    stackexchange_api_key: str = ""
+    stackexchange_site: str = "stackoverflow"
+    stackexchange_max_questions: int = 50
+    stackexchange_include_answers: bool = True
+
+    # Search-demand adapter (niche-signal: Google autocomplete suggestions).
+    searchdemand_max_suggestions: int = 50
+    searchdemand_language: str = "en"
+    searchdemand_country: str = "us"
+
+    # Amazon review adapter (niche-signal: 1-3 star reviews as unmet-need signals).
+    amazon_max_reviews: int = 50
+    amazon_max_products: int = 5
+
+    # Marketplace adapter (niche-signal: Gumroad/Etsy/Udemy listings for saturation + pricing).
+    marketplace_max_listings: int = 30
+    marketplace_sites: str = "gumroad,etsy,udemy"
+    # Etsy Open API v3 key (Personal App tier). When set, Etsy uses official API
+    # instead of HTML scraping. Register at https://www.etsy.com/developers.
+    etsy_api_key: str = ""
+
+    # Hacker News adapter (niche-signal: stories + comments via Algolia API). Fully open.
+    hackernews_max_items: int = 50
+
+    # Wikipedia adapter (niche-signal: pageview trends as demand validation). Official API.
+    wikipedia_max_articles: int = 10
+    wikipedia_pageview_days: int = 30
+
+    # Google Trends adapter (niche-signal: trending topics RSS + optional pytrends).
+    googletrends_max_items: int = 50
+    googletrends_geo: str = "US"
+
+    # Apple App Store adapter (niche-signal: review RSS + iTunes Search). Open, no key.
+    appstore_max_reviews: int = 50
+    appstore_max_apps: int = 5
+    appstore_country: str = "us"
+
+    # Source health tracker — circuit breaker for tolerated adapters.
+    # Consecutive failures before degrading a source.
+    health_degrade_after: int = 3
+    # Consecutive failures before disconnecting a source (skipped in multi-source runs).
+    health_disconnect_after: int = 6
+    # Seconds before a disconnected source gets a probe attempt.
+    health_probe_cooldown_seconds: float = 3600.0
+
+    # Multi-source niche discovery — comma-separated platforms to include.
+    # Defaults to all niche-family adapters.
+    niche_discovery_platforms: str = ""
+
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
     # configurable to move without a code change.
     corp_data_path: str = "corp_data"
+
+    # SQLite warm store for bulk data (evidence text, embeddings, content,
+    # interactions, metrics). Lives on external/flash storage to keep
+    # Supabase Postgres within the free-tier 500 MB limit.
+    warm_store_path: str = "corp_data/warm.db"
 
     # LLM provider selection: auto | fair | gemini | groq | pool
     # auto prefers FAIR (in-process, every free provider it has a key for)

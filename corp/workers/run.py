@@ -5,6 +5,9 @@
     python -m corp.workers.run collect <platform> <identifier> <creator_id>
     python -m corp.workers.run intelligence <creator_id>
     python -m corp.workers.run intent [creator_id]
+    python -m corp.workers.run warm-init
+    python -m corp.workers.run warm-status
+    python -m corp.workers.run warm-export <out_dir>
 
 `research` runs every stage in order and leaves the creator in HUMAN_REVIEW.
 The single-stage commands exist for re-running one step.
@@ -194,14 +197,14 @@ async def _run_estimate_ecosystem(
     campaign_id: str, search_count: int, min_followers: int, max_followers: int,
 ) -> int:
     from corp.database import async_session
-    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.adapters.registry import build_search_adapter
     from corp.workers.intelligence.ecosystem_estimator import (
         EcoConfig,
         EcosystemEstimator,
         YouTubeAPIEnricher,
     )
 
-    adapter = build_adapter("youtube")
+    adapter = build_search_adapter("youtube")
     enricher = None
     if settings.youtube_api_key:
         enricher = YouTubeAPIEnricher(settings.youtube_api_key)
@@ -290,9 +293,13 @@ async def _run_onboard(
 ) -> int:
     from corp.database import async_session
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder, OnboardConfig
-    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.adapters.registry import build_search_adapter
+    from corp.workers.intelligence.ecosystem_estimator import YouTubeAPIEnricher
 
-    adapter = build_adapter("youtube")
+    adapter = build_search_adapter("youtube")
+    enricher = YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
+    if enricher is not None:
+        logger.info("YouTube API enricher enabled for subscriber counts")
     try:
         async with async_session() as session:
             onboarder = CreatorOnboarder(
@@ -304,6 +311,7 @@ async def _run_onboard(
                     min_followers=min_followers,
                     max_followers=max_followers,
                 ),
+                enricher=enricher,
             )
             run = await onboarder.onboard(campaign_id)
             await session.commit()
@@ -360,6 +368,62 @@ async def _run_research_campaign(
         return 0 if run.status == "completed" else 1
     finally:
         await _close(provider)
+
+
+async def _run_prune(retention_days: int, apply: bool) -> int:
+    from corp.database import async_session
+    from corp.workers.maintenance import PruneService
+
+    async with async_session() as session:
+        report = await PruneService(session, retention_days=retention_days).prune(apply=apply)
+        if apply:
+            await session.commit()
+
+    verb = "deleted" if apply else "would delete (dry-run; pass --apply to remove)"
+    print(f"prune retention={report.retention_days}d cutoff={report.cutoff}")
+    print(f"  metrics_snapshots: {report.metrics_snapshots:,} {verb}")
+    return 0
+
+
+async def _run_warm_init() -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    print(f"warm store initialized: {store.path}")
+    await store.close()
+    return 0
+
+
+async def _run_warm_status() -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    counts = await store.count_rows()
+    total = 0
+    for table, count in counts.items():
+        print(f"  {table}: {count:,}")
+        total += count
+    print(f"  total: {total:,}")
+    print(f"  path: {store.path}")
+    await store.close()
+    return 0
+
+
+async def _run_warm_export(out_dir: str) -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    exported = await store.export_jsonl(out_dir)
+    total = 0
+    for table, count in exported.items():
+        print(f"  {table}: {count:,} rows")
+        total += count
+    print(f"  total: {total:,} rows exported to {out_dir}")
+    await store.close()
+    return 0
 
 
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
@@ -507,6 +571,21 @@ def main(argv: list[str] | None = None) -> int:
         "query", help="youtube: 'ytsearch5:<keywords>' (yt-dlp search); reddit: r/<subreddit>"
     )
 
+    prune = sub.add_parser(
+        "prune",
+        help="delete safe-to-drop bulk history (metrics_snapshots) from Postgres; "
+        "the warm store keeps the full record",
+    )
+    prune.add_argument("--retention-days", type=int, default=90)
+    prune.add_argument(
+        "--apply", action="store_true", help="actually delete (default is a dry-run)"
+    )
+
+    sub.add_parser("warm-init", help="initialize the warm store SQLite database")
+    sub.add_parser("warm-status", help="show warm store row counts and path")
+    warm_export = sub.add_parser("warm-export", help="export warm store tables to JSONL")
+    warm_export.add_argument("out_dir", help="output directory for JSONL files")
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=settings.log_level)
 
@@ -554,6 +633,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
+    if args.pipeline == "prune":
+        return asyncio.run(_run_prune(args.retention_days, args.apply))
+    if args.pipeline == "warm-init":
+        return asyncio.run(_run_warm_init())
+    if args.pipeline == "warm-status":
+        return asyncio.run(_run_warm_status())
+    if args.pipeline == "warm-export":
+        return asyncio.run(_run_warm_export(args.out_dir))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))
 
 

@@ -24,6 +24,7 @@ from corp.core.models.research_query import ResearchQueryStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.research.ledger import record_query
 from corp.core.state.research_run import validate_run_type
+from corp.warmstore.sync import mirror_evidence
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
@@ -94,8 +95,10 @@ class NicheDiscoveryCollector:
                     stats.skip()
                     duplicate += 1
                     continue
-                self._session.add(self._evidence(item, run.id))
+                ev = self._evidence(item, run.id)
+                self._session.add(ev)
                 await self._session.flush()
+                await mirror_evidence([ev])
                 stats.ok()
                 new += 1
             except Exception as exc:  # one bad item must not sink the run

@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from corp.workers.intelligence.coerce import as_bool, as_float
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
@@ -111,8 +112,8 @@ async def extract_observations(
             ExtractedObservation(
                 text=str(item["text"])[:500],
                 category=str(item.get("category", "general")),
-                is_inferred=bool(item.get("is_inferred", False)),
-                confidence=min(1.0, max(0.0, float(item.get("confidence", 0.5)))),
+                is_inferred=as_bool(item.get("is_inferred"), False),
+                confidence=min(1.0, max(0.0, as_float(item.get("confidence"), 0.5))),
             )
         )
     return observations

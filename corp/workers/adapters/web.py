@@ -164,6 +164,10 @@ class WebPresenceAdapter(SourceAdapter):
         if landing is None:
             return results
         results.append(landing)
+        # seen holds normalized URL keys. Track both the requested start and the
+        # (possibly redirected) landing external_id so a candidate pointing at
+        # either is skipped.
+        seen.add(_normalize(start))
         seen.add(landing.external_id)
 
         # Follow only links that look commercial; those are the ones that matter.
@@ -176,11 +180,19 @@ class WebPresenceAdapter(SourceAdapter):
             key = _normalize(url)
             if key in seen:
                 continue
+            # Mark before fetching so a repeated or dead candidate isn't retried.
+            seen.add(key)
             await asyncio.sleep(self._interval)
             page = await self._fetch_page(url)
-            if page is not None:
-                results.append(page)
-                seen.add(page.external_id)
+            if page is None:
+                continue
+            # A redirect can land on a different, already-collected page; skip
+            # that. (When there's no redirect external_id == key, which we just
+            # added, so guard on the difference to avoid skipping every page.)
+            if page.external_id != key and page.external_id in seen:
+                continue
+            results.append(page)
+            seen.add(page.external_id)
         return results
 
     async def _fetch_page(self, url: str) -> NormalizedContent | None:

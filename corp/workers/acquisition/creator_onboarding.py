@@ -28,7 +28,7 @@ from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.niche import Niche
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
-from corp.workers.intelligence.ecosystem_estimator import SearchAdapter
+from corp.workers.intelligence.ecosystem_estimator import ChannelEnricher, SearchAdapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 PIPELINE = "creator_onboarding"
 
 PLATFORM = "youtube"
+
+
+def _is_enrichable_channel_id(channel_id: str) -> bool:
+    """Only real YouTube channel IDs (``UC`` + 22 chars) can be looked up via the
+    Data API's ``channels.list``. ``@handle`` fallbacks and display names cannot."""
+    return channel_id.startswith("UC") and len(channel_id) == 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,10 +63,12 @@ class CreatorOnboarder:
         adapter: SearchAdapter,
         session: AsyncSession,
         config: OnboardConfig | None = None,
+        enricher: ChannelEnricher | None = None,
     ) -> None:
         self._adapter = adapter
         self._session = session
         self._cfg = config or OnboardConfig()
+        self._enricher = enricher
 
     async def onboard(self, campaign_id: str) -> ResearchRun:
         run = await start_run(
@@ -83,12 +91,25 @@ class CreatorOnboarder:
 
         try:
             niches = await self._selected_niches(campaign_id)
+
+            # Pass 1 — search every niche (yt-dlp; no reliable subscriber counts).
+            niche_channels: list[tuple[Niche, dict[str, dict]]] = [
+                (niche, await self._search_niche_raw(niche)) for niche in niches
+            ]
+
+            # Pass 2 — one batched Data API enrichment for the whole campaign.
+            # A channel found in several niches is looked up once, and
+            # channels.list bills 1 quota unit per 50 IDs, so this is the
+            # cheapest way to get real subscriber counts.
+            counts = await self._enrich_all(niche_channels)
+
             results: list[dict] = []
             creators_created = 0
             creators_linked = 0
 
-            for niche in niches:
-                channels = await self._search_niche(niche)
+            # Pass 3 — apply real counts, filter to the follower band, cap, create.
+            for niche, raw in niche_channels:
+                channels = self._filter_and_cap(raw, counts)
                 niche_created = niche_linked = 0
 
                 for channel_id, info in channels.items():
@@ -121,6 +142,7 @@ class CreatorOnboarder:
                 niches_processed=len(niches),
                 creators_created=creators_created,
                 creators_linked=creators_linked,
+                channels_enriched=len(counts),
                 results=results,
             )
             return await finish_run(self._session, run, stats)
@@ -132,14 +154,18 @@ class CreatorOnboarder:
             )
             raise
 
-    async def _search_niche(self, niche: Niche) -> dict[str, dict]:
+    async def _search_niche_raw(self, niche: Niche) -> dict[str, dict]:
+        """Search a niche and return every unique channel (no band filter, no cap).
+
+        Filtering and capping happen after enrichment, so we must not drop or
+        truncate here — otherwise the follower band would be applied against
+        yt-dlp's missing counts and the wrong channels would survive.
+        """
         query = f"ytsearch{self._cfg.search_count}:{niche.canonical_name}"
         items = await self._adapter.collect(query)
 
         channels: dict[str, dict] = {}
         for item in items:
-            if len(channels) >= self._cfg.max_creators_per_niche:
-                break
             meta = getattr(item, "metadata", {}) or {}
             # Prefer yt-dlp's stable identifiers (UC channel_id, then @handle) over
             # the author display name: it becomes CreatorPlatformAccount.handle,
@@ -153,13 +179,48 @@ class CreatorOnboarder:
             )
             if not channel_id or channel_id in channels:
                 continue
-            follower_count = meta.get("follower_count")
-            if not self._in_band(follower_count):
-                continue
             channels[channel_id] = {
                 "name": getattr(item, "author", None) or channel_id,
-                "follower_count": follower_count,
+                "follower_count": meta.get("follower_count"),
             }
+        return channels
+
+    async def _enrich_all(
+        self, niche_channels: list[tuple[Niche, dict[str, dict]]],
+    ) -> dict[str, int | None]:
+        """One deduplicated, batched subscriber-count lookup for the whole run."""
+        if self._enricher is None:
+            return {}
+        ids = sorted({
+            cid
+            for _, channels in niche_channels
+            for cid in channels
+            if _is_enrichable_channel_id(cid)
+        })
+        if not ids:
+            return {}
+        try:
+            counts = await self._enricher.get_subscriber_counts(ids)
+        except Exception:
+            logger.warning(
+                "YouTube API enrichment failed; onboarding without subscriber counts",
+                exc_info=True,
+            )
+            return {}
+        logger.info("Enriched %d/%d channels with subscriber counts", len(counts), len(ids))
+        return counts
+
+    def _filter_and_cap(
+        self, raw: dict[str, dict], counts: dict[str, int | None],
+    ) -> dict[str, dict]:
+        channels: dict[str, dict] = {}
+        for channel_id, info in raw.items():
+            if len(channels) >= self._cfg.max_creators_per_niche:
+                break
+            follower_count = counts.get(channel_id, info.get("follower_count"))
+            if not self._in_band(follower_count):
+                continue
+            channels[channel_id] = {**info, "follower_count": follower_count}
         return channels
 
     def _in_band(self, follower_count: int | None) -> bool:

@@ -93,57 +93,81 @@ class ResearchOrchestrator:
                 return True
             return False
 
-        if not skip_collect:
-            for account in await self._accounts(creator_id):
-                adapter = build_adapter(account.platform, self._cfg)
-                try:
-                    run = await AcquisitionCollector(adapter, self._session).collect_creator_data(
-                        account.handle, creator_id
-                    )
-                finally:
-                    close = getattr(adapter, "close", None)
-                    if close is not None:
-                        await close()
-                if await step(run):
-                    return report
+        try:
+            if not skip_collect:
+                for account in await self._accounts(creator_id):
+                    adapter = build_adapter(account.platform, self._cfg)
+                    try:
+                        run = await AcquisitionCollector(
+                            adapter, self._session
+                        ).collect_creator_data(account.handle, creator_id)
+                    finally:
+                        close = getattr(adapter, "close", None)
+                        if close is not None:
+                            await close()
+                    if await step(run):
+                        return report
 
-        if await step(
-            await IntelligencePipeline(
-                self._provider, self._session, self._cfg.pipeline_max_failure_rate
-            ).run(creator_id)
-        ):
+            if await step(
+                await IntelligencePipeline(
+                    self._provider, self._session, self._cfg.pipeline_max_failure_rate
+                ).run(creator_id)
+            ):
+                return report
+
+            if await step(
+                await ClusterPipeline(self._embedder_factory(), self._session).run(creator_id)
+            ):
+                return report
+
+            if await step(
+                await IntentPipeline(
+                    self._provider,
+                    self._session,
+                    rules_path=self._cfg.intent_rules_path,
+                    max_failure_rate=self._cfg.pipeline_max_failure_rate,
+                ).run(creator_id)
+            ):
+                return report
+
+            if await step(
+                await ScoringPipeline(self._session, self._cfg.scoring_rules_path).run(creator_id)
+            ):
+                return report
+
+            await advance(self._session, creator, CreatorStatus.RESEARCH_COMPLETE)
+            report.dossier_html = await DossierGenerator(
+                self._session, self._cfg.scoring_rules_path
+            ).generate(creator_id)
+            await advance(self._session, creator, CreatorStatus.DOSSIER_GENERATED)
+            await advance(self._session, creator, CreatorStatus.HUMAN_REVIEW)
+            await commit()
+
+            report.final_status = creator.status.value
             return report
+        except Exception:
+            # A stage crashed (as opposed to returning status=="failed", which
+            # step() already committed and stopped on). The crashing stage marked
+            # its run failed and restored the creator's status, both flushed but
+            # not yet committed (ADR-0009). Commit so that failed run survives —
+            # a crash is research memory too — then let the caller see the crash.
+            await self._persist_after_crash(creator_id)
+            raise
 
-        if await step(
-            await ClusterPipeline(self._embedder_factory(), self._session).run(creator_id)
-        ):
-            return report
-
-        if await step(
-            await IntentPipeline(
-                self._provider,
-                self._session,
-                rules_path=self._cfg.intent_rules_path,
-                max_failure_rate=self._cfg.pipeline_max_failure_rate,
-            ).run(creator_id)
-        ):
-            return report
-
-        if await step(
-            await ScoringPipeline(self._session, self._cfg.scoring_rules_path).run(creator_id)
-        ):
-            return report
-
-        await advance(self._session, creator, CreatorStatus.RESEARCH_COMPLETE)
-        report.dossier_html = await DossierGenerator(
-            self._session, self._cfg.scoring_rules_path
-        ).generate(creator_id)
-        await advance(self._session, creator, CreatorStatus.DOSSIER_GENERATED)
-        await advance(self._session, creator, CreatorStatus.HUMAN_REVIEW)
-        await commit()
-
-        report.final_status = creator.status.value
-        return report
+    async def _persist_after_crash(self, creator_id: str) -> None:
+        """Keep the failed run row a crashing stage flushed. If the session is
+        poisoned (e.g. a DB error aborted the transaction), commit is impossible,
+        so roll back to hand the caller a usable session — at the cost of that
+        row — rather than masking the original crash with a commit error."""
+        try:
+            await self._session.commit()
+        except Exception:
+            logger.exception(
+                "could not persist failed run after stage crash for creator %s; "
+                "rolling back",
+                creator_id,
+            )
+            await self._session.rollback()
 
     async def _accounts(self, creator_id: str) -> list[CreatorPlatformAccount]:
         result = await self._session.execute(

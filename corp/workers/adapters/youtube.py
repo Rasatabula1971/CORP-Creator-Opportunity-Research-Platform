@@ -32,6 +32,34 @@ def _is_retryable_http_error(exc: BaseException) -> bool:
     return exc.resp.status in (429, 500, 502, 503, 504)
 
 
+# YouTube returns HTTP 403 for both "comments are off for this video"
+# (commentsDisabled) and quota/rate exhaustion. The first is a per-video fact to
+# skip past; the rest are systemic and must not be swallowed as "no comments".
+_QUOTA_REASONS = frozenset(
+    {"quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded", "userRateLimitExceeded"}
+)
+
+
+def _http_error_reason(exc: HttpError) -> str:
+    """Best-effort first ``reason`` from a YouTube HttpError, or ""."""
+    details = getattr(exc, "error_details", None)
+    if details:
+        for d in details:
+            if isinstance(d, dict) and d.get("reason"):
+                return str(d["reason"])
+    try:
+        import json
+
+        content = getattr(exc, "content", None)
+        payload = json.loads(content.decode("utf-8")) if content else {}
+        errors = payload.get("error", {}).get("errors", [])
+        if errors and isinstance(errors[0], dict):
+            return str(errors[0].get("reason", ""))
+    except Exception:
+        pass
+    return ""
+
+
 class _RateLimiter:
     """Thread-safe per-second rate limiter."""
 
@@ -250,7 +278,18 @@ class YouTubeAdapter(SourceAdapter):
                     )
                 except HttpError as e:
                     if e.resp.status == 403:
-                        logger.warning("Comments disabled for video %s", video_id)
+                        reason = _http_error_reason(e)
+                        if reason in _QUOTA_REASONS:
+                            # Systemic — raising stops the run instead of silently
+                            # returning zero comments for every remaining video.
+                            raise QuotaExceededError(
+                                f"YouTube quota/rate limit fetching comments ({reason})"
+                            ) from e
+                        logger.warning(
+                            "No comments for video %s (403: %s)",
+                            video_id,
+                            reason or "commentsDisabled",
+                        )
                         return results
                     raise
 

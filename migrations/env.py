@@ -10,7 +10,17 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Prefer an explicit env var (CI / one-off overrides); otherwise fall back to the
+# app's Settings, which reads DATABASE_URL_SYNC from .env — so `alembic upgrade`
+# targets the same database the app does instead of alembic.ini's localhost default.
 db_url = os.environ.get("DATABASE_URL_SYNC")
+if not db_url:
+    try:
+        from corp.config import settings
+
+        db_url = settings.database_url_sync
+    except Exception:
+        db_url = None
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 

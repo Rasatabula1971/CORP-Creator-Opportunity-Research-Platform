@@ -7,6 +7,7 @@ from typing import Any
 
 from corp.core.intent.hierarchy import classify_signal_level, load_intent_rules
 from corp.core.models.intent import SignalLevel
+from corp.workers.intelligence.coerce import as_float
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
@@ -173,6 +174,6 @@ async def _llm_classify(
     return IntentClassification(
         signal_level=level,
         rationale=str(result.get("rationale", ""))[:500],
-        confidence=min(1.0, max(0.0, float(result.get("confidence", 0.5)))),
+        confidence=min(1.0, max(0.0, as_float(result.get("confidence"), 0.5))),
         key_indicators=[str(k)[:200] for k in _as_list(result.get("key_indicators"))[:10]],
     )

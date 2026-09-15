@@ -11,7 +11,7 @@ from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import Evidence
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import ResearchRun
+from corp.core.models.workflow import Gate, ResearchRun
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheDetailResponse
 from corp.core.schemas.creator import (
@@ -174,11 +174,11 @@ async def get_dossier(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    gen = DossierGenerator(session)
-    try:
-        html = await gen.generate(creator_id)
-    except ValueError:
+    # Only a missing creator is a 404; other failures (e.g. a rules/YAML parse
+    # error inside the generator) must not be masked as "Creator not found".
+    if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
+    html = await DossierGenerator(session).generate(creator_id)
     return Response(content=html, media_type="text/html")
 
 
@@ -244,6 +244,18 @@ async def create_decision(
     body: DecisionCreate,
     session: AsyncSession = Depends(get_session),
 ):
+    # The URL scopes the decision to this creator and this endpoint only records
+    # Gate A. Reject a body that says otherwise instead of silently overriding it,
+    # so a caller never gets a 201 describing a decision different from what it sent.
+    if body.creator_id != creator_id:
+        raise HTTPException(
+            status_code=400, detail="Body creator_id does not match the URL"
+        )
+    if body.gate != Gate.GATE_A:
+        raise HTTPException(
+            status_code=400, detail="This endpoint only records Gate A decisions"
+        )
+
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")

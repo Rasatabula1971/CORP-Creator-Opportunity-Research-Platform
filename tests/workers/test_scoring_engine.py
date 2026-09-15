@@ -15,7 +15,6 @@ from corp.core.scoring.engine import (
     score_recency_trend,
 )
 
-
 # ── Component score calculators ──────────────────────────────────────
 
 
@@ -159,3 +158,19 @@ async def test_score_band_weak():
         "weak": {"min": 0.0, "label": "Weak"},
     }}
     assert get_score_band(0.2, rules) == "Weak"
+
+
+async def test_score_band_skips_band_without_min():
+    # A band missing its "min" must not swallow every score (previously it
+    # defaulted to 0.0 and matched everything as the first band).
+    rules = {"score_bands": {
+        "exceptional": {"label": "Exceptional"},          # no min
+        "strong": {"min": 0.70, "label": "Strong"},
+        "weak": {"min": 0.0, "label": "Weak"},
+    }}
+    assert get_score_band(0.9, rules) == "Strong"          # not "Exceptional"
+    assert get_score_band(0.2, rules) == "Weak"
+
+
+async def test_score_band_empty_rules_falls_back():
+    assert get_score_band(0.9, {}) == "Weak — insufficient signal"

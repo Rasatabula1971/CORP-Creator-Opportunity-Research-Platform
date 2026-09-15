@@ -1,7 +1,6 @@
 """Integration tests for DossierGenerator against real Postgres."""
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator, CreatorPlatformAccount

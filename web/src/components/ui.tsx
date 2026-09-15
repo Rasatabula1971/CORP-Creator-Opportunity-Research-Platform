@@ -42,6 +42,21 @@ const badgeColors: Record<string, string> = {
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
   partial: "bg-amber-100 text-amber-800",
+  draft: "bg-neutral-200 text-neutral-700",
+  active: "bg-blue-100 text-blue-800",
+  paused: "bg-amber-100 text-amber-800",
+  candidate: "bg-sky-100 text-sky-800",
+  canonical: "bg-indigo-100 text-indigo-800",
+  verified: "bg-teal-100 text-teal-800",
+  qualified: "bg-cyan-100 text-cyan-800",
+  selected: "bg-green-100 text-green-800",
+  approve: "bg-green-100 text-green-800",
+  reject: "bg-red-100 text-red-800",
+  watch: "bg-purple-100 text-purple-800",
+  strong: "bg-green-100 text-green-800",
+  moderate: "bg-amber-100 text-amber-800",
+  weak: "bg-neutral-200 text-neutral-700",
+  none: "bg-neutral-200 text-neutral-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {
