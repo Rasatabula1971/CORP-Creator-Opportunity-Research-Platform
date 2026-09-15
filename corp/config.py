@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # configurable to move without a code change.
     corp_data_path: str = "corp_data"
 
+    # SQLite warm store for bulk data (evidence text, embeddings, content,
+    # interactions, metrics). Lives on external/flash storage to keep
+    # Supabase Postgres within the free-tier 500 MB limit.
+    warm_store_path: str = "corp_data/warm.db"
+
     # LLM provider selection: auto | fair | gemini | groq | pool
     # auto prefers FAIR (in-process, every free provider it has a key for)
     # when the fair package is installed and FAIR_ENABLED is true; otherwise

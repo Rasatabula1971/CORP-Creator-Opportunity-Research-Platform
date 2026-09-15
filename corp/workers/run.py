@@ -5,6 +5,9 @@
     python -m corp.workers.run collect <platform> <identifier> <creator_id>
     python -m corp.workers.run intelligence <creator_id>
     python -m corp.workers.run intent [creator_id]
+    python -m corp.workers.run warm-init
+    python -m corp.workers.run warm-status
+    python -m corp.workers.run warm-export <out_dir>
 
 `research` runs every stage in order and leaves the creator in HUMAN_REVIEW.
 The single-stage commands exist for re-running one step.
@@ -362,6 +365,47 @@ async def _run_research_campaign(
         await _close(provider)
 
 
+async def _run_warm_init() -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    print(f"warm store initialized: {store.path}")
+    await store.close()
+    return 0
+
+
+async def _run_warm_status() -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    counts = await store.count_rows()
+    total = 0
+    for table, count in counts.items():
+        print(f"  {table}: {count:,}")
+        total += count
+    print(f"  total: {total:,}")
+    print(f"  path: {store.path}")
+    await store.close()
+    return 0
+
+
+async def _run_warm_export(out_dir: str) -> int:
+    from corp.warmstore.store import WarmStore
+
+    store = WarmStore(settings.warm_store_path)
+    await store.init_db()
+    exported = await store.export_jsonl(out_dir)
+    total = 0
+    for table, count in exported.items():
+        print(f"  {table}: {count:,} rows")
+        total += count
+    print(f"  total: {total:,} rows exported to {out_dir}")
+    await store.close()
+    return 0
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -507,6 +551,11 @@ def main(argv: list[str] | None = None) -> int:
         "query", help="youtube: 'ytsearch5:<keywords>' (yt-dlp search); reddit: r/<subreddit>"
     )
 
+    sub.add_parser("warm-init", help="initialize the warm store SQLite database")
+    sub.add_parser("warm-status", help="show warm store row counts and path")
+    warm_export = sub.add_parser("warm-export", help="export warm store tables to JSONL")
+    warm_export.add_argument("out_dir", help="output directory for JSONL files")
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=settings.log_level)
 
@@ -554,6 +603,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
+    if args.pipeline == "warm-init":
+        return asyncio.run(_run_warm_init())
+    if args.pipeline == "warm-status":
+        return asyncio.run(_run_warm_status())
+    if args.pipeline == "warm-export":
+        return asyncio.run(_run_warm_export(args.out_dir))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))
 
 
