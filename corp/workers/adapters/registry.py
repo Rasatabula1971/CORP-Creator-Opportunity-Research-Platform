@@ -4,7 +4,7 @@ from corp.config import Settings
 from corp.config import settings as default_settings
 from corp.workers.adapters.base import SourceAdapter
 
-KNOWN_PLATFORMS = ("youtube", "reddit", "tiktok", "web")
+KNOWN_PLATFORMS = ("youtube", "reddit", "tiktok", "web", "stackexchange")
 
 
 class AdapterConfigError(Exception):
@@ -50,6 +50,16 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
             user_agent=cfg.reddit_user_agent,
             posts_per_creator=cfg.reddit_posts_per_creator,
             request_interval_seconds=cfg.reddit_request_interval_seconds,
+        )
+
+    if name == "stackexchange":
+        from corp.workers.adapters.stackexchange import StackExchangeAdapter
+
+        return StackExchangeAdapter(
+            site=cfg.stackexchange_site,
+            max_questions=cfg.stackexchange_max_questions,
+            include_answers=cfg.stackexchange_include_answers,
+            api_key=cfg.stackexchange_api_key or None,
         )
 
     known = ", ".join(KNOWN_PLATFORMS)

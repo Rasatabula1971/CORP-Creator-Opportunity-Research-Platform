@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     # Creator-web adapter (landing page + commerce-looking outbound pages).
     web_max_pages: int = 8
 
+    # Stack Exchange adapter (niche-signal: questions = audience problems).
+    # Open API, no key required. Optional key raises quota from 300 to 10,000/day.
+    stackexchange_api_key: str = ""
+    stackexchange_site: str = "stackoverflow"
+    stackexchange_max_questions: int = 50
+    stackexchange_include_answers: bool = True
+
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
     # configurable to move without a code change.
