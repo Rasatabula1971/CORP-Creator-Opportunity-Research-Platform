@@ -326,6 +326,42 @@ async def _run_onboard(
             await close()
 
 
+async def _run_research_campaign(
+    campaign_id: str, limit: int | None, skip_collect: bool, force: bool,
+) -> int:
+    from corp.database import async_session
+    from corp.workers.campaign_research import BatchConfig, CampaignResearchBatch
+    from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
+    from corp.workers.orchestrator import ResearchOrchestrator
+
+    provider = build_provider()
+
+    def embedder():
+        return SentenceTransformerEmbedder(settings.embedding_model)
+
+    try:
+        async with async_session() as session:
+            orchestrator = ResearchOrchestrator(session, provider, embedder)
+            batch = CampaignResearchBatch(
+                orchestrator, session,
+                BatchConfig(limit=limit, skip_collect=skip_collect, force=force),
+            )
+            run = await batch.run_campaign(campaign_id)
+            await session.commit()
+        extra = (run.stats or {}).get("extra", {})
+        print(
+            f"research_run={run.id} status={run.status} "
+            f"total={extra.get('creators_total')} succeeded={extra.get('succeeded')} "
+            f"incomplete={extra.get('incomplete')} skipped={extra.get('skipped')} "
+            f"errored={extra.get('errored')}"
+        )
+        for r in extra.get("results", []):
+            print(f"  {r['outcome']}: {r['name']} ({r['creator_id']}) — {r['reason']}")
+        return 0 if run.status == "completed" else 1
+    finally:
+        await _close(provider)
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -432,6 +468,18 @@ def main(argv: list[str] | None = None) -> int:
     select.add_argument("--min-score", type=float, default=0.0)
     select.add_argument("--min-confidence", type=float, default=0.0)
 
+    research_campaign = sub.add_parser(
+        "research-campaign",
+        help="run the full per-creator research pipeline for every onboarded creator",
+    )
+    research_campaign.add_argument("campaign_id")
+    research_campaign.add_argument("--limit", type=int, default=None)
+    research_campaign.add_argument("--skip-collect", action="store_true")
+    research_campaign.add_argument(
+        "--force", action="store_true",
+        help="re-research creators that already progressed past DISCOVERED",
+    )
+
     onboard = sub.add_parser(
         "onboard", help="materialize Creator rows from ecosystem search for SELECTED niches"
     )
@@ -489,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
             _run_onboard(
                 args.campaign_id, args.search_count, args.max_per_niche,
                 args.min_followers, args.max_followers,
+            )
+        )
+    if args.pipeline == "research-campaign":
+        return asyncio.run(
+            _run_research_campaign(
+                args.campaign_id, args.limit, args.skip_collect, args.force,
             )
         )
     if args.pipeline == "estimate-ecosystem":

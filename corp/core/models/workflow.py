@@ -79,6 +79,7 @@ class RunType(str, enum.Enum):
     NICHE_SELECTION = "niche_selection"
     CREATOR_DISCOVERY = "creator_discovery"
     CREATOR_ONBOARDING = "creator_onboarding"
+    CAMPAIGN_RESEARCH_BATCH = "campaign_research_batch"
     CREATOR_RESEARCH = "creator_research"
 
 
