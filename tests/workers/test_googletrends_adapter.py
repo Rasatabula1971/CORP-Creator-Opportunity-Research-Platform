@@ -5,8 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
+from datetime import UTC
+
 from corp.workers.adapters.googletrends import (
     GoogleTrendsAdapter,
+    _parse_rss_date,
     _parse_trends_rss,
 )
 
@@ -95,6 +98,21 @@ def test_parse_rss_empty_title_skipped():
 def test_parse_rss_invalid_xml():
     results = _parse_trends_rss("not xml at all", "US")
     assert results == []
+
+
+def test_parse_rss_date_converts_offset_to_utc():
+    # 00:00 at -0700 is 07:00 UTC — the instant must be preserved, not relabeled.
+    dt = _parse_rss_date("Mon, 15 Sep 2026 00:00:00 -0700")
+    assert dt is not None
+    assert dt.tzinfo == UTC
+    assert (dt.hour, dt.minute) == (7, 0)
+
+
+def test_parse_rss_date_naive_treated_as_utc():
+    dt = _parse_rss_date("Mon, 15 Sep 2026 00:00:00")
+    assert dt is not None
+    assert dt.tzinfo == UTC
+    assert dt.hour == 0
 
 
 # ── Trending collection ──────────────────────────────────────────────

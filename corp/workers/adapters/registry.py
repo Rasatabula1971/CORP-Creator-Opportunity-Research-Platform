@@ -104,9 +104,10 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
     if name == "marketplace":
         from corp.workers.adapters.marketplace import MarketplaceAdapter
 
+        sites = [s.strip() for s in cfg.marketplace_sites.split(",") if s.strip()]
         return MarketplaceAdapter(
             max_listings=cfg.marketplace_max_listings,
-            marketplaces=cfg.marketplace_sites.split(",") if cfg.marketplace_sites else None,
+            marketplaces=sites or None,
             etsy_api_key=cfg.etsy_api_key or None,
         )
 

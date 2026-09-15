@@ -127,6 +127,44 @@ def test_parse_single_entry_dict():
     assert results[0].metadata["star_rating"] == 5
 
 
+def test_parse_uses_entry_updated_timestamp():
+    feed = {
+        "feed": {
+            "entry": [
+                {
+                    "id": {"label": "7001"},
+                    "title": {"label": "Old review"},
+                    "content": {"label": "text"},
+                    "im:rating": {"label": "2"},
+                    "author": {"name": {"label": "R"}},
+                    "im:name": {"label": "App"},
+                    "updated": {"label": "2024-03-15T10:30:00-07:00"},
+                }
+            ]
+        }
+    }
+    results = _parse_review_feed(feed, "1")
+    assert len(results) == 1
+    ts = results[0].timestamp
+    assert ts.year == 2024 and ts.month == 3 and ts.day == 15
+    # -07:00 10:30 → 17:30 UTC
+    assert ts.hour == 17
+
+
+async def test_reviews_url_includes_country(mock_client):
+    adapter = AppStoreAdapter(country="gb", client=mock_client)
+    seen_urls: list[str] = []
+
+    async def mock_get(url, **kwargs):
+        seen_urls.append(str(url))
+        return _mock_resp(REVIEW_FEED)
+
+    mock_client.get = mock_get
+
+    await adapter.collect("id:123456")
+    assert any("/gb/rss/customerreviews/" in u for u in seen_urls)
+
+
 # ── collect by ID ────────────────────────────────────────────────────
 
 

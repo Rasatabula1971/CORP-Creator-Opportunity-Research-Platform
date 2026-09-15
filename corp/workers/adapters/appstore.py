@@ -38,7 +38,10 @@ from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceA
 logger = logging.getLogger(__name__)
 
 ITUNES_SEARCH = "https://itunes.apple.com/search"
-REVIEWS_RSS = "https://itunes.apple.com/rss/customerreviews/id={app_id}/sortBy=mostRecent/json"
+REVIEWS_RSS = (
+    "https://itunes.apple.com/{country}/rss/customerreviews/"
+    "id={app_id}/sortBy=mostRecent/json"
+)
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -132,7 +135,7 @@ class AppStoreAdapter(SourceAdapter):
         self, app_id: str, limit: int | None = None
     ) -> list[NormalizedContent]:
         limit = limit or self._max_reviews
-        url = REVIEWS_RSS.format(app_id=app_id)
+        url = REVIEWS_RSS.format(app_id=app_id, country=self._country)
         data = await self._get_json(url, {})
         return _parse_review_feed(data, app_id)[:limit]
 
@@ -219,6 +222,10 @@ def _parse_review_feed(
         app_name_data = entry.get("im:name", {})
         app_name = app_name_data.get("label") if isinstance(app_name_data, dict) else None
 
+        updated_data = entry.get("updated", {})
+        updated = updated_data.get("label") if isinstance(updated_data, dict) else None
+        timestamp = _parse_iso(updated) or datetime.now(tz=UTC)
+
         results.append(
             NormalizedContent(
                 source_platform="appstore",
@@ -226,7 +233,7 @@ def _parse_review_feed(
                 external_id=ext_id,
                 text=text,
                 author=author,
-                timestamp=datetime.now(tz=UTC),
+                timestamp=timestamp,
                 url=url,
                 access_method=AccessMethod.OPEN,
                 compliance_status=ComplianceStatus.COMPLIANT,
@@ -240,3 +247,14 @@ def _parse_review_feed(
         )
 
     return results
+
+
+def _parse_iso(text: str | None) -> datetime | None:
+    """Parse an Apple RSS ``updated`` timestamp (ISO 8601), normalized to UTC."""
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)

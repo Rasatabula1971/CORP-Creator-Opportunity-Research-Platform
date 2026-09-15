@@ -287,6 +287,12 @@ def _parse_trends_rss(xml_text: str, geo: str) -> list[NormalizedContent]:
 def _parse_rss_date(text: str) -> datetime | None:
     from email.utils import parsedate_to_datetime
     try:
-        return parsedate_to_datetime(text).replace(tzinfo=UTC)
+        dt = parsedate_to_datetime(text)
     except Exception:
         return None
+    # RSS pubDate carries an offset (e.g. -0700). .replace(tzinfo=UTC) would keep
+    # the wall-clock and relabel the zone, shifting the instant by that offset;
+    # astimezone converts correctly. A rare offset-less date is treated as UTC.
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
