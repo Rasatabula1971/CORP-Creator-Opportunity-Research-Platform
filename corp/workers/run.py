@@ -190,6 +190,44 @@ async def _run_verify(
     return 0 if run.status == "completed" else 1
 
 
+async def _run_estimate_ecosystem(
+    campaign_id: str, search_count: int, min_followers: int, max_followers: int,
+) -> int:
+    from corp.database import async_session
+    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.intelligence.ecosystem_estimator import EcoConfig, EcosystemEstimator
+
+    adapter = build_adapter("youtube")
+    try:
+        async with async_session() as session:
+            estimator = EcosystemEstimator(
+                adapter,
+                session,
+                EcoConfig(
+                    search_count=search_count,
+                    min_followers=min_followers,
+                    max_followers=max_followers,
+                ),
+            )
+            run = await estimator.estimate(campaign_id)
+            await session.commit()
+        extra = (run.stats or {}).get("extra", {})
+        print(
+            f"research_run={run.id} status={run.status} "
+            f"niches_checked={extra.get('niches_checked')}"
+        )
+        for r in extra.get("results", []):
+            print(
+                f"  {r['niche']}: {r['total_creators']} creators, "
+                f"{r['target_band_creators']} in target band"
+            )
+        return 0 if run.status == "completed" else 1
+    finally:
+        close = getattr(adapter, "close", None)
+        if close is not None:
+            await close()
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -279,6 +317,15 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-broad", action="store_true", help="do not reject broad-domain niches"
     )
 
+    eco = sub.add_parser(
+        "estimate-ecosystem",
+        help="estimate creator ecosystem size for verified niches",
+    )
+    eco.add_argument("campaign_id")
+    eco.add_argument("--search-count", type=int, default=20)
+    eco.add_argument("--min-followers", type=int, default=10_000)
+    eco.add_argument("--max-followers", type=int, default=200_000)
+
     discover = sub.add_parser(
         "discover", help="niche discovery (light): one source, one query, under a campaign"
     )
@@ -306,6 +353,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.pipeline == "verify":
         return asyncio.run(
             _run_verify(args.campaign_id, args.min_evidence, args.min_authors, args.allow_broad)
+        )
+    if args.pipeline == "estimate-ecosystem":
+        return asyncio.run(
+            _run_estimate_ecosystem(
+                args.campaign_id, args.search_count,
+                args.min_followers, args.max_followers,
+            )
         )
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
