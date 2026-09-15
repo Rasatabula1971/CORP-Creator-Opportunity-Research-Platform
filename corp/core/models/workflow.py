@@ -78,6 +78,7 @@ class RunType(str, enum.Enum):
     NICHE_QUALIFICATION = "niche_qualification"
     NICHE_SELECTION = "niche_selection"
     CREATOR_DISCOVERY = "creator_discovery"
+    CREATOR_ONBOARDING = "creator_onboarding"
     CREATOR_RESEARCH = "creator_research"
 
 

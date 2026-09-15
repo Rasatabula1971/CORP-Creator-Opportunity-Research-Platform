@@ -284,6 +284,48 @@ async def _run_select(
     return 0 if run.status == "completed" else 1
 
 
+async def _run_onboard(
+    campaign_id: str, search_count: int, max_per_niche: int,
+    min_followers: int | None, max_followers: int | None,
+) -> int:
+    from corp.database import async_session
+    from corp.workers.acquisition.creator_onboarding import CreatorOnboarder, OnboardConfig
+    from corp.workers.adapters.registry import build_adapter
+
+    adapter = build_adapter("youtube")
+    try:
+        async with async_session() as session:
+            onboarder = CreatorOnboarder(
+                adapter,
+                session,
+                OnboardConfig(
+                    search_count=search_count,
+                    max_creators_per_niche=max_per_niche,
+                    min_followers=min_followers,
+                    max_followers=max_followers,
+                ),
+            )
+            run = await onboarder.onboard(campaign_id)
+            await session.commit()
+        extra = (run.stats or {}).get("extra", {})
+        print(
+            f"research_run={run.id} status={run.status} "
+            f"niches_processed={extra.get('niches_processed')} "
+            f"creators_created={extra.get('creators_created')} "
+            f"creators_linked={extra.get('creators_linked')}"
+        )
+        for r in extra.get("results", []):
+            print(
+                f"  {r['niche']}: {r['channels_found']} channels, "
+                f"{r['creators_created']} new, {r['creators_linked']} linked"
+            )
+        return 0 if run.status == "completed" else 1
+    finally:
+        close = getattr(adapter, "close", None)
+        if close is not None:
+            await close()
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -390,6 +432,15 @@ def main(argv: list[str] | None = None) -> int:
     select.add_argument("--min-score", type=float, default=0.0)
     select.add_argument("--min-confidence", type=float, default=0.0)
 
+    onboard = sub.add_parser(
+        "onboard", help="materialize Creator rows from ecosystem search for SELECTED niches"
+    )
+    onboard.add_argument("campaign_id")
+    onboard.add_argument("--search-count", type=int, default=20)
+    onboard.add_argument("--max-per-niche", type=int, default=10)
+    onboard.add_argument("--min-followers", type=int, default=None)
+    onboard.add_argument("--max-followers", type=int, default=None)
+
     eco = sub.add_parser(
         "estimate-ecosystem",
         help="estimate creator ecosystem size for verified niches",
@@ -432,6 +483,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.pipeline == "select":
         return asyncio.run(
             _run_select(args.campaign_id, args.top_n, args.min_score, args.min_confidence)
+        )
+    if args.pipeline == "onboard":
+        return asyncio.run(
+            _run_onboard(
+                args.campaign_id, args.search_count, args.max_per_niche,
+                args.min_followers, args.max_followers,
+            )
         )
     if args.pipeline == "estimate-ecosystem":
         return asyncio.run(
