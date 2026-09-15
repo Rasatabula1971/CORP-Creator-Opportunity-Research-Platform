@@ -11,6 +11,12 @@ from corp.core.models.evidence import Evidence
 from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.warmstore.sync import (
+    mirror_content_items,
+    mirror_evidence,
+    mirror_interactions,
+    mirror_metrics,
+)
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -188,20 +194,20 @@ class AcquisitionCollector:
             if meta.get("handle") and not account.external_id:
                 account.external_id = str(meta["handle"])[:255]
 
-        self._session.add(
-            MetricsSnapshot(
-                research_run_id=research_run_id,
-                platform_account_id=account.id if account else None,
-                follower_count=int(followers) if followers is not None else None,
-                extra={
-                    "platform": item.source_platform,
-                    "display_name": meta.get("display_name"),
-                    "video_count": meta.get("video_count"),
-                },
-            )
+        snapshot = MetricsSnapshot(
+            research_run_id=research_run_id,
+            platform_account_id=account.id if account else None,
+            follower_count=int(followers) if followers is not None else None,
+            extra={
+                "platform": item.source_platform,
+                "display_name": meta.get("display_name"),
+                "video_count": meta.get("video_count"),
+            },
         )
+        self._session.add(snapshot)
         await self._create_evidence(item, research_run_id)
         await self._session.flush()
+        await mirror_metrics([snapshot])
 
     async def _snapshot_content(
         self, ci: ContentItem, item: NormalizedContent, research_run_id: str
@@ -213,16 +219,16 @@ class AcquisitionCollector:
             value = meta.get(field)
             if value is not None:
                 setattr(ci, field, int(value))
-        self._session.add(
-            MetricsSnapshot(
-                research_run_id=research_run_id,
-                content_item_id=ci.id,
-                view_count=_int_or_none(meta.get("view_count")),
-                like_count=_int_or_none(meta.get("like_count")),
-                comment_count=_int_or_none(meta.get("comment_count")),
-                share_count=_int_or_none(meta.get("share_count")),
-            )
+        snapshot = MetricsSnapshot(
+            research_run_id=research_run_id,
+            content_item_id=ci.id,
+            view_count=_int_or_none(meta.get("view_count")),
+            like_count=_int_or_none(meta.get("like_count")),
+            comment_count=_int_or_none(meta.get("comment_count")),
+            share_count=_int_or_none(meta.get("share_count")),
         )
+        self._session.add(snapshot)
+        await mirror_metrics([snapshot])
 
     async def _upsert_content_item(
         self,
@@ -257,6 +263,7 @@ class AcquisitionCollector:
         )
         self._session.add(ci)
         await self._session.flush()
+        await mirror_content_items([ci])
         return ci
 
     async def _find_content_item_for_interaction(
@@ -318,6 +325,7 @@ class AcquisitionCollector:
         )
         self._session.add(interaction)
         await self._session.flush()
+        await mirror_interactions([interaction])
         return interaction
 
     async def _create_evidence(
@@ -338,4 +346,5 @@ class AcquisitionCollector:
         )
         self._session.add(evidence)
         await self._session.flush()
+        await mirror_evidence([evidence])
         return evidence

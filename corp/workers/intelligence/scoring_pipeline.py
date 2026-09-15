@@ -42,6 +42,7 @@ from corp.core.scoring.engine import (
     weighted_evidence_count,
 )
 from corp.core.scoring.text import containment, jaccard, tokens
+from corp.warmstore.sync import mirror_scores
 from corp.workers.intelligence.runs import (
     PipelineStats,
     active_clusters_for_creator,
@@ -445,6 +446,7 @@ class ScoringPipeline:
         )
         self._session.add(opp)
         await self._session.flush()
+        await mirror_scores(opportunity_scores=[opp])
         return opp
 
     async def _score_creator(
@@ -503,6 +505,7 @@ class ScoringPipeline:
         )
         self._session.add(creator_score)
         await self._session.flush()
+        await mirror_scores(creator_scores=[creator_score])
         return creator_score
 
 

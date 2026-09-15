@@ -28,6 +28,7 @@ from corp.workers.intelligence.runs import (
     start_run,
 )
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
+from corp.warmstore.sync import mirror_observations
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -125,21 +126,23 @@ class IntelligencePipeline:
                 stats.fail(exc)
                 continue
 
+            new_obs = []
             for obs in observations:
-                self._session.add(
-                    ProblemObservation(
-                        evidence_id=evidence.id,
-                        text=obs.text,
-                        category=obs.category,
-                        is_inferred=obs.is_inferred,
-                        extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
-                        model_version=self._provider.model_name,
-                        confidence=obs.confidence,
-                        source_side="audience",
-                    )
+                po = ProblemObservation(
+                    evidence_id=evidence.id,
+                    text=obs.text,
+                    category=obs.category,
+                    is_inferred=obs.is_inferred,
+                    extraction_prompt_version=EXTRACTION_PROMPT_VERSION,
+                    model_version=self._provider.model_name,
+                    confidence=obs.confidence,
+                    source_side="audience",
                 )
+                self._session.add(po)
+                new_obs.append(po)
             stats.ok()
             await self._session.flush()
+            await mirror_observations(new_obs)
 
     async def _find_evidence(self, external_id: str) -> Evidence | None:
         """Newest evidence row for a source id (re-collection appends, never updates)."""
@@ -219,21 +222,23 @@ class IntelligencePipeline:
                 stats.fail(exc)
                 continue
 
+            new_obs = []
             for obs in observations:
-                self._session.add(
-                    ProblemObservation(
-                        evidence_id=evidence.id,
-                        text=obs.text,
-                        category=obs.category,
-                        is_inferred=obs.is_inferred,
-                        extraction_prompt_version=CREATOR_PROMPT_VERSION,
-                        model_version=self._provider.model_name,
-                        confidence=obs.confidence,
-                        source_side="creator",
-                    )
+                po = ProblemObservation(
+                    evidence_id=evidence.id,
+                    text=obs.text,
+                    category=obs.category,
+                    is_inferred=obs.is_inferred,
+                    extraction_prompt_version=CREATOR_PROMPT_VERSION,
+                    model_version=self._provider.model_name,
+                    confidence=obs.confidence,
+                    source_side="creator",
                 )
+                self._session.add(po)
+                new_obs.append(po)
             stats.ok()
             await self._session.flush()
+            await mirror_observations(new_obs)
 
     # ── Topics ───────────────────────────────────────────────────────
 

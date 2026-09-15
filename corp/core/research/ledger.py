@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
+from corp.warmstore.sync import mirror_research_queries
 
 
 async def record_query(
@@ -41,6 +42,7 @@ async def record_query(
     )
     session.add(row)
     await session.flush()
+    await mirror_research_queries([row])
     return row
 
 
