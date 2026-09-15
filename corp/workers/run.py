@@ -259,6 +259,31 @@ async def _run_qualify(campaign_id: str, rules_path: str) -> int:
     return 0 if run.status == "completed" else 1
 
 
+async def _run_select(
+    campaign_id: str, top_n: int, min_score: float, min_confidence: float,
+) -> int:
+    from corp.database import async_session
+    from corp.workers.intelligence.niche_selection import NicheSelector, SelectionConfig
+
+    async with async_session() as session:
+        selector = NicheSelector(
+            session,
+            SelectionConfig(top_n=top_n, min_score=min_score, min_confidence=min_confidence),
+        )
+        run = await selector.select(campaign_id)
+        await session.commit()
+    extra = (run.stats or {}).get("extra", {})
+    print(
+        f"research_run={run.id} status={run.status} "
+        f"ranked={extra.get('niches_ranked')} selected={extra.get('selected')} "
+        f"rejected={extra.get('rejected')}"
+    )
+    for r in extra.get("results", []):
+        mark = "SELECTED" if r["selected"] else "REJECTED"
+        print(f"  #{r['rank']} {mark}: {r['niche']} (score={r['score']:.4f}) — {r['rationale']}")
+    return 0 if run.status == "completed" else 1
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -357,6 +382,14 @@ def main(argv: list[str] | None = None) -> int:
         help="path to qualification rules YAML (default: rules/niche_qualification.yaml)",
     )
 
+    select = sub.add_parser(
+        "select", help="rank qualified niches and mark the winners SELECTED"
+    )
+    select.add_argument("campaign_id")
+    select.add_argument("--top-n", type=int, default=5)
+    select.add_argument("--min-score", type=float, default=0.0)
+    select.add_argument("--min-confidence", type=float, default=0.0)
+
     eco = sub.add_parser(
         "estimate-ecosystem",
         help="estimate creator ecosystem size for verified niches",
@@ -396,6 +429,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.pipeline == "qualify":
         return asyncio.run(_run_qualify(args.campaign_id, args.rules))
+    if args.pipeline == "select":
+        return asyncio.run(
+            _run_select(args.campaign_id, args.top_n, args.min_score, args.min_confidence)
+        )
     if args.pipeline == "estimate-ecosystem":
         return asyncio.run(
             _run_estimate_ecosystem(
