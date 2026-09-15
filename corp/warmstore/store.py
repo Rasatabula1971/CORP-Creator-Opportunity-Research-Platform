@@ -66,7 +66,14 @@ class WarmStore:
 
     async def _get_engine(self) -> AsyncEngine:
         if self._engine is None:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
+            # Create only the DB's own directory, never the tree above it. With
+            # parents=True, an unmounted external drive (e.g. /mnt/flash missing)
+            # got a fresh empty warm store fabricated on the root filesystem,
+            # which then shadows the real mount and splits rows across two DBs.
+            # Without parents=True, a missing parent tree raises FileNotFoundError,
+            # which the fire-and-forget mirror in sync.py logs and skips — matching
+            # its "path missing -> log and return" contract.
+            self._path.parent.mkdir(exist_ok=True)
             self._engine = create_async_engine(
                 f"sqlite+aiosqlite:///{self._path}",
                 echo=False,
