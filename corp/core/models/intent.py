@@ -1,6 +1,7 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Enum, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -15,6 +16,7 @@ class SignalLevel(str, enum.Enum):
 
 class CommercialSignal(TimestampMixin, Base):
     __tablename__ = "commercial_signals"
+    __table_args__ = (Index("ix_commercial_signals_active", "superseded_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     problem_cluster_id: Mapped[str] = mapped_column(
@@ -26,3 +28,5 @@ class CommercialSignal(TimestampMixin, Base):
     confidence: Mapped[float | None] = mapped_column(Float)
     classification_model: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Set when a newer intent run re-classifies the cluster. Active rows have NULL here.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

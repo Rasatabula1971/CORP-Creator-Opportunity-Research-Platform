@@ -1,0 +1,29 @@
+version: "1.0.0"
+
+weights:
+  evidence_depth: 0.25
+  author_diversity: 0.20
+  ecosystem_size: 0.25
+  target_band_density: 0.20
+  specificity: 0.10
+
+normalizers:
+  evidence_depth_cap: 50
+  author_diversity_cap: 30
+  ecosystem_size_cap: 50
+
+confidence:
+  high:
+    min_evidence: 15
+    min_authors: 8
+    requires_ecosystem: true
+  medium:
+    min_evidence: 5
+    min_authors: 3
+    requires_ecosystem: false
+
+completeness_stages:
+  - has_evidence
+  - is_verified
+  - has_ecosystem_data
+  - has_target_band_data

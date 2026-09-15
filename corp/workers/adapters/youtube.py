@@ -17,6 +17,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.adapters.captions import fetch_youtube_caption
 
 logger = logging.getLogger(__name__)
 
@@ -311,24 +312,7 @@ class YouTubeAdapter(SourceAdapter):
         """Fetch transcript/captions for a video (no quota cost)."""
 
         def _fetch() -> NormalizedContent | None:
-            try:
-                from youtube_transcript_api import YouTubeTranscriptApi
-
-                api = YouTubeTranscriptApi()
-                transcript = api.fetch(video_id)
-                text = " ".join(snippet.text for snippet in transcript)
-                return NormalizedContent(
-                    source_platform="youtube",
-                    content_type="caption",
-                    external_id=f"caption_{video_id}",
-                    text=text,
-                    parent_id=video_id,
-                    access_method=self.access_method,
-                    compliance_status=self.compliance_status,
-                )
-            except Exception:
-                logger.debug("No captions for video %s", video_id)
-                return None
+            return fetch_youtube_caption(video_id, self.access_method, self.compliance_status)
 
         return await asyncio.to_thread(_fetch)
 

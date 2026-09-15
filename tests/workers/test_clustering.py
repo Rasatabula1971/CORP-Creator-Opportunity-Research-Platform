@@ -123,3 +123,18 @@ async def test_generate_label():
 
 async def test_generate_label_empty():
     assert _generate_label([]) == "Unlabeled cluster"
+
+
+def test_tiny_input_clusters_without_umap():
+    """Fewer points than UMAP can initialise from (<= n_components + 1) still
+    cluster: two tight groups of two, min_cluster_size=2."""
+    rng = np.random.RandomState(1)
+    a = rng.randn(4, 8).astype(np.float32) * 0.01
+    a[:2, 0] += 10.0
+    a[2:, 1] += 10.0
+    texts = ["battery a", "battery b", "camera a", "camera b"]
+    clusters = cluster_observations(
+        texts, a, config=ClusteringConfig(min_cluster_size=2, min_samples=1)
+    )
+    assert len(clusters) == 2
+    assert sorted(len(c.member_indices) for c in clusters) == [2, 2]

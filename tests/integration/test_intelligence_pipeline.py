@@ -27,7 +27,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake-test-model"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         self._call_count += 1
         if "topic" in (system or "").lower() or "topics" in prompt.lower()[:100]:
             return {
@@ -171,20 +173,26 @@ async def test_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
         def model_name(self) -> str:
             return "failing"
 
-        async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+        async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
             raise RuntimeError("LLM down")
 
     pipeline = IntelligencePipeline(FailingProvider(), session)
 
-    with pytest.raises(RuntimeError, match="LLM down"):
-        await pipeline.run(creator.id)
+    # Every unit failed: the run comes back "failed" rather than raising, so the
+    # caller's commit keeps the row (docs/DECISIONS/0009).
+    returned = await pipeline.run(creator.id)
+    assert returned.status == "failed"
 
     result = await session.execute(
         select(ResearchRun).where(ResearchRun.creator_id == creator.id)
     )
     run = result.scalar_one()
+    assert run is returned
     assert run.status == "failed"
     assert "LLM down" in run.error_message
+    assert run.completed_at is not None
 
 
 @pytest.mark.asyncio

@@ -1,15 +1,23 @@
 """Acquisition orchestrator — adapter output → DB rows with evidence chain."""
 
 import logging
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.creator import CreatorPlatformAccount, CreatorStatus
+from corp.core.models.evidence import Evidence
+from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.intelligence.runs import (
+    PipelineStats,
+    fail_run,
+    finish_run,
+    stage,
+    start_run,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +27,9 @@ _CONTENT_TYPE_MAP = {
     "short": ContentType.SHORT,
     "reel": ContentType.REEL,
     "article": ContentType.ARTICLE,
+    "story": ContentType.STORY,
+    "thread": ContentType.THREAD,
+    "page": ContentType.PAGE,
 }
 
 _INTERACTION_TYPE_MAP = {
@@ -27,6 +38,28 @@ _INTERACTION_TYPE_MAP = {
     "question": InteractionType.QUESTION,
     "review": InteractionType.REVIEW,
 }
+
+
+_EXTRA_KEYS = ("commerce_signals", "tags", "music", "domain", "duration", "flair", "subreddit")
+
+
+def _content_extra(meta: dict) -> dict | None:
+    """Whitelist adapter metadata that scoring or the dossier can use later."""
+    extra = {k: meta[k] for k in _EXTRA_KEYS if meta.get(k) not in (None, "", [], {})}
+    links = meta.get("links")
+    if isinstance(links, list):
+        extra["link_kinds"] = sorted({k for link in links for k in link.get("kinds", [])})
+        extra["commerce_links"] = [
+            {"url": link["url"], "kinds": link["kinds"]} for link in links if link.get("kinds")
+        ][:20]
+    return extra or None
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value) if value is not None else None  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return None
 
 
 class AcquisitionCollector:
@@ -50,32 +83,32 @@ class AcquisitionCollector:
         Returns:
             The completed ResearchRun.
         """
-        run = ResearchRun(
+        run = await start_run(
+            self._session,
+            pipeline="collect",
             creator_id=creator_id,
-            status="running",
-            config_snapshot={
-                "adapter": self._adapter.platform,
-                "identifier": identifier,
-            },
-            prompt_versions={},
-            model_versions={},
+            config={"adapter": self._adapter.platform, "identifier": identifier},
         )
-        self._session.add(run)
-        await self._session.flush()
+        stats = PipelineStats()
 
         try:
-            items = await self._adapter.collect(identifier)
-            await self._persist_items(items, creator_id, run.id)
-            run.status = "completed"
-            run.completed_at = datetime.now(timezone.utc)
+            async with stage(
+                self._session,
+                creator_id,
+                working=CreatorStatus.COLLECTING,
+                done=CreatorStatus.COLLECTED,
+                run=run,
+            ):
+                items = await self._adapter.collect(identifier)
+                counts = await self._persist_items(items, creator_id, run.id)
+                stats.extra.update(counts)
+                stats.ok()
+                await finish_run(self._session, run, stats)
         except Exception as exc:
-            run.status = "failed"
-            run.error_message = str(exc)[:2000]
-            run.completed_at = datetime.now(timezone.utc)
+            if run.status == "running":
+                await fail_run(self._session, run, exc)
             logger.exception("Collection failed for %s", identifier)
             raise
-        finally:
-            await self._session.flush()
 
         return run
 
@@ -84,22 +117,26 @@ class AcquisitionCollector:
         items: list[NormalizedContent],
         creator_id: str,
         research_run_id: str,
-    ) -> None:
-        videos = [i for i in items if i.content_type == "video"]
-        comments = [i for i in items if i.content_type in ("comment", "reply")]
+    ) -> dict[str, int]:
+        # Any adapter content type with a ContentType mapping is a content item
+        # (video, post, short, ...); comments and replies hang off those.
+        videos = [i for i in items if i.content_type in _CONTENT_TYPE_MAP]
+        comments = [i for i in items if i.content_type in _INTERACTION_TYPE_MAP]
         captions = [i for i in items if i.content_type == "caption"]
+        profiles = [i for i in items if i.content_type == "profile"]
+        orphaned = 0
+
+        for item in profiles:
+            await self._record_profile(item, creator_id, research_run_id)
 
         content_map: dict[str, ContentItem] = {}
         for item in videos:
             ci = await self._upsert_content_item(item, creator_id)
             content_map[item.external_id] = ci
             await self._create_evidence(item, research_run_id)
+            await self._snapshot_content(ci, item, research_run_id)
 
         for item in comments:
-            video_ext_id = item.parent_id
-            if item.content_type == "reply":
-                pass  # parent_id is the comment id, not the video id
-
             ci = await self._find_content_item_for_interaction(
                 item, content_map
             )
@@ -109,6 +146,7 @@ class AcquisitionCollector:
                     item.external_id,
                     item.parent_id,
                 )
+                orphaned += 1
                 continue
 
             await self._upsert_interaction(item, ci.id)
@@ -116,6 +154,75 @@ class AcquisitionCollector:
 
         for item in captions:
             await self._create_evidence(item, research_run_id)
+
+        return {
+            "content_items": len(videos),
+            "interactions": len(comments) - orphaned,
+            "captions": len(captions),
+            "profiles": len(profiles),
+            "orphaned_interactions": orphaned,
+        }
+
+    async def _record_profile(
+        self, item: NormalizedContent, creator_id: str, research_run_id: str
+    ) -> None:
+        """Update the platform account's follower count and append a snapshot."""
+        meta = item.metadata or {}
+        followers = meta.get("follower_count")
+        result = await self._session.execute(
+            select(CreatorPlatformAccount).where(
+                CreatorPlatformAccount.creator_id == creator_id,
+                CreatorPlatformAccount.platform == item.source_platform,
+            )
+        )
+        account = result.scalars().first()
+        if account is None:
+            logger.info(
+                "No %s account row for creator %s; profile snapshot stored without account link",
+                item.source_platform,
+                creator_id,
+            )
+        else:
+            if followers is not None:
+                account.subscriber_count = int(followers)
+            if meta.get("handle") and not account.external_id:
+                account.external_id = str(meta["handle"])[:255]
+
+        self._session.add(
+            MetricsSnapshot(
+                research_run_id=research_run_id,
+                platform_account_id=account.id if account else None,
+                follower_count=int(followers) if followers is not None else None,
+                extra={
+                    "platform": item.source_platform,
+                    "display_name": meta.get("display_name"),
+                    "video_count": meta.get("video_count"),
+                },
+            )
+        )
+        await self._create_evidence(item, research_run_id)
+        await self._session.flush()
+
+    async def _snapshot_content(
+        self, ci: ContentItem, item: NormalizedContent, research_run_id: str
+    ) -> None:
+        meta = item.metadata or {}
+        # Keep the latest counts and metadata on the row; the snapshot preserves history.
+        ci.extra = _content_extra(meta) or ci.extra
+        for field in ("view_count", "like_count", "comment_count"):
+            value = meta.get(field)
+            if value is not None:
+                setattr(ci, field, int(value))
+        self._session.add(
+            MetricsSnapshot(
+                research_run_id=research_run_id,
+                content_item_id=ci.id,
+                view_count=_int_or_none(meta.get("view_count")),
+                like_count=_int_or_none(meta.get("like_count")),
+                comment_count=_int_or_none(meta.get("comment_count")),
+                share_count=_int_or_none(meta.get("share_count")),
+            )
+        )
 
     async def _upsert_content_item(
         self,
@@ -138,13 +245,15 @@ class AcquisitionCollector:
             creator_id=creator_id,
             platform=item.source_platform,
             external_id=item.external_id,
-            title=item.text[:500] if item.text else None,
+            title=(meta.get("title") or item.text or "")[:500] or None,
+            description=(meta.get("description") or None),
             content_type=ct,
             published_at=item.timestamp,
             view_count=meta.get("view_count"),
             like_count=meta.get("like_count"),
             comment_count=meta.get("comment_count"),
             url=item.url,
+            extra=_content_extra(meta),
         )
         self._session.add(ci)
         await self._session.flush()
@@ -170,17 +279,14 @@ class AcquisitionCollector:
             # The parent_id for a reply is the comment_id.
             # We need to find which video that comment belongs to.
             # Look through all interactions with that external_id.
-            result = await self._session.execute(
-                select(AudienceInteraction.content_item_id).where(
-                    AudienceInteraction.external_id == item.parent_id
-                )
+            parent_result = await self._session.execute(
+                select(AudienceInteraction.content_item_id)
+                .where(AudienceInteraction.external_id == item.parent_id)
+                .limit(1)
             )
-            ci_id = result.scalar_one_or_none()
+            ci_id = parent_result.scalar_one_or_none()
             if ci_id:
-                result = await self._session.execute(
-                    select(ContentItem).where(ContentItem.id == ci_id)
-                )
-                return result.scalar_one_or_none()
+                return await self._session.get(ContentItem, ci_id)
 
         return None
 

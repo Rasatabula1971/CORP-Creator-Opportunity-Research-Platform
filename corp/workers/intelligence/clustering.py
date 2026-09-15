@@ -1,8 +1,8 @@
 """Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling."""
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -68,6 +68,13 @@ def _reduce_dimensions(embeddings: np.ndarray, cfg: ClusteringConfig) -> np.ndar
     import umap
 
     n_samples = embeddings.shape[0]
+    if n_samples <= cfg.umap_n_components + 1:
+        # UMAP's spectral initialisation needs more points than target
+        # dimensions (scipy eigsh: k >= N); at this size the raw embedding
+        # space is small enough for HDBSCAN directly. Seen with a 4-item
+        # discovery evidence set (Slice 8).
+        logger.info("Skipping UMAP for %d samples; clustering raw embeddings", n_samples)
+        return np.asarray(embeddings, dtype=np.float32)
     n_components = min(cfg.umap_n_components, n_samples - 1)
     n_neighbors = min(cfg.umap_n_neighbors, n_samples - 1)
 
@@ -97,7 +104,7 @@ def _build_clusters(
     labels: np.ndarray,
     timestamps: list[datetime | None] | None,
 ) -> list[ClusterResult]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     unique_labels = set(labels)
     unique_labels.discard(-1)
 

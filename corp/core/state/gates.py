@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision
-from corp.core.state.machine import InvalidTransitionError, validate_transition
+from corp.core.state.machine import validate_transition
 
 _DECISION_TO_STATUS = {
     DecisionType.APPROVE: CreatorStatus.APPROVED,

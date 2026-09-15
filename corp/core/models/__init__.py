@@ -1,18 +1,34 @@
 from corp.core.models.base import Base, TimestampMixin
+from corp.core.models.campaign import Campaign, CampaignStatus
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
+from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
-from corp.core.models.content import ContentItem, AudienceInteraction, ContentType, InteractionType
-from corp.core.models.evidence import Evidence, AccessMethod, ComplianceStatus
-from corp.core.models.intelligence import ProblemObservation, ProblemCluster, ProblemClusterMember
+from corp.core.models.creator_niche import CreatorNiche
+from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
-from corp.core.models.scoring import CreatorScore, OpportunityScore, ConfidenceBand
-from corp.core.models.workflow import HumanDecision, ResearchRun, DecisionType, Gate
+from corp.core.models.metrics import MetricsSnapshot
+from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
+from corp.core.models.niche_candidate import (
+    NicheCandidate,
+    NicheCandidateEvidence,
+    NicheCandidateStatus,
+)
+from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
+from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
+from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
 
 __all__ = [
     "Base",
     "TimestampMixin",
+    "Campaign",
+    "CampaignStatus",
+    "CampaignNiche",
+    "CampaignNicheStatus",
     "Creator",
     "CreatorPlatformAccount",
     "CreatorStatus",
+    "CreatorNiche",
     "ContentItem",
     "AudienceInteraction",
     "ContentType",
@@ -30,6 +46,17 @@ __all__ = [
     "ConfidenceBand",
     "HumanDecision",
     "ResearchRun",
+    "RunType",
+    "ResearchQuery",
+    "ResearchQueryStatus",
+    "MetricsSnapshot",
+    "Niche",
+    "NicheAlias",
+    "NicheLifecycleStatus",
+    "NichePolicyClass",
+    "NicheCandidate",
+    "NicheCandidateEvidence",
+    "NicheCandidateStatus",
     "DecisionType",
     "Gate",
 ]

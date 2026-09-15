@@ -16,6 +16,7 @@ class ContentType(str, enum.Enum):
     SHORT = "short"
     ARTICLE = "article"
     THREAD = "thread"
+    PAGE = "page"  # creator-web: linktree, shop, course, media kit
 
 
 class InteractionType(str, enum.Enum):
@@ -45,6 +46,8 @@ class ContentItem(TimestampMixin, Base):
     comment_count: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String(500))
     topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Adapter metadata worth keeping: commerce_signals, link kinds, tags, music, domain.
+    extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     interactions: Mapped[list["AudienceInteraction"]] = relationship(
         back_populates="content_item", cascade="all, delete-orphan"

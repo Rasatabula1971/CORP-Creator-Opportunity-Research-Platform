@@ -16,6 +16,7 @@ class ScoreResponse(BaseModel):
     confidence_band: ConfidenceBand
     rule_version: str
     model_version: str
+    diagnostics: dict | None = None
     created_at: datetime
 
 

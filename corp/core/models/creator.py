@@ -1,9 +1,13 @@
 import enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from corp.core.models.creator_niche import CreatorNiche
 
 
 class CreatorStatus(str, enum.Enum):
@@ -46,6 +50,9 @@ class Creator(TimestampMixin, Base):
     platform_accounts: Mapped[list["CreatorPlatformAccount"]] = relationship(
         back_populates="creator", cascade="all, delete-orphan"
     )
+    # No delete cascade: a creator's niche-association history outlives any
+    # single row referencing it — same reasoning as Niche.campaign_niches.
+    creator_niches: Mapped[list["CreatorNiche"]] = relationship(back_populates="creator")
 
 
 class CreatorPlatformAccount(TimestampMixin, Base):

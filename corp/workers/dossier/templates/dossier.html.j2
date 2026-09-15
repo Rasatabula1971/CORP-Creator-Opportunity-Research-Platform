@@ -111,6 +111,23 @@
   {% endfor %}
   </tbody>
 </table>
+{% if creator_score.diagnostics %}
+{% set cd = creator_score.diagnostics %}
+<h3>Creator Signals</h3>
+<table>
+  <tbody>
+  <tr><td>Audience platforms</td><td>{{ (cd.get('audience_platforms') or []) | join(", ") or "—" }}</td></tr>
+  <tr><td>Engagement rate</td><td>
+    {% if cd.get('engagement_rate_by_platform') %}{% for p, r in cd.get('engagement_rate_by_platform').items() %}{{ p }}: {{ "%.2f"|format(r * 100) }}%{{ ", " if not loop.last }}{% endfor %}{% else %}—{% endif %}
+  </td></tr>
+  <tr><td>Follower growth (between collections)</td><td>{% if cd.get('follower_growth') is not none %}{{ "%+.1f"|format(cd.get('follower_growth') * 100) }}%{% else %}not yet measurable{% endif %}</td></tr>
+  <tr><td>Existing monetisation</td><td>
+    {% if cd.get('monetisation') %}{% for k, n in cd.get('monetisation').items() %}{{ k }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}{% else %}none found on creator web pages{% endif %}
+  </td></tr>
+  <tr><td>Creator-side observations</td><td>{{ cd.get('creator_observations') or 0 }}</td></tr>
+  </tbody>
+</table>
+{% endif %}
 {% endif %}
 
 <!-- ── Top Audience Problems ───────────────────────────────────────── -->
@@ -173,6 +190,18 @@
   {% endfor %}
   </tbody>
 </table>
+{% if opp.score.diagnostics %}
+{% set d = opp.score.diagnostics %}
+<p class="evidence-source">
+  {% set mix = d.get('source_mix') or {} %}
+  Engagement: {{ d.get('interaction_likes') or 0 }} likes, {{ d.get('reply_count') or 0 }} replies
+  · Sources: {{ (mix.get('platforms') or []) | join(", ") or "—" }}
+  · Creator addresses this: {{ "yes" if d.get('creator_acknowledged') else "no" }}
+  {% if d.get('content_view_growth') is not none %}· View growth: {{ "%+.0f"|format(d.get('content_view_growth') * 100) }}%{% endif %}
+  {% if d.get('frequency_growth') is not none %}· Frequency vs last run: {{ "%+.0f"|format(d.get('frequency_growth') * 100) }}%{% endif %}
+  {% if d.get('commerce_overlap') is not none %}· Overlap with creator's products: {{ "%.0f"|format(d.get('commerce_overlap') * 100) }}%{% endif %}
+</p>
+{% endif %}
 {% endfor %}
 
 {% else %}
