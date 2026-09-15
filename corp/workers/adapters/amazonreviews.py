@@ -131,8 +131,12 @@ class AmazonReviewAdapter(SourceAdapter):
     async def _collect_by_search(self, query: str) -> list[NormalizedContent]:
         asins = await self._search_products(query)
         results: list[NormalizedContent] = []
-        per_product = max(1, self._max_reviews // max(1, len(asins)))
-        for asin in asins[: self._max_products]:
+        # Divide the budget across the products we actually visit, not the whole
+        # search page (~40-60 ASINs) — otherwise per_product collapsed to 1 and a
+        # max_reviews=50 / max_products=5 run returned ~5 reviews instead of 50.
+        products = asins[: self._max_products]
+        per_product = max(1, self._max_reviews // max(1, len(products)))
+        for asin in products:
             if len(results) >= self._max_reviews:
                 break
             reviews = await self._collect_reviews(asin, limit=per_product)
@@ -236,11 +240,20 @@ def _parse_reviews(html: str, asin: str) -> list[NormalizedContent]:
     """
     results: list[NormalizedContent] = []
 
-    review_blocks = re.findall(
-        r'data-hook="review"[^>]*id="([^"]*)"(.*?)(?=data-hook="review"|$)',
-        html,
-        re.DOTALL,
+    # Match each review div's opening tag regardless of attribute order — live
+    # Amazon markup is <div id="R..." data-hook="review" ...> (id first), while
+    # the previous pattern required data-hook before id and matched neither that
+    # nor much else. Capture the id from the opening tag, then take the block
+    # body up to the next review div.
+    review_starts = list(
+        re.finditer(r'<div\b[^>]*\bdata-hook="review"[^>]*>', html, re.DOTALL)
     )
+    review_blocks: list[tuple[str, str]] = []
+    for i, match in enumerate(review_starts):
+        id_match = re.search(r'\bid="([^"]*)"', match.group(0))
+        review_id = id_match.group(1) if id_match else ""
+        end = review_starts[i + 1].start() if i + 1 < len(review_starts) else len(html)
+        review_blocks.append((review_id, html[match.end():end]))
 
     for review_id, block in review_blocks:
         title_match = re.search(

@@ -122,6 +122,43 @@ def test_parse_reviews_empty_html():
     assert reviews == []
 
 
+async def test_search_divides_budget_by_products_not_search_page(mock_client):
+    # 50 reviews across 5 products should ask ~10 per product, not 50 // 40 = 1.
+    adapter = AmazonReviewAdapter(max_reviews=50, max_products=5, client=mock_client)
+    adapter._search_products = AsyncMock(return_value=[f"B{i:09d}" for i in range(40)])
+
+    captured_limits: list[int | None] = []
+
+    async def fake_collect_reviews(asin, limit=None):
+        captured_limits.append(limit)
+        return []
+
+    adapter._collect_reviews = fake_collect_reviews
+
+    await adapter.collect("search:widgets")
+
+    assert len(captured_limits) == 5           # only max_products visited
+    assert all(limit == 10 for limit in captured_limits)
+
+
+def test_parse_reviews_id_before_data_hook():
+    # Live Amazon markup puts id before data-hook; parsing must be
+    # attribute-order-independent.
+    html = """
+    <div id="R9ZZZ999" data-hook="review" class="review">
+        <span data-hook="review-star-rating"><span>1.0 out of 5 stars</span></span>
+        <a data-hook="review-title"><span>Broke immediately</span></a>
+        <span class="a-profile-name">Sam Buyer</span>
+        <span data-hook="review-body"><span>Stopped working on day one.</span></span>
+    </div>
+    """
+    reviews = _parse_reviews(html, "B08TEST123")
+    assert len(reviews) == 1
+    assert reviews[0].external_id == "R9ZZZ999"
+    assert reviews[0].metadata["star_rating"] == 1.0
+    assert "Broke immediately" in reviews[0].text
+
+
 # ── collect by ASIN ─────────────────────────────────────────────────
 
 
