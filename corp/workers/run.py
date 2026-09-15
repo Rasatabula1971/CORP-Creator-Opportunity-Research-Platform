@@ -237,6 +237,28 @@ async def _run_estimate_ecosystem(
             await close()
 
 
+async def _run_qualify(campaign_id: str, rules_path: str) -> int:
+    from corp.database import async_session
+    from corp.workers.intelligence.niche_qualification import NicheQualifier
+
+    async with async_session() as session:
+        qualifier = NicheQualifier(session, rules_path)
+        run = await qualifier.qualify_campaign(campaign_id)
+        await session.commit()
+    extra = (run.stats or {}).get("extra", {})
+    print(
+        f"research_run={run.id} status={run.status} "
+        f"niches_scored={extra.get('niches_scored')}"
+    )
+    for r in extra.get("results", []):
+        print(
+            f"  {r['niche']}: score={r['qualification_score']:.4f} "
+            f"confidence={r['confidence']:.4f} "
+            f"completeness={r['research_completeness']:.4f}"
+        )
+    return 0 if run.status == "completed" else 1
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -326,6 +348,15 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-broad", action="store_true", help="do not reject broad-domain niches"
     )
 
+    qual = sub.add_parser(
+        "qualify", help="score verified niches by evidence, ecosystem, specificity"
+    )
+    qual.add_argument("campaign_id")
+    qual.add_argument(
+        "--rules", default="rules/niche_qualification.yaml",
+        help="path to qualification rules YAML (default: rules/niche_qualification.yaml)",
+    )
+
     eco = sub.add_parser(
         "estimate-ecosystem",
         help="estimate creator ecosystem size for verified niches",
@@ -363,6 +394,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(
             _run_verify(args.campaign_id, args.min_evidence, args.min_authors, args.allow_broad)
         )
+    if args.pipeline == "qualify":
+        return asyncio.run(_run_qualify(args.campaign_id, args.rules))
     if args.pipeline == "estimate-ecosystem":
         return asyncio.run(
             _run_estimate_ecosystem(
