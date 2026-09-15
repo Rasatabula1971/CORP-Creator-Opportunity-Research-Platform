@@ -174,11 +174,11 @@ async def get_dossier(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    gen = DossierGenerator(session)
-    try:
-        html = await gen.generate(creator_id)
-    except ValueError:
+    # Only a missing creator is a 404; other failures (e.g. a rules/YAML parse
+    # error inside the generator) must not be masked as "Creator not found".
+    if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
+    html = await DossierGenerator(session).generate(creator_id)
     return Response(content=html, media_type="text/html")
 
 
