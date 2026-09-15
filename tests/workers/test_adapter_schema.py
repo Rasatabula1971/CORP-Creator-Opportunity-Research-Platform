@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent
@@ -11,7 +11,7 @@ def test_normalized_content_creation():
         external_id="abc123",
         text="This is a comment",
         author="user1",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
     )

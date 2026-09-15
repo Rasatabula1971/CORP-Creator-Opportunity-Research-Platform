@@ -1,7 +1,7 @@
 """Tests for the Stack Exchange adapter — all HTTP calls mocked."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest

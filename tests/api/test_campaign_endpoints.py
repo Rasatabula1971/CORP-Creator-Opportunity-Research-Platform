@@ -7,12 +7,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.api.app import create_app
+from corp.api.jobs import registry
 from corp.core.models.campaign import Campaign
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.creator import Creator
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.niche import Niche, NicheLifecycleStatus
-from corp.api.jobs import CAMPAIGN_PIPELINES, registry
 from corp.database import get_session
 
 

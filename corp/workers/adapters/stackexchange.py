@@ -21,7 +21,6 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 from tenacity import (

@@ -1,19 +1,17 @@
 """Tests for multi-source niche discovery — all DB + HTTP calls mocked."""
 
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
-from corp.workers.adapters.health import SourceHealthTracker, SourceStatus
+from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.acquisition.multi_discovery import (
     NICHE_PLATFORMS,
     MultiSourceDiscovery,
     _to_evidence,
 )
-from corp.core.models.evidence import AccessMethod, ComplianceStatus
-
+from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.health import SourceHealthTracker
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

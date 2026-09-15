@@ -5,10 +5,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from corp.workers.intelligence.coerce import as_bool, as_float, as_int
-from corp.workers.intelligence.extraction import extract_observations
 from corp.workers.intelligence.creator_content import extract_creator_problems
+from corp.workers.intelligence.extraction import extract_observations
 from corp.workers.intelligence.topics import classify_topics
-
 
 # ── as_float ─────────────────────────────────────────────────────────
 

@@ -1,11 +1,10 @@
 """Tests for the Google Trends adapter — all HTTP calls mocked."""
 
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-
-from datetime import UTC
 
 from corp.workers.adapters.googletrends import (
     GoogleTrendsAdapter,

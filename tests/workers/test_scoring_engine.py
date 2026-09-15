@@ -15,7 +15,6 @@ from corp.core.scoring.engine import (
     score_recency_trend,
 )
 
-
 # ── Component score calculators ──────────────────────────────────────
 
 

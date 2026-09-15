@@ -23,9 +23,7 @@ ComplianceStatus is COMPLIANT for the RSS feed, VERIFY for pytrends data.
 
 import asyncio
 import logging
-import re
 from datetime import UTC, datetime
-from typing import Any
 from xml.etree import ElementTree
 
 import httpx

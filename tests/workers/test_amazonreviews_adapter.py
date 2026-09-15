@@ -1,6 +1,5 @@
 """Tests for the Amazon review adapter — all HTTP calls mocked."""
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx

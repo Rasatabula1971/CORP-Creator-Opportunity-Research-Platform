@@ -1,6 +1,5 @@
-from corp.core.models.intent import SignalLevel
 from corp.core.intent.hierarchy import classify_signal_level
-
+from corp.core.models.intent import SignalLevel
 
 RULES = {
     "levels": {

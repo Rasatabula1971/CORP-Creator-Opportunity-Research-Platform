@@ -27,12 +27,11 @@ from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.research.ledger import record_query
 from corp.core.state.research_run import validate_run_type
 from corp.warmstore.sync import mirror_evidence
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import AdapterFamily, NormalizedContent
 from corp.workers.adapters.health import SourceHealthTracker
-from corp.workers.adapters.registry import KNOWN_PLATFORMS, build_adapter
+from corp.workers.adapters.registry import build_adapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
-    fail_run,
     finish_run,
     start_run,
 )

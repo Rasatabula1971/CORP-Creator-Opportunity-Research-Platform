@@ -23,7 +23,6 @@ import asyncio
 import logging
 import re
 from datetime import UTC, datetime
-from typing import Any
 from html.parser import HTMLParser
 
 import httpx
@@ -147,7 +146,7 @@ class AmazonReviewAdapter(SourceAdapter):
         return results
 
     async def _search_products(self, query: str) -> list[str]:
-        html = await self._get_page(f"/s", params={"k": query, "ref": "nb_sb_noss"})
+        html = await self._get_page("/s", params={"k": query, "ref": "nb_sb_noss"})
         return _extract_asins(html)
 
     async def _collect_reviews(

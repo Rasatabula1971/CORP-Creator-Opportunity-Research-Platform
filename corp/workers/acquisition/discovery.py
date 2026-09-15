@@ -24,8 +24,8 @@ from corp.core.models.research_query import ResearchQueryStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.research.ledger import record_query
 from corp.core.state.research_run import validate_run_type
-from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.warmstore.sync import mirror_evidence
+from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,

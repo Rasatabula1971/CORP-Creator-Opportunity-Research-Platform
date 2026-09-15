@@ -1,12 +1,12 @@
 """Unit tests for clustering — uses synthetic embeddings with known structure."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 
 from corp.workers.intelligence.clustering import (
-    ClusterResult,
     ClusteringConfig,
+    ClusterResult,
     _generate_label,
     _pick_representative,
     cluster_observations,
@@ -77,7 +77,7 @@ async def test_cluster_result_fields():
 
 async def test_cluster_recency_scoring():
     texts, embeddings = _make_clustered_embeddings(n_per_cluster=10, n_clusters=2, dim=10)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     timestamps = [now] * len(texts)
     config = ClusteringConfig(min_cluster_size=3, min_samples=2, umap_n_components=3)
 

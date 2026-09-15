@@ -1,10 +1,8 @@
 """Test that Alembic migrations run clean up and down."""
 
-import subprocess
 import os
-
-import pytest
-
+import subprocess
+from pathlib import Path
 
 ALEMBIC_CMD = ["alembic"]
 ENV = {
@@ -12,13 +10,17 @@ ENV = {
     "DATABASE_URL_SYNC": "postgresql://corp:corp@localhost:5432/corp_test",
 }
 
+# Repo root = two levels up from tests/integration/. Deriving it avoids a
+# hardcoded absolute path whose casing broke on case-sensitive filesystems.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def run_alembic(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [*ALEMBIC_CMD, *args],
         capture_output=True,
         text=True,
-        cwd="/home/user/CORP-Creator-Opportunity-Research-Platform",
+        cwd=str(REPO_ROOT),
         env=ENV,
     )
 

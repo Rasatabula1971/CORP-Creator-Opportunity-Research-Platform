@@ -1,6 +1,6 @@
 """Integration tests for IntelligencePipeline against real Postgres."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -55,7 +55,7 @@ async def _seed_data(session: AsyncSession) -> tuple[Creator, ContentItem, Evide
     session.add(creator)
     await session.flush()
 
-    ts = datetime(2026, 1, 15, 10, 0, tzinfo=timezone.utc)
+    ts = datetime(2026, 1, 15, 10, 0, tzinfo=UTC)
     ci = ContentItem(
         creator_id=creator.id,
         platform="youtube",

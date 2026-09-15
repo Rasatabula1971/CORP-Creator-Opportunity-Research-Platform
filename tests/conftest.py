@@ -19,8 +19,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from corp.core.models.base import Base
-
 TEST_DB_URL = os.environ["DATABASE_URL"]
 
 engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)

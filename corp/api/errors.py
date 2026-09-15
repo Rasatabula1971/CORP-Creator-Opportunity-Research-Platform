@@ -10,7 +10,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
-
 from sqlalchemy.exc import IntegrityError
 
 from corp.core.state.machine import InvalidTransitionError

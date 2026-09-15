@@ -5,11 +5,11 @@ import pytest
 from corp.config import Settings
 from corp.workers.adapters.registry import (
     AdapterConfigError,
+    build_adapter,
     build_search_adapter,
 )
-from corp.workers.adapters.ytdlp import YtDlpAdapter
 from corp.workers.adapters.youtube import YouTubeAdapter
-from corp.workers.adapters.registry import build_adapter
+from corp.workers.adapters.ytdlp import YtDlpAdapter
 
 
 def test_build_search_adapter_uses_ytdlp_without_key():

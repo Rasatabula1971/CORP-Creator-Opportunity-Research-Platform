@@ -10,6 +10,7 @@ from corp.core.models.creator import CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.workflow import ResearchRun
+from corp.warmstore.sync import mirror_observations
 from corp.workers.intelligence.creator_content import (
     CREATOR_PROMPT_VERSION,
     extract_creator_problems,
@@ -28,7 +29,6 @@ from corp.workers.intelligence.runs import (
     start_run,
 )
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
-from corp.warmstore.sync import mirror_observations
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)

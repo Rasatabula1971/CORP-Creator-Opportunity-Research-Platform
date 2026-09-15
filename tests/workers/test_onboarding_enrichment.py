@@ -7,8 +7,6 @@ tests/integration/test_creator_onboarding.py.
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 from corp.workers.acquisition.creator_onboarding import (
     CreatorOnboarder,
     OnboardConfig,

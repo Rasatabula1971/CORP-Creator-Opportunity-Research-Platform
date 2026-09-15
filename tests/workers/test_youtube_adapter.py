@@ -1,6 +1,6 @@
 """Unit tests for the YouTube adapter — all API calls mocked."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -183,7 +183,7 @@ async def test_list_videos_published_after_filter():
     stats_req.execute.return_value = _video_stats_response(["new_vid"])
     adapter._service.videos().list.return_value = stats_req
 
-    cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cutoff = datetime(2026, 1, 1, tzinfo=UTC)
     videos = await adapter.list_videos("UC123", published_after=cutoff)
 
     assert len(videos) == 1

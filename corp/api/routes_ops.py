@@ -18,7 +18,6 @@ from corp.api.jobs import (
     run_research,
 )
 from corp.core.models.campaign import Campaign
-from corp.core.schemas.campaign import CampaignCreate, CampaignResponse
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -28,6 +27,7 @@ from corp.core.models.intelligence import (
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import OpportunityScore
 from corp.core.models.workflow import HumanDecision, ResearchRun
+from corp.core.schemas.campaign import CampaignCreate, CampaignResponse
 from corp.core.schemas.creator import (
     CreatorCreate,
     CreatorDetailResponse,

@@ -3,9 +3,9 @@
 import pytest
 
 from corp.core.models.creator import CreatorStatus
+from corp.core.models.workflow import DecisionType
 from corp.core.state.gates import _DECISION_TO_STATUS
 from corp.core.state.machine import InvalidTransitionError, validate_transition
-from corp.core.models.workflow import DecisionType
 
 
 def test_gate_a_approve_valid():

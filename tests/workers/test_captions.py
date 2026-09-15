@@ -2,7 +2,6 @@
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.captions import (
-    TranscriptSegment,
     _segment_snippets,
 )
 
@@ -91,8 +90,7 @@ def test_segment_timestamps_round_trip():
 
 def _mock_fetched_transcript(snippets, language_code="en", is_generated=True):
     """Create a mock FetchedTranscript-like object."""
-    from dataclasses import dataclass, field
-    from typing import Any
+    from dataclasses import dataclass
 
     @dataclass
     class MockSnippet:
@@ -103,10 +101,10 @@ def _mock_fetched_transcript(snippets, language_code="en", is_generated=True):
     @dataclass
     class MockTranscript:
         snippets: list
+        language_code: str = "en"
+        is_generated: bool = True
         video_id: str = "test_vid"
         language: str = "English"
-        language_code: str = language_code
-        is_generated: bool = is_generated
 
         def __iter__(self):
             return iter(self.snippets)
@@ -115,11 +113,15 @@ def _mock_fetched_transcript(snippets, language_code="en", is_generated=True):
             return [{"text": s.text, "start": s.start, "duration": s.duration} for s in self.snippets]
 
     mock_snippets = [MockSnippet(**s) for s in snippets]
-    return MockTranscript(snippets=mock_snippets)
+    return MockTranscript(
+        snippets=mock_snippets,
+        language_code=language_code,
+        is_generated=is_generated,
+    )
 
 
 async def test_fetch_caption_returns_segments_in_metadata():
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from corp.workers.adapters.captions import fetch_youtube_caption
 

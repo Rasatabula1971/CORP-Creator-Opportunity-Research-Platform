@@ -7,7 +7,6 @@ from jinja2 import Environment, FileSystemLoader
 from corp.core.models.intent import SignalLevel
 from corp.core.models.scoring import ConfidenceBand
 
-
 _TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "corp" / "workers" / "dossier" / "templates"
 
 
