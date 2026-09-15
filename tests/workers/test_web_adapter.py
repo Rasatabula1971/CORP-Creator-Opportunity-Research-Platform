@@ -102,3 +102,46 @@ async def test_unreachable_landing_returns_empty():
     a = _adapter({})
     assert await a.collect("https://nowhere.example/") == []
     await a.close()
+
+
+async def test_dedupes_links_that_normalize_equal():
+    landing = (
+        "<html><head><title>Hub</title></head><body>"
+        '<a href="/shop">Shop</a><a href="/shop?ref=aff">Shop aff</a>'
+        "</body></html>"
+    )
+    calls: list[str] = []
+    routes = {
+        "https://example.com/": _html(landing),
+        "https://example.com/shop": _html(SHOP),
+        "https://example.com/shop?ref=aff": _html(SHOP),
+    }
+    a = _adapter(routes, calls=calls, max_pages=10)
+    items = await a.collect("https://example.com/")
+    # Both links normalize to the same key → landing + one shop page.
+    assert len(items) == 2
+    assert len([u for u in calls if "/shop" in u]) == 1
+    await a.close()
+
+
+async def test_no_duplicate_when_candidates_redirect_to_same_page():
+    landing = (
+        "<html><head><title>Hub</title></head><body>"
+        '<a href="/store">Store</a><a href="/merch">Merch</a>'
+        "</body></html>"
+    )
+    routes = {
+        "https://example.com/": _html(landing),
+        "https://example.com/store": httpx.Response(
+            302, headers={"location": "https://example.com/shop"}
+        ),
+        "https://example.com/merch": httpx.Response(
+            302, headers={"location": "https://example.com/shop"}
+        ),
+        "https://example.com/shop": _html(SHOP),
+    }
+    a = _adapter(routes, max_pages=10)
+    items = await a.collect("https://example.com/")
+    shop_pages = [i for i in items if i.external_id == "https://example.com/shop"]
+    assert len(shop_pages) == 1  # both redirects land on /shop; collected once
+    await a.close()
