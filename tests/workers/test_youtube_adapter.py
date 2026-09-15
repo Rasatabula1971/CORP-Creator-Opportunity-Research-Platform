@@ -263,25 +263,29 @@ async def test_get_comment_threads_disabled():
 async def test_get_captions():
     adapter = _make_adapter()
 
-    mock_snippet = MagicMock()
-    mock_snippet.text = "Hello"
-    mock_transcript = [mock_snippet, MagicMock(text="world")]
+    mock_transcript = MagicMock()
+    mock_transcript.language_code = "en"
+    mock_transcript.is_generated = True
+    mock_transcript.to_raw_data.return_value = [
+        {"text": "Hello", "start": 0.0, "duration": 1.5},
+        {"text": "world", "start": 1.5, "duration": 1.5},
+    ]
 
-    with patch("corp.workers.adapters.youtube.YouTubeTranscriptApi", create=True) as mock_cls:
-        # Patch at the import location inside the _fetch closure
-        with patch(
-            "youtube_transcript_api.YouTubeTranscriptApi"
-        ) as mock_api_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch.return_value = mock_transcript
-            mock_api_cls.return_value = mock_instance
+    with patch(
+        "youtube_transcript_api.YouTubeTranscriptApi"
+    ) as mock_api_cls:
+        mock_instance = MagicMock()
+        mock_instance.fetch.return_value = mock_transcript
+        mock_api_cls.return_value = mock_instance
 
-            caption = await adapter.get_captions("v1")
+        caption = await adapter.get_captions("v1")
 
     assert caption is not None
     assert caption.content_type == "caption"
-    assert caption.text == "Hello world"
+    assert "Hello" in caption.text
+    assert "world" in caption.text
     assert caption.parent_id == "v1"
+    assert caption.metadata["language"] == "en"
 
 
 async def test_get_captions_unavailable():
