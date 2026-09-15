@@ -7,6 +7,7 @@ and ``error: {code, message}``. Domain exceptions map to fixed codes.
 import logging
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -48,7 +49,9 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         body = _body(422, "Request validation failed", "validation_error")
-        body["errors"] = exc.errors()
+        # jsonable_encoder: exc.errors() can carry non-serializable objects in a
+        # validator's ctx, which would otherwise turn a 422 into a 500.
+        body["errors"] = jsonable_encoder(exc.errors())
         return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=body)
 
     @app.exception_handler(InvalidTransitionError)
