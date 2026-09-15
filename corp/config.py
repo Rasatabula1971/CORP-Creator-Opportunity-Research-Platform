@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     stackexchange_max_questions: int = 50
     stackexchange_include_answers: bool = True
 
+    # Search-demand adapter (niche-signal: Google autocomplete suggestions).
+    searchdemand_max_suggestions: int = 50
+    searchdemand_language: str = "en"
+    searchdemand_country: str = "us"
+
+    # Amazon review adapter (niche-signal: 1-3 star reviews as unmet-need signals).
+    amazon_max_reviews: int = 50
+    amazon_max_products: int = 5
+
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
     # configurable to move without a code change.
