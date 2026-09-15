@@ -78,9 +78,7 @@ async def _run_add_creator(name: str, platform: str, handle: str, niche: str | N
         creator = Creator(name=name, niche=niche, discovery_source="manual")
         session.add(creator)
         await session.flush()
-        session.add(
-            CreatorPlatformAccount(creator_id=creator.id, platform=platform, handle=handle)
-        )
+        session.add(CreatorPlatformAccount(creator_id=creator.id, platform=platform, handle=handle))
         await session.commit()
         print(f"creator_id={creator.id} name={name!r} {platform}:{handle}")
     return 0
@@ -140,6 +138,36 @@ async def _run_discover(campaign_id: str, source: str, query: str) -> int:
         await _close(adapter)
 
 
+async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
+    from corp.database import async_session
+    from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
+    from corp.workers.intelligence.niche_candidates import CandidateConfig, NicheCandidateGenerator
+
+    provider = None if no_llm else build_provider()
+    try:
+        async with async_session() as session:
+            generator = NicheCandidateGenerator(
+                SentenceTransformerEmbedder(settings.embedding_model),
+                provider,
+                session,
+                CandidateConfig(min_cluster_size=min_cluster_size),
+            )
+            run = await generator.generate(campaign_id)
+            await session.commit()
+        extra = (run.stats or {}).get("extra", {})
+        print(
+            f"research_run={run.id} status={run.status} evidence={extra.get('evidence')} "
+            f"candidates={extra.get('candidates')} noise={extra.get('noise')} "
+            f"superseded={extra.get('superseded')} "
+            f"llm_failures={extra.get('llm_naming_failures')} "
+            f"ungrounded={extra.get('llm_names_ungrounded')}"
+        )
+        return 0 if run.status == "completed" else 1
+    finally:
+        if provider is not None:
+            await _close(provider)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -170,6 +198,13 @@ def main(argv: list[str] | None = None) -> int:
     add_campaign = sub.add_parser("add-campaign", help="create a research campaign")
     add_campaign.add_argument("name")
 
+    candidates = sub.add_parser(
+        "candidates", help="group a campaign's discovery evidence into staged niche candidates"
+    )
+    candidates.add_argument("campaign_id")
+    candidates.add_argument("--min-cluster-size", type=int, default=3)
+    candidates.add_argument("--no-llm", action="store_true", help="keyword labels only")
+
     discover = sub.add_parser(
         "discover", help="niche discovery (light): one source, one query, under a campaign"
     )
@@ -190,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_run_collect(args.platform, args.identifier, args.creator_id))
     if args.pipeline == "add-campaign":
         return asyncio.run(_run_add_campaign(args.name))
+    if args.pipeline == "candidates":
+        return asyncio.run(_run_candidates(args.campaign_id, args.min_cluster_size, args.no_llm))
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))

@@ -68,6 +68,13 @@ def _reduce_dimensions(embeddings: np.ndarray, cfg: ClusteringConfig) -> np.ndar
     import umap
 
     n_samples = embeddings.shape[0]
+    if n_samples <= cfg.umap_n_components + 1:
+        # UMAP's spectral initialisation needs more points than target
+        # dimensions (scipy eigsh: k >= N); at this size the raw embedding
+        # space is small enough for HDBSCAN directly. Seen with a 4-item
+        # discovery evidence set (Slice 8).
+        logger.info("Skipping UMAP for %d samples; clustering raw embeddings", n_samples)
+        return np.asarray(embeddings, dtype=np.float32)
     n_components = min(cfg.umap_n_components, n_samples - 1)
     n_neighbors = min(cfg.umap_n_neighbors, n_samples - 1)
 
