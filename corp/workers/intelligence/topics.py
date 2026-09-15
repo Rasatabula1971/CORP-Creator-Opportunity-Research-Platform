@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 
+from corp.workers.intelligence.coerce import as_float, as_int
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
@@ -104,8 +105,8 @@ async def classify_topics(
         topics.append(
             {
                 "name": str(t["name"])[:100],
-                "confidence": min(1.0, max(0.0, float(t.get("confidence", 0.5)))),
-                "evidence_count": int(t.get("evidence_count", 0)),
+                "confidence": min(1.0, max(0.0, as_float(t.get("confidence"), 0.5))),
+                "evidence_count": max(0, as_int(t.get("evidence_count"), 0)),
             }
         )
     return topics
