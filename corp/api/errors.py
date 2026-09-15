@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
 
+from sqlalchemy.exc import IntegrityError
+
 from corp.core.state.machine import InvalidTransitionError
 from corp.workers.adapters.registry import AdapterConfigError
 from corp.workers.providers.factory import ProviderConfigError
@@ -62,6 +64,19 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AdapterConfigError)
     async def _adapter(request: Request, exc: AdapterConfigError) -> JSONResponse:
         return JSONResponse(status_code=400, content=_body(400, str(exc), "adapter_not_configured"))
+
+    @app.exception_handler(IntegrityError)
+    async def _integrity(request: Request, exc: IntegrityError) -> JSONResponse:
+        # A unique/foreign-key violation (e.g. a duplicate platform handle) is a
+        # client conflict, not a 500. Log the DB detail; return a generic message
+        # so no internal schema leaks to the caller.
+        logger.info(
+            "Integrity error on %s %s: %s", request.method, request.url.path, exc.orig
+        )
+        return JSONResponse(
+            status_code=409,
+            content=_body(409, "That record conflicts with an existing one", "conflict"),
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
