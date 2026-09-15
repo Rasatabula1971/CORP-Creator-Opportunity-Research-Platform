@@ -197,14 +197,14 @@ async def _run_estimate_ecosystem(
     campaign_id: str, search_count: int, min_followers: int, max_followers: int,
 ) -> int:
     from corp.database import async_session
-    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.adapters.registry import build_search_adapter
     from corp.workers.intelligence.ecosystem_estimator import (
         EcoConfig,
         EcosystemEstimator,
         YouTubeAPIEnricher,
     )
 
-    adapter = build_adapter("youtube")
+    adapter = build_search_adapter("youtube")
     enricher = None
     if settings.youtube_api_key:
         enricher = YouTubeAPIEnricher(settings.youtube_api_key)
@@ -293,9 +293,9 @@ async def _run_onboard(
 ) -> int:
     from corp.database import async_session
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder, OnboardConfig
-    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.adapters.registry import build_search_adapter
 
-    adapter = build_adapter("youtube")
+    adapter = build_search_adapter("youtube")
     try:
         async with async_session() as session:
             onboarder = CreatorOnboarder(

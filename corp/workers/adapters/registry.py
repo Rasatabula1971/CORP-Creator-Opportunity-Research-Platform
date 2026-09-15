@@ -15,6 +15,24 @@ class AdapterConfigError(Exception):
     """The requested platform is unknown or not configured."""
 
 
+def build_search_adapter(platform: str = "youtube", cfg: Settings | None = None) -> SourceAdapter:
+    """Adapter for creator DISCOVERY via keyword search (``ytsearchN:`` syntax).
+
+    Distinct from :func:`build_adapter`: the YouTube Data API adapter resolves a
+    single known channel handle, but discovery searches *across* channels, which
+    only the yt-dlp adapter supports. A YouTube API key, when present, is used to
+    enrich subscriber counts (``YouTubeAPIEnricher``), never for search — so this
+    always returns the search-capable yt-dlp adapter regardless of the key.
+    """
+    cfg = cfg or default_settings
+    name = platform.lower()
+    if name in ("youtube", "tiktok"):
+        from corp.workers.adapters.ytdlp import YtDlpAdapter
+
+        return YtDlpAdapter(platform=name, max_items=cfg.ytdlp_max_items)
+    raise AdapterConfigError(f"Search discovery not supported for platform {platform!r}")
+
+
 def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
     cfg = cfg or default_settings
     name = platform.lower()

@@ -315,13 +315,13 @@ async def run_campaign_pipeline(
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "estimate-ecosystem":
-        from corp.workers.adapters.registry import build_adapter
+        from corp.workers.adapters.registry import build_search_adapter
         from corp.workers.intelligence.ecosystem_estimator import (
             EcosystemEstimator,
             YouTubeAPIEnricher,
         )
 
-        adapter = build_adapter("youtube")
+        adapter = build_search_adapter("youtube")
         enricher = (
             YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
         )
@@ -355,9 +355,9 @@ async def run_campaign_pipeline(
 
     if kind == "onboard":
         from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
-        from corp.workers.adapters.registry import build_adapter
+        from corp.workers.adapters.registry import build_search_adapter
 
-        adapter = build_adapter("youtube")
+        adapter = build_search_adapter("youtube")
         try:
             async with async_session() as session:
                 run = await CreatorOnboarder(adapter, session).onboard(campaign_id)
