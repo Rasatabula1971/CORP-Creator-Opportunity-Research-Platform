@@ -6,7 +6,7 @@ from corp.workers.adapters.base import SourceAdapter
 
 KNOWN_PLATFORMS = (
     "youtube", "reddit", "tiktok", "web", "stackexchange",
-    "searchdemand", "amazon_reviews",
+    "searchdemand", "amazon_reviews", "marketplace",
 )
 
 
@@ -80,6 +80,14 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
         return AmazonReviewAdapter(
             max_reviews=cfg.amazon_max_reviews,
             max_products=cfg.amazon_max_products,
+        )
+
+    if name == "marketplace":
+        from corp.workers.adapters.marketplace import MarketplaceAdapter
+
+        return MarketplaceAdapter(
+            max_listings=cfg.marketplace_max_listings,
+            marketplaces=cfg.marketplace_sites.split(",") if cfg.marketplace_sites else None,
         )
 
     known = ", ".join(KNOWN_PLATFORMS)

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     amazon_max_reviews: int = 50
     amazon_max_products: int = 5
 
+    # Marketplace adapter (niche-signal: Gumroad/Etsy/Udemy listings for saturation + pricing).
+    marketplace_max_listings: int = 30
+    marketplace_sites: str = "gumroad,etsy,udemy"
+
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
     # configurable to move without a code change.
