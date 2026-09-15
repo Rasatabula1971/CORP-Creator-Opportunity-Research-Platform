@@ -132,14 +132,30 @@ class MarketplaceAdapter(SourceAdapter):
     async def _collect_all(self, query: str) -> list[NormalizedContent]:
         results: list[NormalizedContent] = []
         per_marketplace = max(1, self._max_listings // len(self._marketplaces))
+        errors: list[tuple[str, Exception]] = []
+        attempted = 0
         for marketplace in self._marketplaces:
             if len(results) >= self._max_listings:
                 break
-            items = await self._collect_from(marketplace, query, limit=per_marketplace)
+            attempted += 1
+            try:
+                items = await self._collect_from(marketplace, query, limit=per_marketplace)
+            except Exception as exc:
+                # Isolate marketplaces: one failing site (e.g. Udemy 403) must not
+                # discard listings already gathered from the others.
+                logger.warning("Marketplace %s failed for %r: %s", marketplace, query, exc)
+                errors.append((marketplace, exc))
+                continue
             for item in items:
                 if len(results) >= self._max_listings:
                     break
                 results.append(item)
+        # Only surface a failure when every marketplace we tried errored and none
+        # produced results — so the caller records the source as failed rather
+        # than silently empty. A partial failure keeps whatever was collected.
+        if errors and len(errors) == attempted and not results:
+            summary = "; ".join(f"{m}: {e}" for m, e in errors)
+            raise RuntimeError(f"All marketplaces failed for {query!r}: {summary}")
         return results
 
     async def _collect_from(

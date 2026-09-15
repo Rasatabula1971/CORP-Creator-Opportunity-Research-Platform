@@ -344,3 +344,41 @@ async def test_custom_marketplace_list(mock_client):
 
     assert len(results) > 0
     assert all(r.metadata["marketplace"] == "etsy" for r in results)
+
+
+# ── per-marketplace isolation ──────────────────────────────────────
+
+
+async def test_one_marketplace_failure_is_isolated(mock_client):
+    adapter = MarketplaceAdapter(max_listings=30, client=mock_client)
+
+    async def mock_get(url, **kwargs):
+        url_str = str(url)
+        if "udemy" in url_str:
+            raise httpx.TransportError("udemy 403")
+        if "gumroad" in url_str:
+            return _mock_resp_html(GUMROAD_HTML)
+        if "etsy" in url_str:
+            return _mock_resp_html(ETSY_HTML)
+        return _mock_resp_html("")
+
+    mock_client.get = mock_get
+
+    # Udemy blows up, but Gumroad and Etsy listings still come back.
+    results = await adapter.collect("python")
+    marketplaces = {r.metadata["marketplace"] for r in results}
+    assert "gumroad" in marketplaces
+    assert "etsy" in marketplaces
+    assert "udemy" not in marketplaces
+
+
+async def test_all_marketplaces_failing_raises(mock_client):
+    adapter = MarketplaceAdapter(max_listings=30, client=mock_client)
+
+    async def mock_get(url, **kwargs):
+        raise httpx.TransportError("everything down")
+
+    mock_client.get = mock_get
+
+    with pytest.raises(RuntimeError, match="All marketplaces failed"):
+        await adapter.collect("python")
