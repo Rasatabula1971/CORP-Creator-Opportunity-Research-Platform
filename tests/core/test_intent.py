@@ -42,3 +42,34 @@ def test_highest_match_wins():
         ["I already purchased this and it's annoying"], RULES
     )
     assert result == SignalLevel.VALIDATION
+
+
+# ── whole-word matching (no substring false positives) ───────────────
+
+_VS_RULES = {
+    "levels": {
+        "validation": {"keywords": ["vs", "compared"]},
+        "strong": {"keywords": ["pricing"]},
+        "moderate": {"keywords": []},
+        "weak": {"keywords": []},
+    }
+}
+
+
+def test_keyword_does_not_match_inside_another_word():
+    # "vs" must not fire on "devs"; "compared" must not fire on "comparedware".
+    assert classify_signal_level(["the devs are great"], _VS_RULES) == SignalLevel.WEAK
+    assert classify_signal_level(["comparedware rocks"], _VS_RULES) == SignalLevel.WEAK
+    assert classify_signal_level(["I love my new tvs"], _VS_RULES) == SignalLevel.WEAK
+
+
+def test_keyword_matches_as_whole_word():
+    assert classify_signal_level(["React vs Vue"], _VS_RULES) == SignalLevel.VALIDATION
+    assert (
+        classify_signal_level(["I compared them all"], _VS_RULES)
+        == SignalLevel.VALIDATION
+    )
+
+
+def test_multiword_phrase_still_matches():
+    assert classify_signal_level(["what is the pricing?"], _VS_RULES) == SignalLevel.STRONG
