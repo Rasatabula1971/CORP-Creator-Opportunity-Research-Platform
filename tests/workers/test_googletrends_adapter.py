@@ -119,17 +119,28 @@ async def test_collect_trending_with_geo(mock_client):
     assert len(results) == 2
 
 
-# ── Keyword falls back to trending when pytrends not installed ───────
+# ── Keyword fallback: keyword-matched trending only (no pytrends) ────
 
 
-async def test_keyword_falls_back_to_trending(mock_client):
+async def test_keyword_fallback_returns_only_matching_trends(mock_client):
+    # TRENDS_RSS contains "Python 4.0" and "AI Startup Funding".
     adapter = GoogleTrendsAdapter(client=mock_client)
     mock_client.get = AsyncMock(return_value=_mock_resp_text(TRENDS_RSS))
 
-    results = await adapter.collect("machine learning")
+    results = await adapter.collect("python")
 
-    assert len(results) >= 1
-    assert all(r.source_platform == "googletrends" for r in results)
+    assert len(results) == 1
+    assert results[0].text == "Python 4.0"
+
+
+async def test_keyword_fallback_returns_empty_when_nothing_matches(mock_client):
+    # No trending topic mentions this keyword → no unrelated items leak through.
+    adapter = GoogleTrendsAdapter(client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_text(TRENDS_RSS))
+
+    results = await adapter.collect("underwater basket weaving")
+
+    assert results == []
 
 
 # ── Max items cap ────────────────────────────────────────────────────

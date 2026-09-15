@@ -117,11 +117,20 @@ class GoogleTrendsAdapter(SourceAdapter):
 
     async def _collect_interest(self, keyword: str) -> list[NormalizedContent]:
         if not _has_pytrends():
+            # No pytrends → no keyword-specific interest series. Fall back to the
+            # trending feed but keep only topics that actually mention the
+            # keyword; returning the whole geo's unrelated trending list would
+            # tag ~50 irrelevant items as evidence for this query.
             logger.info(
-                "pytrends not installed; falling back to trending RSS for %r",
+                "pytrends not installed; returning keyword-matched trending topics for %r",
                 keyword,
             )
-            return await self._collect_trending(self._geo)
+            trending = await self._collect_trending(self._geo)
+            needle = keyword.casefold()
+            matched = [item for item in trending if needle in item.text.casefold()]
+            if not matched:
+                logger.info("No trending topics matched %r; no interest data", keyword)
+            return matched
 
         logger.info(
             "Using pytrends (tolerated/undocumented endpoint) for %r", keyword
