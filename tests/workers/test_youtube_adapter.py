@@ -257,6 +257,28 @@ async def test_get_comment_threads_disabled():
     assert comments == []
 
 
+async def test_get_comment_threads_quota_403_raises():
+    # A 403 whose reason is quotaExceeded must not be swallowed as "disabled" —
+    # otherwise every remaining video silently gets zero comments.
+    import json
+
+    from corp.workers.adapters.youtube import QuotaExceededError
+
+    adapter = _make_adapter()
+    resp = MagicMock()
+    resp.status = 403
+    content = json.dumps(
+        {"error": {"errors": [{"reason": "quotaExceeded"}]}}
+    ).encode("utf-8")
+    error = HttpError(resp, content)
+    mock_req = MagicMock()
+    mock_req.execute.side_effect = error
+    adapter._service.commentThreads().list.return_value = mock_req
+
+    with pytest.raises(QuotaExceededError):
+        await adapter.get_comment_threads("v1")
+
+
 # ---- get_captions ----
 
 
