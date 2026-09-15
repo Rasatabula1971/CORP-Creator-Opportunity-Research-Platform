@@ -41,8 +41,12 @@ def compute_hash(component_scores: dict[str, float], rule_version: str) -> str:
 def get_score_band(aggregate: float, rules: dict[str, Any]) -> str:
     bands = rules.get("score_bands", {})
     for band_key in ("exceptional", "strong", "moderate", "weak"):
-        band = bands.get(band_key, {})
-        if aggregate >= band.get("min", 0.0):
+        band = bands.get(band_key)
+        # A band with no explicit "min" must not match: defaulting it to 0.0
+        # made a missing high band swallow every score into that label.
+        if not band or "min" not in band:
+            continue
+        if aggregate >= band["min"]:
             return band.get("label", band_key)
     return "Weak — insufficient signal"
 
