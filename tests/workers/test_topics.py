@@ -21,7 +21,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake-model-v1"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         return self._response
 
 
@@ -30,7 +32,9 @@ class FailingProvider(LLMProvider):
     def model_name(self) -> str:
         return "failing-model"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         raise RuntimeError("API down")
 
 

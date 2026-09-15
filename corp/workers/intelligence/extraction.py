@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
@@ -9,6 +10,33 @@ from corp.workers.providers.registry import LLMProvider
 logger = logging.getLogger(__name__)
 
 EXTRACTION_PROMPT_VERSION = "extract_v1"
+
+# JSON Schema of the answer, for providers that verify or enforce shape (FAIR).
+# Strict-mode shape (Groq's json_schema mode rejects anything else): every object
+# lists all its properties as required and forbids extras. The parser below stays
+# lenient for providers that only see the prompt, so a usable answer is
+# never rejected for a missing optional field.
+EXTRACTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["observations"],
+    "properties": {
+        "observations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["text", "category", "is_inferred", "confidence"],
+                "properties": {
+                    "text": {"type": "string"},
+                    "category": {"type": "string"},
+                    "is_inferred": {"type": "boolean"},
+                    "confidence": {"type": "number"},
+                },
+            },
+        }
+    },
+}
 
 _SYSTEM_PROMPT = (
     "You are an analyst identifying audience problems, questions, pain points, "
@@ -65,7 +93,9 @@ async def extract_observations(
     )
 
     try:
-        result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT)
+        result = await provider.generate_json(
+            prompt, system=_SYSTEM_PROMPT, schema=EXTRACTION_SCHEMA
+        )
     except Exception as exc:
         logger.warning("Extraction failed for comment %.80r: %s", comment_text, exc)
         raise LLMCallError("extraction", exc) from exc

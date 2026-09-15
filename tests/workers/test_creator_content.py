@@ -19,7 +19,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         self.prompts.append(prompt)
         if isinstance(self._response, Exception):
             raise self._response

@@ -27,7 +27,9 @@ class Fake(LLMProvider):
     def model_name(self) -> str:
         return self._name
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         self.calls += 1
         item = self.script.pop(0) if self.script else {"from": self._name}
         if isinstance(item, BaseException):

@@ -26,7 +26,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake-intent-model"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         return {
             "signal_level": self._level,
             "rationale": f"Classified as {self._level} based on evidence",
@@ -199,7 +201,9 @@ async def test_intent_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
         def model_name(self) -> str:
             return "broken"
 
-        async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+        async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
             raise RuntimeError("LLM crashed")
 
     pipeline = IntentPipeline(BrokenProvider(), session)

@@ -1,7 +1,9 @@
 """Provider selection — builds the configured LLMProvider from settings.
 
 Selection order (``LLM_PROVIDER=auto``):
-1. FAIR, when ``FAIR_URL`` is set — governed free-tier routing with failover.
+1. FAIR, when the ``fair`` package is installed, ``FAIR_ENABLED`` is true and
+   it finds at least one provider key — in-process governed routing across
+   every free provider, with its own quota handling and answer verification.
 2. Otherwise every configured key in ``LLM_PROVIDER_ORDER`` (default
    ``gemini,groq``): two or more become a :class:`PooledProvider` that fails
    over on quota exhaustion; exactly one is returned bare.
@@ -12,7 +14,7 @@ import logging
 
 from corp.config import Settings
 from corp.config import settings as default_settings
-from corp.workers.providers.fair import FairProvider
+from corp.workers.providers.fair import FairUnavailableError, build_fair_provider, fair_available
 from corp.workers.providers.groq import GroqProvider
 from corp.workers.providers.pool import PooledProvider
 from corp.workers.providers.registry import GeminiProvider, LLMProvider
@@ -68,18 +70,17 @@ def build_provider(cfg: Settings | None = None) -> LLMProvider:
             f"LLM_PROVIDER must be one of {PROVIDER_CHOICES}, got {cfg.llm_provider!r}"
         )
 
-    if choice == "fair" or (choice == "auto" and cfg.fair_url):
-        if not cfg.fair_url:
-            raise ProviderConfigError("LLM_PROVIDER=fair requires FAIR_URL")
-        logger.info("LLM provider: FAIR at %s (client_id=%s)", cfg.fair_url, cfg.fair_client_id)
-        return FairProvider(
-            base_url=cfg.fair_url,
-            client_id=cfg.fair_client_id,
-            api_key=cfg.fair_api_key,
-            timeout=cfg.fair_timeout_seconds,
-            quality_level=cfg.fair_quality_level,
-            priority=cfg.fair_priority,
-        )
+    if choice == "fair":
+        try:
+            return build_fair_provider(cfg)
+        except FairUnavailableError as exc:
+            raise ProviderConfigError(f"LLM_PROVIDER=fair: {exc}") from exc
+
+    if choice == "auto" and cfg.fair_enabled and fair_available():
+        try:
+            return build_fair_provider(cfg)
+        except FairUnavailableError as exc:
+            logger.warning("FAIR is installed but unusable (%s); falling back to the pool", exc)
 
     if choice == "gemini":
         if not cfg.gemini_api_key:
@@ -114,5 +115,6 @@ def build_provider(cfg: Settings | None = None) -> LLMProvider:
     if members:
         return members[0]
     raise ProviderConfigError(
-        "No LLM provider configured: set FAIR_URL (preferred), GEMINI_API_KEY and/or GROQ_API_KEY"
+        "No LLM provider configured: set GEMINI_API_KEY and/or GROQ_API_KEY "
+        "(and install FAIR for governed routing across every free provider)"
     )

@@ -27,7 +27,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake-test-model"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         self._call_count += 1
         if "topic" in (system or "").lower() or "topics" in prompt.lower()[:100]:
             return {
@@ -171,7 +173,9 @@ async def test_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
         def model_name(self) -> str:
             return "failing"
 
-        async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+        async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
             raise RuntimeError("LLM down")
 
     pipeline = IntelligencePipeline(FailingProvider(), session)

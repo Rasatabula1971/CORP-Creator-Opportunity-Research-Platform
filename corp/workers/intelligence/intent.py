@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from corp.core.intent.hierarchy import classify_signal_level, load_intent_rules
 from corp.core.models.intent import SignalLevel
@@ -12,6 +13,22 @@ from corp.workers.providers.registry import LLMProvider
 logger = logging.getLogger(__name__)
 
 INTENT_PROMPT_VERSION = "intent_v1"
+
+# JSON Schema of the answer, for providers that verify or enforce shape (FAIR).
+# Strict-mode shape (Groq's json_schema mode rejects anything else): every object
+# lists all its properties as required and forbids extras. The parser below stays
+# lenient for providers that only see the prompt (an unknown level → weak).
+INTENT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["signal_level", "rationale", "confidence", "key_indicators"],
+    "properties": {
+        "signal_level": {"type": "string"},
+        "rationale": {"type": "string"},
+        "confidence": {"type": "number"},
+        "key_indicators": {"type": "array", "items": {"type": "string"}},
+    },
+}
 
 _SYSTEM_PROMPT = (
     "You are a commercial intent analyst. Given a problem cluster and "
@@ -140,7 +157,7 @@ async def _llm_classify(
     )
 
     try:
-        result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT)
+        result = await provider.generate_json(prompt, system=_SYSTEM_PROMPT, schema=INTENT_SCHEMA)
     except Exception as exc:
         logger.warning("LLM intent classification failed for cluster %s: %s", label, exc)
         raise LLMCallError("intent", exc) from exc

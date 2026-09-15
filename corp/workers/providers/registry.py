@@ -36,7 +36,15 @@ class LLMProvider(ABC):
     def model_name(self) -> str: ...
 
     @abstractmethod
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict: ...
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
+    ) -> dict:
+        """Return the model's JSON-object answer.
+
+        ``schema`` is the JSON Schema of the answer the caller expects. Providers
+        that can enforce or verify it do (FAIR); the others accept it and
+        rely on the prompt.
+        """
 
 
 def classify_quota_error(model: str, exc: BaseException) -> ProviderExhaustedError:
@@ -106,7 +114,10 @@ class GeminiProvider(LLMProvider):
             ) from exc
         raise ProviderUnavailableError(self._model_id, "retry loop exited without a response")
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
+    ) -> dict:
+        del schema  # JSON mode only; the prompt describes the shape
         model = self._model
         if system:
             model = genai.GenerativeModel(

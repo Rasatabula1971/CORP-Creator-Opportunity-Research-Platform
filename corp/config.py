@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     corp_data_path: str = "corp_data"
 
     # LLM provider selection: auto | fair | gemini | groq | pool
-    # auto prefers FAIR when FAIR_URL is set; otherwise pools every configured
-    # key in LLM_PROVIDER_ORDER and fails over when one hits its quota.
+    # auto prefers FAIR (in-process, every free provider it has a key for)
+    # when the fair package is installed and FAIR_ENABLED is true; otherwise
+    # it pools every configured key in LLM_PROVIDER_ORDER and fails over when
+    # one hits its quota.
     llm_provider: str = "auto"
     llm_provider_order: str = "gemini,groq"
     # How long a provider sits out after a daily-cap error, in seconds.
@@ -55,12 +57,19 @@ class Settings(BaseSettings):
     # limit from throttling every other call. Empty string sends no preference.
     groq_reasoning_effort: str = "low"
 
-    fair_url: str = ""
+    # FAIR Free AI Router, embedded (pip install -e <FAIR repo>). It reads
+    # GEMINI_API_KEY/GROQ_API_KEY from the settings above; FAIR_ENV_FILE points
+    # at FAIR's own .env for the keys of its other free providers.
+    fair_enabled: bool = True
+    fair_env_file: str = ""
     fair_client_id: str = "corp"
-    fair_api_key: str = ""
+    # commodity | standard | advanced | high_impact_support. Schema-validated
+    # answers (what CORP's prompts produce) pass at commodity/standard only.
     fair_quality_level: str = "standard"
     fair_priority: str = "P2"
     fair_timeout_seconds: float = 60.0
+    fair_max_output_tokens: int = 2048
+    fair_cache_enabled: bool = True
 
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"

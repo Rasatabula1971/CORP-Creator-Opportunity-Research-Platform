@@ -82,7 +82,9 @@ class PooledProvider(LLMProvider):
             if self._cooling_until.get(i, 0.0) <= now
         ]
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         waited = 0.0
         while True:
             now = self._clock()
@@ -92,7 +94,7 @@ class PooledProvider(LLMProvider):
                 if self._cooling_until.get(index, 0.0) > now:
                     continue
                 try:
-                    result = await provider.generate_json(prompt, system=system)
+                    result = await provider.generate_json(prompt, system=system, schema=schema)
                 except ProviderExhaustedError as exc:
                     wait = self._cooldown_for(exc)
                     any_daily = any_daily or exc.daily

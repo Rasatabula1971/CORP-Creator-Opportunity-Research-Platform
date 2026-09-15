@@ -148,7 +148,9 @@ async def test_concrete_provider_satisfies_interface():
         def model_name(self) -> str:
             return "test-v1"
 
-        async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+        async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
             return {"result": True}
 
     p = TestProvider()

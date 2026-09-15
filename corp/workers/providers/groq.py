@@ -81,7 +81,10 @@ class GroqProvider(LLMProvider):
     def model_name(self) -> str:
         return f"groq/{self._model}"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        del schema  # json_object mode only; the prompt describes the shape
         system_text = system or DEFAULT_SYSTEM
         if "json" not in system_text.lower() and "json" not in prompt.lower():
             system_text += "\nRespond with valid JSON only."
