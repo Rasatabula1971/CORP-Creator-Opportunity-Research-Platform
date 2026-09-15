@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     appstore_max_apps: int = 5
     appstore_country: str = "us"
 
+    # Source health tracker — circuit breaker for tolerated adapters.
+    # Consecutive failures before degrading a source.
+    health_degrade_after: int = 3
+    # Consecutive failures before disconnecting a source (skipped in multi-source runs).
+    health_disconnect_after: int = 6
+    # Seconds before a disconnected source gets a probe attempt.
+    health_probe_cooldown_seconds: float = 3600.0
+
+    # Multi-source niche discovery — comma-separated platforms to include.
+    # Defaults to all niche-family adapters.
+    niche_discovery_platforms: str = ""
+
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
     # configurable to move without a code change.
