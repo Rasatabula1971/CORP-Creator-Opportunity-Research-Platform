@@ -228,6 +228,11 @@ class AcquisitionCollector:
             share_count=_int_or_none(meta.get("share_count")),
         )
         self._session.add(snapshot)
+        # Flush before mirroring so the DB fills id and captured_at (server
+        # default); mirroring an unflushed row writes captured_at=None, which the
+        # warm store's NOT NULL column rejects — silently, so content metrics
+        # never reached the warm store. _snapshot_account already flushes first.
+        await self._session.flush()
         await mirror_metrics([snapshot])
 
     async def _upsert_content_item(
