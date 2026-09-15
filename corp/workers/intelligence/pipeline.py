@@ -71,6 +71,7 @@ class IntelligencePipeline:
                 creator_id,
                 working=CreatorStatus.EXTRACTING,
                 done=CreatorStatus.EXTRACTED,
+                run=run,
             ):
                 await self._extract_problems(creator_id, stats)
                 await self._extract_creator_side(creator_id, stats)

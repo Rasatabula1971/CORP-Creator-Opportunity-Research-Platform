@@ -10,6 +10,8 @@
 
 Each stage moves the creator through the state machine. A failing stage
 leaves the creator at the status it had before that stage and stops the run.
+Whether it raised or finished with status ``failed``, its run row is kept
+(committed) — a failed run is research memory too.
 """
 
 import logging
@@ -73,6 +75,24 @@ class ResearchOrchestrator:
         report = ResearchReport(creator_id=creator_id)
         commit = self._session.commit
 
+        async def step(run: ResearchRun) -> bool:
+            """Record a stage's run and commit it. True when the sequence must stop:
+            a stage that failed outright produced nothing for the next one, and
+            finish_run no longer raises to say so — the status is the signal."""
+            report.runs.append(run)
+            await commit()
+            if run.status == "failed":
+                pipeline = (run.config_snapshot or {}).get("pipeline", "?")
+                logger.warning(
+                    "stage %s failed for creator %s; stopping research: %s",
+                    pipeline,
+                    creator_id,
+                    run.error_message,
+                )
+                report.final_status = creator.status.value
+                return True
+            return False
+
         if not skip_collect:
             for account in await self._accounts(creator_id):
                 adapter = build_adapter(account.platform, self._cfg)
@@ -84,35 +104,35 @@ class ResearchOrchestrator:
                     close = getattr(adapter, "close", None)
                     if close is not None:
                         await close()
-                report.runs.append(run)
-                await commit()
+                if await step(run):
+                    return report
 
-        report.runs.append(
+        if await step(
             await IntelligencePipeline(
                 self._provider, self._session, self._cfg.pipeline_max_failure_rate
             ).run(creator_id)
-        )
-        await commit()
+        ):
+            return report
 
-        report.runs.append(
+        if await step(
             await ClusterPipeline(self._embedder_factory(), self._session).run(creator_id)
-        )
-        await commit()
+        ):
+            return report
 
-        report.runs.append(
+        if await step(
             await IntentPipeline(
                 self._provider,
                 self._session,
                 rules_path=self._cfg.intent_rules_path,
                 max_failure_rate=self._cfg.pipeline_max_failure_rate,
             ).run(creator_id)
-        )
-        await commit()
+        ):
+            return report
 
-        report.runs.append(
+        if await step(
             await ScoringPipeline(self._session, self._cfg.scoring_rules_path).run(creator_id)
-        )
-        await commit()
+        ):
+            return report
 
         await advance(self._session, creator, CreatorStatus.RESEARCH_COMPLETE)
         report.dossier_html = await DossierGenerator(

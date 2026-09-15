@@ -32,10 +32,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_FAILURE_RATE = 0.2
 
 
-class PipelineFailureError(RuntimeError):
-    """Every unit of work in a run failed; nothing usable was produced."""
-
-
 @dataclass
 class PipelineStats:
     """Counts one pipeline run keeps while it works. Persisted on the run."""
@@ -120,20 +116,26 @@ async def finish_run(
     *,
     max_failure_rate: float = DEFAULT_MAX_FAILURE_RATE,
 ) -> ResearchRun:
-    """Close a run. Raises PipelineFailureError when every unit of work failed."""
+    """Close a run: ``completed`` / ``partial`` / ``failed`` by the failure rate.
+
+    Never raises for a failed run. A run where every unit failed is still
+    research memory (§13) — the row must reach the database, and it only does
+    if the caller's normal commit runs. Callers and the orchestrator read
+    ``run.status``. (Until 2026-09-14 this raised, and the caller's rollback
+    erased every fully failed run — see docs/DECISIONS/0009.)
+    """
     run.stats = stats.to_dict()
     run.completed_at = datetime.now(UTC)
     run.status = resolve_status(stats, max_failure_rate)
     if run.status == RunStatus.FAILED.value:
         run.error_message = (stats.last_error or "all work units failed")[:2000]
+        logger.error("run %s failed: %s", run.id, run.error_message)
     elif run.status == RunStatus.PARTIAL.value:
         run.error_message = (
             f"{stats.failed}/{stats.attempted} units failed "
             f"(max {max_failure_rate:.0%}); last: {stats.last_error}"
         )[:2000]
     await session.flush()
-    if run.status == RunStatus.FAILED.value:
-        raise PipelineFailureError(run.error_message)
     return run
 
 
@@ -151,11 +153,14 @@ async def stage(
     *,
     working: CreatorStatus,
     done: CreatorStatus,
+    run: ResearchRun | None = None,
 ) -> AsyncIterator[Creator | None]:
     """Advance the creator to ``working`` for the block, then ``done`` on success.
 
-    On an exception the previous status is restored. A missing creator or an
-    invalid transition never blocks the pipeline; it is logged and skipped.
+    The previous status is restored on an exception, and also when ``run`` is
+    given and finishes ``failed`` — a stage that produced nothing must not
+    leave the creator looking as if it had. A missing creator or an invalid
+    transition never blocks the pipeline; it is logged and skipped.
     """
     creator = await session.get(Creator, creator_id) if creator_id else None
     if creator is None:
@@ -171,7 +176,18 @@ async def stage(
             await restore(session, creator, previous)
         raise
     else:
-        if moved:
+        if not moved:
+            return
+        if run is not None and run.status == RunStatus.FAILED.value:
+            logger.warning(
+                "stage %s -> %s produced nothing for creator %s; restoring %s",
+                working.value,
+                done.value,
+                creator.id,
+                previous.value,
+            )
+            await restore(session, creator, previous)
+        else:
             await advance(session, creator, done)
 
 

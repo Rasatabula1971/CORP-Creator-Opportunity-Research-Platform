@@ -204,8 +204,10 @@ async def test_intent_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
 
     pipeline = IntentPipeline(BrokenProvider(), session)
 
-    with pytest.raises(RuntimeError, match="LLM crashed"):
-        await pipeline.run(creator.id)
+    # Every unit failed: the run comes back "failed" rather than raising, so the
+    # caller's commit keeps the row (docs/DECISIONS/0009).
+    returned = await pipeline.run(creator.id)
+    assert returned.status == "failed"
 
     result = await session.execute(
         select(ResearchRun).where(
@@ -213,5 +215,7 @@ async def test_intent_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
         )
     )
     run = result.scalar_one()
+    assert run is returned
     assert run.status == "failed"
     assert "LLM crashed" in run.error_message
+    assert run.completed_at is not None

@@ -97,6 +97,7 @@ class AcquisitionCollector:
                 creator_id,
                 working=CreatorStatus.COLLECTING,
                 done=CreatorStatus.COLLECTED,
+                run=run,
             ):
                 items = await self._adapter.collect(identifier)
                 counts = await self._persist_items(items, creator_id, run.id)

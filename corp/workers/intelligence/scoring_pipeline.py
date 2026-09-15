@@ -112,6 +112,7 @@ class ScoringPipeline:
                 creator_id,
                 working=CreatorStatus.SCORING,
                 done=CreatorStatus.SCORED,
+                run=run,
             ):
                 creator_ctx = await self._load_creator_context(creator_id)
                 clusters = await active_clusters_for_creator(self._session, creator_id)

@@ -2,12 +2,13 @@
 
 import pytest
 
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.workflow import ResearchRun, RunStatus
 from corp.workers.intelligence.runs import (
-    PipelineFailureError,
     PipelineStats,
     finish_run,
     resolve_status,
+    stage,
 )
 
 
@@ -81,12 +82,84 @@ async def test_finish_run_partial_records_reason():
     assert "provider timeout" in run.error_message
 
 
-async def test_finish_run_all_failed_raises_with_last_error():
+async def test_finish_run_all_failed_returns_failed_run_without_raising():
+    """A fully failed run is still research memory: it must come back to the
+    caller (who commits it), not be lost behind an exception and a rollback.
+    Seen live twice before this changed (Reddit 403 in Slice 7; a Groq stall)."""
     run = ResearchRun(creator_id="c1", status="running")
     stats = PipelineStats()
     stats.fail(RuntimeError("LLM down"))
     stats.fail(RuntimeError("LLM down"))
-    with pytest.raises(PipelineFailureError, match="LLM down"):
-        await finish_run(FakeSession(), run, stats)
+    session = FakeSession()
+    returned = await finish_run(session, run, stats)
+    assert returned is run
     assert run.status == "failed"
-    assert isinstance(PipelineFailureError("x"), RuntimeError)
+    assert "LLM down" in run.error_message
+    assert run.completed_at is not None
+    assert session.flushes == 1
+
+
+# ── stage(): a failed run must not advance the creator ───────────────
+
+
+class FakeSessionWithCreator(FakeSession):
+    def __init__(self, creator: Creator) -> None:
+        super().__init__()
+        self._creator = creator
+
+    async def get(self, model, key):
+        return self._creator
+
+
+async def test_stage_failed_run_restores_previous_status():
+    creator = Creator(id="c1", name="c", status=CreatorStatus.COLLECTED)
+    run = ResearchRun(creator_id="c1", status="running")
+    async with stage(
+        FakeSessionWithCreator(creator),
+        "c1",
+        working=CreatorStatus.EXTRACTING,
+        done=CreatorStatus.EXTRACTED,
+        run=run,
+    ) as c:
+        assert c.status == CreatorStatus.EXTRACTING
+        run.status = "failed"  # what finish_run does when every unit fails
+    assert creator.status == CreatorStatus.COLLECTED
+
+
+async def test_stage_completed_run_advances():
+    creator = Creator(id="c1", name="c", status=CreatorStatus.COLLECTED)
+    run = ResearchRun(creator_id="c1", status="running")
+    async with stage(
+        FakeSessionWithCreator(creator),
+        "c1",
+        working=CreatorStatus.EXTRACTING,
+        done=CreatorStatus.EXTRACTED,
+        run=run,
+    ):
+        run.status = "partial"  # partial still produced something: advance
+    assert creator.status == CreatorStatus.EXTRACTED
+
+
+async def test_stage_without_run_keeps_old_behaviour():
+    creator = Creator(id="c1", name="c", status=CreatorStatus.COLLECTED)
+    async with stage(
+        FakeSessionWithCreator(creator),
+        "c1",
+        working=CreatorStatus.EXTRACTING,
+        done=CreatorStatus.EXTRACTED,
+    ):
+        pass
+    assert creator.status == CreatorStatus.EXTRACTED
+
+
+async def test_stage_exception_still_restores():
+    creator = Creator(id="c1", name="c", status=CreatorStatus.COLLECTED)
+    with pytest.raises(RuntimeError, match="boom"):
+        async with stage(
+            FakeSessionWithCreator(creator),
+            "c1",
+            working=CreatorStatus.EXTRACTING,
+            done=CreatorStatus.EXTRACTED,
+        ):
+            raise RuntimeError("boom")
+    assert creator.status == CreatorStatus.COLLECTED

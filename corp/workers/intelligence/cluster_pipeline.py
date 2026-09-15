@@ -69,6 +69,7 @@ class ClusterPipeline:
                 creator_id,
                 working=CreatorStatus.CLUSTERING,
                 done=CreatorStatus.CLUSTERED,
+                run=run,
             ):
                 observations = await self._load_observations(creator_id)
                 stats.extra["observations"] = len(observations)
