@@ -132,7 +132,16 @@ class SourceHealthTracker:
                     platform,
                     rec.consecutive_failures,
                 )
-                rec.disconnected_at = time.time()
+            else:
+                logger.info(
+                    "Source %s probe failed; re-arming disconnect cooldown", platform
+                )
+            # Re-arm the cooldown on every failure at/over the threshold — including
+            # a failed probe of an already-disconnected source. Setting it only on
+            # the transition left disconnected_at in the past after the first
+            # cooldown, so is_available() green-lit a probe on every subsequent run
+            # and the breaker never throttled again.
+            rec.disconnected_at = time.time()
             rec.status = SourceStatus.DISCONNECTED
         elif rec.consecutive_failures >= self._degrade_after:
             if rec.status == SourceStatus.HEALTHY:

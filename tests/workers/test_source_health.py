@@ -105,6 +105,26 @@ def test_probe_after_cooldown(tracker):
     assert tracker.is_available("appstore")
 
 
+# ── Failed probe re-arms the cooldown ────────────────────────────────
+
+
+def test_failed_probe_rearms_cooldown(tracker):
+    # disconnect_after=5 in the fixture.
+    for i in range(5):
+        tracker.record_failure("appstore", RuntimeError(f"fail {i}"))
+    assert not tracker.is_available("appstore")
+
+    # Cooldown elapses → one probe is allowed.
+    rec = tracker.get_record("appstore")
+    rec.disconnected_at = time.time() - 120.0
+    assert tracker.is_available("appstore")
+
+    # The probe fails. This must re-arm the cooldown, not leave it elapsed.
+    tracker.record_failure("appstore", RuntimeError("probe failed"))
+    assert tracker.get_status("appstore") == SourceStatus.DISCONNECTED
+    assert not tracker.is_available("appstore")  # throttled again, not green-lit forever
+
+
 # ── Recovery from disconnected ───────────────────────────────────────
 
 
