@@ -44,6 +44,25 @@ class Settings(BaseSettings):
     # Marketplace adapter (niche-signal: Gumroad/Etsy/Udemy listings for saturation + pricing).
     marketplace_max_listings: int = 30
     marketplace_sites: str = "gumroad,etsy,udemy"
+    # Etsy Open API v3 key (Personal App tier). When set, Etsy uses official API
+    # instead of HTML scraping. Register at https://www.etsy.com/developers.
+    etsy_api_key: str = ""
+
+    # Hacker News adapter (niche-signal: stories + comments via Algolia API). Fully open.
+    hackernews_max_items: int = 50
+
+    # Wikipedia adapter (niche-signal: pageview trends as demand validation). Official API.
+    wikipedia_max_articles: int = 10
+    wikipedia_pageview_days: int = 30
+
+    # Google Trends adapter (niche-signal: trending topics RSS + optional pytrends).
+    googletrends_max_items: int = 50
+    googletrends_geo: str = "US"
+
+    # Apple App Store adapter (niche-signal: review RSS + iTunes Search). Open, no key.
+    appstore_max_reviews: int = 50
+    appstore_max_apps: int = 5
+    appstore_country: str = "us"
 
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be

@@ -88,11 +88,13 @@ class MarketplaceAdapter(SourceAdapter):
         marketplaces: list[str] | None = None,
         request_interval_seconds: float = 2.0,
         client: httpx.AsyncClient | None = None,
+        etsy_api_key: str | None = None,
     ) -> None:
         self._max_listings = max_listings
         self._marketplaces = marketplaces or ["gumroad", "etsy", "udemy"]
         self._interval = request_interval_seconds
         self._client = client
+        self._etsy_api_key = etsy_api_key
         self._last_request_at: float | None = None
         self.request_count = 0
 
@@ -161,11 +163,21 @@ class MarketplaceAdapter(SourceAdapter):
         return _parse_gumroad_listings(html, query)[:limit]
 
     async def _collect_etsy(self, query: str, limit: int) -> list[NormalizedContent]:
+        if self._etsy_api_key:
+            return await self._collect_etsy_api(query, limit)
         html = await self._get_page(
             MARKETPLACE_URLS["etsy"],
             params={"q": query, "ref": "search_bar"},
         )
         return _parse_etsy_listings(html, query)[:limit]
+
+    async def _collect_etsy_api(self, query: str, limit: int) -> list[NormalizedContent]:
+        data = await self._get_json(
+            "https://openapi.etsy.com/v3/application/listings/active",
+            params={"keywords": query, "limit": min(limit, 25)},
+            headers={"x-api-key": self._etsy_api_key},
+        )
+        return _parse_etsy_api_response(data, query)[:limit]
 
     async def _collect_udemy(self, query: str, limit: int) -> list[NormalizedContent]:
         data = await self._get_json(
@@ -224,11 +236,14 @@ class MarketplaceAdapter(SourceAdapter):
         reraise=True,
     )
     async def _get_json(
-        self, url: str, params: dict[str, Any] | None = None
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         await self._throttle()
         client = self._get_client()
-        resp = await client.get(url, params=params)
+        resp = await client.get(url, params=params, headers=headers or {})
         self.request_count += 1
         if resp.status_code == 429:
             logger.warning("Marketplace rate limit hit on %s", url)
@@ -419,6 +434,58 @@ def _parse_udemy_response(
                     "rating": course.get("avg_rating"),
                     "review_count": course.get("num_reviews"),
                     "subscriber_count": course.get("num_subscribers"),
+                },
+            )
+        )
+
+    return results
+
+
+def _parse_etsy_api_response(
+    data: dict[str, Any], query: str
+) -> list[NormalizedContent]:
+    results: list[NormalizedContent] = []
+    now = datetime.now(tz=UTC)
+
+    for item in data.get("results", []):
+        title = item.get("title", "")
+        description = item.get("description", "")
+        text = f"{title}\n\n{description[:200]}".strip() if description else title
+        if not text:
+            continue
+
+        price_raw = item.get("price", {})
+        if isinstance(price_raw, dict):
+            amount = price_raw.get("amount")
+            divisor = price_raw.get("divisor", 100)
+            price = amount / divisor if amount is not None else None
+            currency = price_raw.get("currency_code", "USD")
+        else:
+            price = None
+            currency = "USD"
+
+        listing_id = item.get("listing_id", hash(title) & 0xFFFFFFFF)
+
+        results.append(
+            NormalizedContent(
+                source_platform="marketplace",
+                content_type="listing",
+                external_id=f"etsy_{listing_id}",
+                text=title,
+                author=item.get("shop_id"),
+                timestamp=now,
+                url=item.get("url") or f"https://www.etsy.com/listing/{listing_id}",
+                access_method=AccessMethod.OFFICIAL,
+                compliance_status=ComplianceStatus.COMPLIANT,
+                metadata={
+                    "marketplace": "etsy",
+                    "query": query,
+                    "price": price,
+                    "currency": currency,
+                    "rating": None,
+                    "review_count": item.get("num_favorers"),
+                    "views": item.get("views"),
+                    "tags": item.get("tags", [])[:5],
                 },
             )
         )

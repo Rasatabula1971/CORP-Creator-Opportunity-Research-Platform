@@ -7,6 +7,7 @@ from corp.workers.adapters.base import SourceAdapter
 KNOWN_PLATFORMS = (
     "youtube", "reddit", "tiktok", "web", "stackexchange",
     "searchdemand", "amazon_reviews", "marketplace",
+    "hackernews", "wikipedia", "googletrends", "appstore",
 )
 
 
@@ -88,6 +89,39 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
         return MarketplaceAdapter(
             max_listings=cfg.marketplace_max_listings,
             marketplaces=cfg.marketplace_sites.split(",") if cfg.marketplace_sites else None,
+            etsy_api_key=cfg.etsy_api_key or None,
+        )
+
+    if name == "hackernews":
+        from corp.workers.adapters.hackernews import HackerNewsAdapter
+
+        return HackerNewsAdapter(
+            max_items=cfg.hackernews_max_items,
+        )
+
+    if name == "wikipedia":
+        from corp.workers.adapters.wikipedia import WikipediaAdapter
+
+        return WikipediaAdapter(
+            max_articles=cfg.wikipedia_max_articles,
+            pageview_days=cfg.wikipedia_pageview_days,
+        )
+
+    if name == "googletrends":
+        from corp.workers.adapters.googletrends import GoogleTrendsAdapter
+
+        return GoogleTrendsAdapter(
+            max_items=cfg.googletrends_max_items,
+            geo=cfg.googletrends_geo,
+        )
+
+    if name == "appstore":
+        from corp.workers.adapters.appstore import AppStoreAdapter
+
+        return AppStoreAdapter(
+            max_reviews=cfg.appstore_max_reviews,
+            max_apps=cfg.appstore_max_apps,
+            country=cfg.appstore_country,
         )
 
     known = ", ".join(KNOWN_PLATFORMS)
