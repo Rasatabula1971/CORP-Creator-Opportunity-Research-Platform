@@ -120,11 +120,20 @@ class MultiSourceDiscovery:
         stats.extra.update({
             "per_source": per_source,
             "total_sources_attempted": sum(
-                1 for s in per_source.values() if s.get("status") != "skipped"
+                1 for s in per_source.values() if s.get("status") in ("ok", "failed")
+            ),
+            "total_sources_ok": sum(
+                1 for s in per_source.values() if s.get("status") == "ok"
+            ),
+            "total_sources_failed": sum(
+                1 for s in per_source.values() if s.get("status") == "failed"
             ),
             "total_sources_skipped": sum(
                 1 for s in per_source.values() if s.get("status") == "skipped"
             ),
+            "total_new_items": sum(s.get("new", 0) for s in per_source.values()),
+            "total_duplicate_items": sum(s.get("duplicate", 0) for s in per_source.values()),
+            "total_item_failures": sum(s.get("item_failures", 0) for s in per_source.values()),
             "total_items": len(all_items),
             "archive_reference": archive_ref,
         })
@@ -139,6 +148,11 @@ class MultiSourceDiscovery:
         stats: PipelineStats,
         all_items: list[NormalizedContent],
     ) -> dict:
+        # PipelineStats counts SOURCES here, not items: one ok()/fail()/skip()
+        # per source, so the run's failure_rate answers "how many sources
+        # worked". Per-item new/duplicate/failure counts live in the returned
+        # dict and are aggregated into stats.extra — mixing the two axes made a
+        # run with 7/8 sources dead look "completed" on one chatty survivor.
         if not self._health.is_available(platform):
             health_rec = self._health.get_record(platform)
             logger.info(
@@ -147,6 +161,7 @@ class MultiSourceDiscovery:
                 health_rec.consecutive_failures,
                 health_rec.last_error,
             )
+            stats.skip()
             return {
                 "status": "skipped",
                 "reason": "disconnected",
@@ -157,9 +172,11 @@ class MultiSourceDiscovery:
             adapter = build_adapter(platform, self._cfg)
         except Exception as exc:
             logger.warning("Could not build adapter for %s: %s", platform, exc)
+            stats.skip()
             return {"status": "skipped", "reason": f"build_error: {exc}"}
 
         if adapter.family != AdapterFamily.NICHE:
+            stats.skip()
             return {"status": "skipped", "reason": "not_niche_family"}
 
         try:
@@ -189,26 +206,25 @@ class MultiSourceDiscovery:
                 except Exception:
                     pass
 
-        new = duplicate = 0
+        new = duplicate = item_failures = 0
         for item in items:
             try:
                 if await self._already_have(item):
-                    stats.skip()
                     duplicate += 1
                     continue
                 ev = _to_evidence(item, run.id)
                 self._session.add(ev)
                 await self._session.flush()
                 await mirror_evidence([ev])
-                stats.ok()
                 new += 1
                 all_items.append(item)
             except Exception as exc:
                 logger.warning(
                     "Item %s from %s failed: %s", item.external_id, platform, exc
                 )
-                stats.fail(exc)
+                item_failures += 1
 
+        stats.ok()
         await record_query(
             self._session,
             research_run_id=run.id,
@@ -224,6 +240,7 @@ class MultiSourceDiscovery:
             "results_seen": len(items),
             "new": new,
             "duplicate": duplicate,
+            "item_failures": item_failures,
             "health": self._health.get_status(platform),
         }
 

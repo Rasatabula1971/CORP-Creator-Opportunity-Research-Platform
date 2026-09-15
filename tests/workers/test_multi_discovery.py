@@ -157,7 +157,10 @@ async def test_discover_fans_out(
     assert mock_record.call_count == 2
 
     stats = mock_finish.call_args[0][2]
-    assert stats.succeeded == 3
+    # Two sources succeeded (stats count sources, not items).
+    assert stats.succeeded == 2
+    assert stats.extra["total_sources_ok"] == 2
+    assert stats.extra["total_new_items"] == 3
     assert stats.extra["total_items"] == 3
 
 
@@ -228,11 +231,57 @@ async def test_source_failure_continues_run(
     stats = mock_finish.call_args[0][2]
     assert stats.extra["per_source"]["hackernews"]["status"] == "failed"
     assert stats.extra["per_source"]["wikipedia"]["status"] == "ok"
+    # One source failed, one succeeded (source-level accounting).
     assert stats.failed == 1
     assert stats.succeeded == 1
+    assert stats.extra["total_sources_failed"] == 1
+    assert stats.extra["total_sources_ok"] == 1
 
     assert tracker.get_record("hackernews").total_failures == 1
     assert tracker.get_record("wikipedia").total_successes == 1
+
+
+@patch("corp.workers.acquisition.multi_discovery.mirror_evidence", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.record_query", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.validate_run_type")
+@patch("corp.workers.acquisition.multi_discovery.finish_run", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.start_run", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.build_adapter")
+async def test_failure_rate_reflects_sources_not_items(
+    mock_build, mock_start, mock_finish, mock_validate, mock_record, mock_mirror,
+    mock_session, tracker, tmp_path,
+):
+    # Three sources fail; one chatty source returns many items. The run's
+    # failure_rate must reflect the sources (3/4 = 0.75), not be diluted by the
+    # survivor's item count — the whole point of counting sources.
+    run = MagicMock()
+    run.id = "run-fr"
+    mock_start.return_value = run
+    mock_finish.return_value = run
+
+    many = [_make_item("wikipedia", f"w{i}") for i in range(20)]
+
+    def build_side_effect(platform, cfg=None):
+        if platform == "wikipedia":
+            return FakeAdapter("wikipedia", many)
+        return FakeAdapter(platform, error=RuntimeError("down"))
+
+    mock_build.side_effect = build_side_effect
+
+    disco = MultiSourceDiscovery(
+        mock_session,
+        str(tmp_path),
+        platforms=("hackernews", "appstore", "stackexchange", "wikipedia"),
+        health_tracker=tracker,
+    )
+    await disco.discover("camp-1", "python")
+
+    stats = mock_finish.call_args[0][2]
+    assert stats.succeeded == 1        # one source ok
+    assert stats.failed == 3           # three sources down
+    assert stats.attempted == 4
+    assert stats.failure_rate == 0.75  # sources, not diluted by 20 items
+    assert stats.extra["total_new_items"] == 20
 
 
 @patch("corp.workers.acquisition.multi_discovery.mirror_evidence", new_callable=AsyncMock)
@@ -280,8 +329,10 @@ async def test_deduplicates_evidence(
     await disco.discover("camp-1", "python")
 
     stats = mock_finish.call_args[0][2]
+    # One source succeeded; the dedup is an item-level count, not a skipped source.
     assert stats.succeeded == 1
-    assert stats.skipped == 1
+    assert stats.extra["total_new_items"] == 1
+    assert stats.extra["total_duplicate_items"] == 1
 
 
 async def test_discover_unknown_campaign(tmp_path, tracker):
