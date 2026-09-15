@@ -30,11 +30,30 @@ class Settings(BaseSettings):
     # configurable to move without a code change.
     corp_data_path: str = "corp_data"
 
-    # LLM provider selection: auto | fair | gemini (auto prefers FAIR when FAIR_URL is set)
+    # LLM provider selection: auto | fair | gemini | groq | pool
+    # auto prefers FAIR when FAIR_URL is set; otherwise pools every configured
+    # key in LLM_PROVIDER_ORDER and fails over when one hits its quota.
     llm_provider: str = "auto"
+    llm_provider_order: str = "gemini,groq"
+    # How long a provider sits out after a daily-cap error, in seconds.
+    llm_cooldown_seconds: float = 3600.0
+    # Longest the pool will wait for a short cooldown to expire when no
+    # provider is available, before failing the call.
+    llm_max_wait_seconds: float = 300.0
 
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
+    groq_timeout_seconds: float = 60.0
+    # Groq reserves this against its 8,000 tokens/minute bucket, so it directly
+    # sets calls per minute. Measured extraction completions stay under 500.
+    groq_max_output_tokens: int = 2048
+    # gpt-oss is a reasoning model; "low" spends ~16 reasoning tokens per call
+    # instead of ~500, which is what keeps the free tier's per-minute token
+    # limit from throttling every other call. Empty string sends no preference.
+    groq_reasoning_effort: str = "low"
 
     fair_url: str = ""
     fair_client_id: str = "corp"

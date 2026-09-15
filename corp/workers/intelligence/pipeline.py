@@ -75,6 +75,9 @@ class IntelligencePipeline:
                 await self._extract_problems(creator_id, stats)
                 await self._extract_creator_side(creator_id, stats)
                 await self._classify_and_store_topics(creator_id, stats)
+                # "primary" is what the run started with; "used" is what actually
+                # answered, which a pool can change mid-run (PDR #9 provenance).
+                run.model_versions = {**(run.model_versions or {}), "used": self._models_used()}
                 await finish_run(
                     self._session, run, stats, max_failure_rate=self._max_failure_rate
                 )
@@ -147,6 +150,21 @@ class IntelligencePipeline:
         )
         return result.scalar_one_or_none()
 
+    def _model_family(self) -> list[str]:
+        """Model names that count as "already done" for idempotency.
+
+        A pooled provider may answer with any of its members, and which one
+        answers can change between runs (a daily cap today, not tomorrow).
+        Those members are one family: work done by any of them is done. A
+        genuinely different model (new deployment) still re-extracts.
+        """
+        members = getattr(self._provider, "member_names", None)
+        return list(members()) if members else [self._provider.model_name]
+
+    def _models_used(self) -> list[str]:
+        used = getattr(self._provider, "models_used", None)
+        return sorted(used()) if used else [self._provider.model_name]
+
     async def _already_extracted(
         self,
         external_id: str,
@@ -159,7 +177,7 @@ class IntelligencePipeline:
             .where(
                 Evidence.source_id == external_id,
                 ProblemObservation.extraction_prompt_version == prompt_version,
-                ProblemObservation.model_version == self._provider.model_name,
+                ProblemObservation.model_version.in_(self._model_family()),
                 ProblemObservation.source_side == source_side,
             )
             .limit(1)

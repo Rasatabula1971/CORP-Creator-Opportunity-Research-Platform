@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -13,15 +14,18 @@ from google.api_core.exceptions import (
     ServiceUnavailable,
 )
 from tenacity import (
-    retry,
+    AsyncRetrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
 
+from corp.workers.providers.errors import ProviderExhaustedError, ProviderUnavailableError
+
 logger = logging.getLogger(__name__)
 
-_RETRYABLE = (ResourceExhausted, ServiceUnavailable, DeadlineExceeded)
+_TRANSIENT = (ServiceUnavailable, DeadlineExceeded)
+_RETRY_IN_RE = re.compile(r"retry in (\d+(?:\.\d+)?)\s*s", re.IGNORECASE)
 
 
 class LLMProvider(ABC):
@@ -35,6 +39,23 @@ class LLMProvider(ABC):
     async def generate_json(self, prompt: str, system: str | None = None) -> dict: ...
 
 
+def classify_quota_error(model: str, exc: BaseException) -> ProviderExhaustedError:
+    """Turn a Gemini 429 into a pool signal.
+
+    Gemini reports a per-day cap and a per-minute limit with the same
+    exception type. The message tells them apart via the quota id
+    (``GenerateRequestsPerDayPerProjectPerModel-FreeTier`` vs ``...PerMinute...``).
+    The "Please retry in Ns" hint is only honoured for the per-minute case;
+    on a daily cap it is misleading (observed: "retry in 40s" on a cap that
+    resets at midnight).
+    """
+    text = str(exc)
+    daily = "PerDay" in text or "per day" in text.lower()
+    match = _RETRY_IN_RE.search(text)
+    retry_after = float(match.group(1)) if (match and not daily) else None
+    return ProviderExhaustedError(model, text[:300], retry_after=retry_after, daily=daily)
+
+
 class GeminiProvider(LLMProvider):
     """Google Gemini provider using the free tier."""
 
@@ -43,6 +64,9 @@ class GeminiProvider(LLMProvider):
         api_key: str,
         model: str = "gemini-2.0-flash",
         temperature: float = 0.0,
+        retry_attempts: int = 4,
+        retry_wait_min: float = 2.0,
+        retry_wait_max: float = 30.0,
     ) -> None:
         genai.configure(api_key=api_key)
         self._model = genai.GenerativeModel(
@@ -51,23 +75,36 @@ class GeminiProvider(LLMProvider):
         )
         self._model_id = model
         self._temperature = temperature
+        self._retry_attempts = retry_attempts
+        self._retry_wait_min = retry_wait_min
+        self._retry_wait_max = retry_wait_max
 
     @property
     def model_name(self) -> str:
         return self._model_id
 
-    @retry(
-        retry=retry_if_exception_type(_RETRYABLE),
-        wait=wait_exponential(multiplier=1, min=4, max=60),
-        stop=stop_after_attempt(6),
-        reraise=True,
-    )
     async def _generate_with_retry(self, model: Any, prompt: str, config: Any) -> Any:
+        """Retry only transient errors (503/504). A 429 is never retried here:
+        it becomes ProviderExhaustedError immediately so a pool can fail over
+        instead of this call sleeping through a cap that will not clear."""
         try:
-            return await model.generate_content_async(prompt, generation_config=config)
-        except _RETRYABLE as exc:
-            logger.warning("Gemini call rate-limited/unavailable, retrying: %s", exc)
-            raise
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception_type(_TRANSIENT),
+                wait=wait_exponential(
+                    multiplier=1, min=self._retry_wait_min, max=self._retry_wait_max
+                ),
+                stop=stop_after_attempt(self._retry_attempts),
+                reraise=True,
+            ):
+                with attempt:
+                    return await model.generate_content_async(prompt, generation_config=config)
+        except ResourceExhausted as exc:
+            raise classify_quota_error(self._model_id, exc) from exc
+        except _TRANSIENT as exc:
+            raise ProviderUnavailableError(
+                self._model_id, f"{type(exc).__name__} after {self._retry_attempts} attempts"
+            ) from exc
+        raise ProviderUnavailableError(self._model_id, "retry loop exited without a response")
 
     async def generate_json(self, prompt: str, system: str | None = None) -> dict:
         model = self._model

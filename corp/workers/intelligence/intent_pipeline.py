@@ -67,6 +67,12 @@ class IntentPipeline:
             clusters = await active_clusters_for_creator(self._session, creator_id)
             for cluster in clusters:
                 await self._classify_cluster(cluster, run.id, stats)
+            # "used" is what actually answered; a pool can change it mid-run (PDR #9).
+            used = getattr(self._provider, "models_used", None)
+            run.model_versions = {
+                **(run.model_versions or {}),
+                "used": sorted(used()) if used else [self._provider.model_name],
+            }
             await finish_run(self._session, run, stats, max_failure_rate=self._max_failure_rate)
         except Exception as exc:
             if run.status == "running":
