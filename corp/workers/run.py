@@ -160,6 +160,36 @@ async def _run_canonicalize(campaign_id: str, similarity_threshold: float) -> in
     return 0 if run.status == "completed" else 1
 
 
+async def _run_verify(
+    campaign_id: str, min_evidence: int, min_authors: int, allow_broad: bool,
+) -> int:
+    from corp.database import async_session
+    from corp.workers.intelligence.niche_verification import NicheVerifier, VerifyConfig
+
+    async with async_session() as session:
+        verifier = NicheVerifier(
+            session,
+            VerifyConfig(
+                min_evidence=min_evidence,
+                min_authors=min_authors,
+                reject_broad_domain=not allow_broad,
+            ),
+        )
+        run = await verifier.verify(campaign_id)
+        await session.commit()
+    extra = (run.stats or {}).get("extra", {})
+    print(
+        f"research_run={run.id} status={run.status} "
+        f"checked={extra.get('candidates_checked')} verified={extra.get('verified')} "
+        f"failed={extra.get('failed_verification')}"
+    )
+    for r in extra.get("results", []):
+        status = "PASS" if r["passed"] else "FAIL"
+        reasons = f" ({'; '.join(r['reasons'])})" if r["reasons"] else ""
+        print(f"  {status}: {r['niche']}{reasons}")
+    return 0 if run.status == "completed" else 1
+
+
 async def _run_candidates(campaign_id: str, min_cluster_size: int, no_llm: bool) -> int:
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
@@ -239,6 +269,16 @@ def main(argv: list[str] | None = None) -> int:
         help="cosine similarity threshold for deduplication (default 0.82)",
     )
 
+    verify = sub.add_parser(
+        "verify", help="verify candidate niches against evidence-quality thresholds"
+    )
+    verify.add_argument("campaign_id")
+    verify.add_argument("--min-evidence", type=int, default=5)
+    verify.add_argument("--min-authors", type=int, default=3)
+    verify.add_argument(
+        "--allow-broad", action="store_true", help="do not reject broad-domain niches"
+    )
+
     discover = sub.add_parser(
         "discover", help="niche discovery (light): one source, one query, under a campaign"
     )
@@ -263,6 +303,10 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_run_candidates(args.campaign_id, args.min_cluster_size, args.no_llm))
     if args.pipeline == "canonicalize":
         return asyncio.run(_run_canonicalize(args.campaign_id, args.similarity_threshold))
+    if args.pipeline == "verify":
+        return asyncio.run(
+            _run_verify(args.campaign_id, args.min_evidence, args.min_authors, args.allow_broad)
+        )
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
     return asyncio.run(_run_llm(args.pipeline, args.creator_id))
