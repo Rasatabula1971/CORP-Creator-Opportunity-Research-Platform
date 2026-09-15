@@ -356,11 +356,17 @@ async def run_campaign_pipeline(
     if kind == "onboard":
         from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
         from corp.workers.adapters.registry import build_search_adapter
+        from corp.workers.intelligence.ecosystem_estimator import YouTubeAPIEnricher
 
         adapter = build_search_adapter("youtube")
+        enricher = (
+            YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
+        )
         try:
             async with async_session() as session:
-                run = await CreatorOnboarder(adapter, session).onboard(campaign_id)
+                run = await CreatorOnboarder(
+                    adapter, session, enricher=enricher
+                ).onboard(campaign_id)
                 await session.commit()
         finally:
             await _close(adapter)

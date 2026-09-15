@@ -294,8 +294,12 @@ async def _run_onboard(
     from corp.database import async_session
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder, OnboardConfig
     from corp.workers.adapters.registry import build_search_adapter
+    from corp.workers.intelligence.ecosystem_estimator import YouTubeAPIEnricher
 
     adapter = build_search_adapter("youtube")
+    enricher = YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
+    if enricher is not None:
+        logger.info("YouTube API enricher enabled for subscriber counts")
     try:
         async with async_session() as session:
             onboarder = CreatorOnboarder(
@@ -307,6 +311,7 @@ async def _run_onboard(
                     min_followers=min_followers,
                     max_followers=max_followers,
                 ),
+                enricher=enricher,
             )
             run = await onboarder.onboard(campaign_id)
             await session.commit()
