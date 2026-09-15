@@ -141,7 +141,16 @@ class CreatorOnboarder:
             if len(channels) >= self._cfg.max_creators_per_niche:
                 break
             meta = getattr(item, "metadata", {}) or {}
-            channel_id = meta.get("channel_id") or getattr(item, "author", None)
+            # Prefer yt-dlp's stable identifiers (UC channel_id, then @handle) over
+            # the author display name: it becomes CreatorPlatformAccount.handle,
+            # which later gets fed straight into YtDlpAdapter.profile_url() to
+            # re-collect content for this creator — a display name (spaces,
+            # unicode, doesn't match the real handle) 404s there.
+            channel_id = (
+                meta.get("channel_id")
+                or meta.get("channel_handle")
+                or getattr(item, "author", None)
+            )
             if not channel_id or channel_id in channels:
                 continue
             follower_count = meta.get("follower_count")

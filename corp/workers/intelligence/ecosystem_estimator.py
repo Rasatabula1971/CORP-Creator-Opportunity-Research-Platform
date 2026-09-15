@@ -196,7 +196,14 @@ class EcosystemEstimator:
         seen_channels: dict[str, dict] = {}
         for item in items:
             meta = getattr(item, "metadata", {}) or {}
-            channel_id = meta.get("channel_id") or getattr(item, "author", None)
+            # Prefer yt-dlp's stable identifiers (UC channel_id, then @handle) over
+            # the author display name, which can't be turned back into a working
+            # profile URL (spaces/unicode, doesn't match the real handle).
+            channel_id = (
+                meta.get("channel_id")
+                or meta.get("channel_handle")
+                or getattr(item, "author", None)
+            )
             if not channel_id:
                 continue
             if channel_id in seen_channels:

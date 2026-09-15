@@ -206,6 +206,14 @@ class YtDlpAdapter(SourceAdapter):
                     if self._platform == "tiktok"
                     else None
                 ),
+                # Canonical channel identity for building a stable profile URL
+                # later. ``uploader``/``channel`` (used for ``author`` above) is
+                # a display name — it can contain spaces/unicode and doesn't
+                # round-trip through ``profile_url``. ``channel_id`` (UC...) and
+                # ``uploader_id`` (``@handle``) are yt-dlp's stable identifiers.
+                "channel_id": info.get("channel_id"),
+                "channel_handle": info.get("uploader_id"),
+                "channel_url": info.get("channel_url") or info.get("uploader_url"),
             },
         )
 

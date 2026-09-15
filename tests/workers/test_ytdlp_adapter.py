@@ -48,6 +48,9 @@ INFO1 = {
     "title": "How to fix a wobbly desk",
     "description": "Full walkthrough.",
     "uploader": "Maker Channel",
+    "channel_id": "UCabc123",
+    "uploader_id": "@maker",
+    "channel_url": "https://www.youtube.com/@maker",
     "timestamp": 1_700_000_000,
     "webpage_url": VID1,
     "view_count": 1000,
@@ -163,6 +166,12 @@ async def test_collect_profile_videos_and_flat_then_full_opts():
     assert v1.metadata["view_count"] == 1000 and v1.metadata["comment_count"] == 7
     assert v1.timestamp is not None and v1.timestamp.year == 2023
     assert v1.metadata["title"] == "How to fix a wobbly desk"
+    # Stable channel identity, not just the display name in `author` — this is
+    # what downstream code (ecosystem_estimator, creator_onboarding) must use
+    # to build a working profile URL later.
+    assert v1.metadata["channel_id"] == "UCabc123"
+    assert v1.metadata["channel_handle"] == "@maker"
+    assert v1.metadata["channel_url"] == "https://www.youtube.com/@maker"
 
     v2 = items[2]
     assert v2.content_type == "short"
