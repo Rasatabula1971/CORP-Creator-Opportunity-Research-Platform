@@ -195,9 +195,17 @@ async def _run_estimate_ecosystem(
 ) -> int:
     from corp.database import async_session
     from corp.workers.adapters.registry import build_adapter
-    from corp.workers.intelligence.ecosystem_estimator import EcoConfig, EcosystemEstimator
+    from corp.workers.intelligence.ecosystem_estimator import (
+        EcoConfig,
+        EcosystemEstimator,
+        YouTubeAPIEnricher,
+    )
 
     adapter = build_adapter("youtube")
+    enricher = None
+    if settings.youtube_api_key:
+        enricher = YouTubeAPIEnricher(settings.youtube_api_key)
+        logger.info("YouTube API enricher enabled for subscriber counts")
     try:
         async with async_session() as session:
             estimator = EcosystemEstimator(
@@ -208,6 +216,7 @@ async def _run_estimate_ecosystem(
                     min_followers=min_followers,
                     max_followers=max_followers,
                 ),
+                enricher=enricher,
             )
             run = await estimator.estimate(campaign_id)
             await session.commit()

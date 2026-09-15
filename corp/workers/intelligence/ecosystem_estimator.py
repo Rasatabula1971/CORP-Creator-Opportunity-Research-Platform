@@ -5,7 +5,10 @@ many unique creator channels are active in the niche. Populates
 ``creator_count_observed`` and ``target_band_creator_count`` on the
 CampaignNiche row.
 
-No API key, no LLM, no cost — only yt-dlp metadata search (free).
+Discovery uses yt-dlp (free, no API key). When ``YOUTUBE_API_KEY`` is set,
+a second-pass enrichment resolves each unique channel via the YouTube Data
+API v3 ``channels().list(part="statistics")`` to get real subscriber counts
+(1 quota unit per 50 channels — negligible against the 10K/day free tier).
 
 ``target_band_creator_count`` is the subset of observed creators whose
 subscriber count falls within a configurable band (default 10K–200K),
@@ -14,9 +17,11 @@ the sweet spot for partnership outreach.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +48,63 @@ class SearchAdapter(Protocol):
     async def collect(self, identifier: str) -> list: ...
 
 
+class ChannelEnricher(Protocol):
+    """Resolve channel IDs to subscriber counts."""
+
+    async def get_subscriber_counts(
+        self, channel_ids: list[str],
+    ) -> dict[str, int | None]: ...
+
+
+class YouTubeAPIEnricher:
+    """Fetches real subscriber counts via YouTube Data API v3.
+
+    Costs 1 quota unit per 50 channels. Batches automatically.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        service_factory: Callable[..., Any] | None = None,
+    ) -> None:
+        self._api_key = api_key
+        self._factory = service_factory
+
+    def _build_service(self) -> Any:
+        if self._factory is not None:
+            return self._factory()
+        from googleapiclient.discovery import build
+        return build("youtube", "v3", developerKey=self._api_key)
+
+    async def get_subscriber_counts(
+        self, channel_ids: list[str],
+    ) -> dict[str, int | None]:
+        if not channel_ids:
+            return {}
+
+        def _fetch() -> dict[str, int | None]:
+            service = self._build_service()
+            result: dict[str, int | None] = {}
+            for i in range(0, len(channel_ids), 50):
+                batch = channel_ids[i: i + 50]
+                resp = (
+                    service.channels()
+                    .list(part="statistics", id=",".join(batch))
+                    .execute()
+                )
+                for item in resp.get("items", []):
+                    stats = item.get("statistics", {})
+                    hidden = stats.get("hiddenSubscriberCount", False)
+                    if hidden:
+                        result[item["id"]] = None
+                    else:
+                        raw = stats.get("subscriberCount")
+                        result[item["id"]] = int(raw) if raw else None
+            return result
+
+        return await asyncio.to_thread(_fetch)
+
+
 @dataclass(frozen=True, slots=True)
 class EcoConfig:
     search_count: int = 20
@@ -65,10 +127,12 @@ class EcosystemEstimator:
         adapter: SearchAdapter,
         session: AsyncSession,
         config: EcoConfig | None = None,
+        enricher: ChannelEnricher | None = None,
     ) -> None:
         self._adapter = adapter
         self._session = session
         self._cfg = config or EcoConfig()
+        self._enricher = enricher
 
     async def estimate(self, campaign_id: str) -> ResearchRun:
         run = await start_run(
@@ -143,6 +207,9 @@ class EcosystemEstimator:
                 "follower_count": meta.get("follower_count"),
             }
 
+        if self._enricher and seen_channels:
+            await self._enrich_subscriber_counts(seen_channels)
+
         total = len(seen_channels)
         in_band = 0
         channels_out: list[dict] = []
@@ -163,6 +230,30 @@ class EcosystemEstimator:
             target_band_creators=in_band,
             channels=channels_out,
         )
+
+    async def _enrich_subscriber_counts(
+        self, channels: dict[str, dict],
+    ) -> None:
+        ids = [
+            cid for cid in channels
+            if cid.startswith("UC") and len(cid) == 24
+        ]
+        if not ids:
+            return
+        try:
+            counts = await self._enricher.get_subscriber_counts(ids)  # type: ignore[union-attr]
+            for cid, count in counts.items():
+                if cid in channels and count is not None:
+                    channels[cid]["follower_count"] = count
+            logger.info(
+                "Enriched %d/%d channels with subscriber counts",
+                len(counts), len(ids),
+            )
+        except Exception:
+            logger.warning(
+                "YouTube API enrichment failed; using yt-dlp counts only",
+                exc_info=True,
+            )
 
     async def _verified_niches(
         self, campaign_id: str,

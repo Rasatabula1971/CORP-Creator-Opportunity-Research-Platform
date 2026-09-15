@@ -220,3 +220,106 @@ async def test_search_empty_results(clean_db: AsyncSession):
     await session.refresh(cn)
     assert cn.creator_count_observed == 0
     assert cn.target_band_creator_count == 0
+
+
+# ── enrichment tests ─────────────────────────────────────────────────
+
+
+class FakeEnricher:
+    """Returns canned subscriber counts for channel IDs."""
+
+    def __init__(self, counts: dict[str, int | None]) -> None:
+        self._counts = counts
+        self.called_with: list[str] = []
+
+    async def get_subscriber_counts(
+        self, channel_ids: list[str],
+    ) -> dict[str, int | None]:
+        self.called_with = list(channel_ids)
+        return {cid: self._counts.get(cid) for cid in channel_ids}
+
+
+@pytest.mark.asyncio
+async def test_enricher_populates_subscriber_counts(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche, cn = await _setup_verified_niche(session, "Home Espresso")
+
+    adapter = FakeSearchAdapter({
+        "Home Espresso": [
+            _FakeItem("Small Creator", "UCaaaaaaaaaaaaaaaaaaaaaa", None),
+            _FakeItem("Mid Creator", "UCbbbbbbbbbbbbbbbbbbbbbb", None),
+            _FakeItem("Big Creator", "UCcccccccccccccccccccccc", None),
+        ],
+    })
+    enricher = FakeEnricher({
+        "UCaaaaaaaaaaaaaaaaaaaaaa": 5_000,
+        "UCbbbbbbbbbbbbbbbbbbbbbb": 50_000,
+        "UCcccccccccccccccccccccc": 500_000,
+    })
+
+    estimator = EcosystemEstimator(
+        adapter, session,
+        EcoConfig(min_followers=10_000, max_followers=200_000),
+        enricher=enricher,
+    )
+    run = await estimator.estimate(campaign.id)
+
+    assert len(enricher.called_with) == 3
+    r = run.stats["extra"]["results"][0]
+    assert r["total_creators"] == 3
+    assert r["target_band_creators"] == 1
+
+    await session.refresh(cn)
+    assert cn.creator_count_observed == 3
+    assert cn.target_band_creator_count == 1
+
+
+@pytest.mark.asyncio
+async def test_enricher_failure_falls_back_gracefully(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche, cn = await _setup_verified_niche(session, "Reef Aquarium")
+
+    adapter = FakeSearchAdapter({
+        "Reef Aquarium": [
+            _FakeItem("Chan", "UCdddddddddddddddddddddd", None),
+        ],
+    })
+
+    class FailingEnricher:
+        async def get_subscriber_counts(self, channel_ids):
+            raise ConnectionError("API down")
+
+    estimator = EcosystemEstimator(
+        adapter, session, enricher=FailingEnricher(),
+    )
+    run = await estimator.estimate(campaign.id)
+
+    assert run.status == "completed"
+    assert run.stats["extra"]["results"][0]["total_creators"] == 1
+    assert run.stats["extra"]["results"][0]["target_band_creators"] == 0
+
+
+@pytest.mark.asyncio
+async def test_enricher_skips_non_uc_channel_ids(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche, cn = await _setup_verified_niche(session, "Sim Racing")
+
+    adapter = FakeSearchAdapter({
+        "Sim Racing": [
+            _FakeItem("Author Name", "not-a-uc-id", None),
+            _FakeItem("Real Channel", "UCeeeeeeeeeeeeeeeeeeeeee", None),
+        ],
+    })
+    enricher = FakeEnricher({
+        "UCeeeeeeeeeeeeeeeeeeeeee": 75_000,
+    })
+
+    estimator = EcosystemEstimator(
+        adapter, session,
+        EcoConfig(min_followers=10_000, max_followers=200_000),
+        enricher=enricher,
+    )
+    run = await estimator.estimate(campaign.id)
+
+    assert enricher.called_with == ["UCeeeeeeeeeeeeeeeeeeeeee"]
+    assert run.stats["extra"]["results"][0]["target_band_creators"] == 1
