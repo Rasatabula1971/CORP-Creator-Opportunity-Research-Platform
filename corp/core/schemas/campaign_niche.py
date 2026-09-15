@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from corp.core.models.campaign_niche import CampaignNicheStatus
+from corp.core.schemas.niche import NicheResponse
 
 
 class CampaignNicheCreate(BaseModel):
@@ -29,3 +30,7 @@ class CampaignNicheResponse(BaseModel):
     rationale: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class CampaignNicheDetailResponse(CampaignNicheResponse):
+    niche: NicheResponse

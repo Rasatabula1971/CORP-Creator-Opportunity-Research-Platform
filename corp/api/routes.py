@@ -5,10 +5,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from corp.core.models.campaign import Campaign
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.creator import Creator, CreatorStatus
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import Evidence
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
+from corp.core.schemas.campaign import CampaignResponse
+from corp.core.schemas.campaign_niche import CampaignNicheDetailResponse
 from corp.core.schemas.creator import (
     CreatorDetailResponse,
     CreatorResponse,
@@ -23,6 +28,87 @@ from corp.database import get_session
 from corp.workers.dossier.generator import DossierGenerator
 
 router = APIRouter()
+
+
+# ── Campaigns ────────────────────────────────────────────────────────
+
+
+@router.get("/campaigns", response_model=list[CampaignResponse])
+async def list_campaigns(
+    response: Response,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    total = (await session.execute(select(func.count()).select_from(Campaign))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
+    result = await session.execute(
+        select(Campaign).order_by(Campaign.created_at.desc()).offset(offset).limit(limit)
+    )
+    return [CampaignResponse.model_validate(c) for c in result.scalars().all()]
+
+
+@router.get("/campaigns/{campaign_id}", response_model=CampaignResponse)
+async def get_campaign(
+    campaign_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    campaign = await session.get(Campaign, campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return CampaignResponse.model_validate(campaign)
+
+
+@router.get(
+    "/campaigns/{campaign_id}/niches",
+    response_model=list[CampaignNicheDetailResponse],
+)
+async def list_campaign_niches(
+    campaign_id: str,
+    status: CampaignNicheStatus | None = None,
+    session: AsyncSession = Depends(get_session),
+):
+    if await session.get(Campaign, campaign_id) is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    query = (
+        select(CampaignNiche)
+        .options(selectinload(CampaignNiche.niche))
+        .where(CampaignNiche.campaign_id == campaign_id)
+    )
+    if status is not None:
+        query = query.where(CampaignNiche.status == status)
+    query = query.order_by(CampaignNiche.qualification_score.desc().nulls_last())
+    result = await session.execute(query)
+    return [CampaignNicheDetailResponse.model_validate(cn) for cn in result.scalars().all()]
+
+
+@router.get("/campaigns/{campaign_id}/creators", response_model=list[CreatorResponse])
+async def list_campaign_creators(
+    campaign_id: str,
+    niche_status: CampaignNicheStatus = CampaignNicheStatus.SELECTED,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    if await session.get(Campaign, campaign_id) is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    query = (
+        select(Creator)
+        .join(CreatorNiche, CreatorNiche.creator_id == Creator.id)
+        .join(CampaignNiche, CampaignNiche.niche_id == CreatorNiche.niche_id)
+        .where(
+            CampaignNiche.campaign_id == campaign_id,
+            CampaignNiche.status == niche_status,
+        )
+        .distinct()
+        .order_by(Creator.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(query)
+    return [CreatorResponse.model_validate(c) for c in result.scalars().all()]
 
 
 # ── Creators ─────────────────────────────────────────────────────────
