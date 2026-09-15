@@ -8,7 +8,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from corp.api.jobs import PIPELINES, JobResponse, registry, run_pipeline, run_research
+from corp.api.jobs import (
+    CAMPAIGN_PIPELINES,
+    PIPELINES,
+    JobResponse,
+    registry,
+    run_campaign_pipeline,
+    run_pipeline,
+    run_research,
+)
+from corp.core.models.campaign import Campaign
+from corp.core.schemas.campaign import CampaignCreate, CampaignResponse
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -52,6 +62,11 @@ class PipelineRunRequest(BaseModel):
     platform: str | None = None
     identifier: str | None = None
     skip_collect: bool = False
+
+
+class CampaignPipelineRequest(BaseModel):
+    source: str | None = None
+    query: str | None = None
 
 
 class SignalSummary(BaseModel):
@@ -205,6 +220,55 @@ async def get_job(job_id: str):
     job = registry.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+# ── Campaigns: write ────────────────────────────────────────────────
+
+
+@router.post("/campaigns", response_model=CampaignResponse, status_code=201)
+async def create_campaign(
+    body: CampaignCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    campaign = Campaign(**body.model_dump())
+    session.add(campaign)
+    await session.commit()
+    await session.refresh(campaign)
+    return CampaignResponse.model_validate(campaign)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/{stage}",
+    response_model=JobResponse,
+    status_code=202,
+)
+async def start_campaign_pipeline(
+    campaign_id: str,
+    stage: str,
+    background: BackgroundTasks,
+    body: CampaignPipelineRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+):
+    if stage not in CAMPAIGN_PIPELINES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"stage must be one of {', '.join(CAMPAIGN_PIPELINES)}",
+        )
+    if await session.get(Campaign, campaign_id) is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if (active := registry.active_for_campaign(campaign_id)) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A job is already running for this campaign: {active.id}",
+        )
+    source = body.source if body else None
+    query = body.query if body else None
+    if stage == "discover" and not (source and query):
+        raise HTTPException(status_code=422, detail="discover requires source and query")
+    job = registry.create(stage, campaign_id=campaign_id)
+    work = lambda: run_campaign_pipeline(stage, campaign_id, source=source, query=query)  # noqa: E731
+    background.add_task(registry.execute, job, work)
     return job
 
 

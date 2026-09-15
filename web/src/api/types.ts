@@ -42,12 +42,79 @@ export interface Job {
   id: string;
   kind: string;
   creator_id: string | null;
+  campaign_id: string | null;
   status: JobStatus;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
   error: string | null;
   result: Record<string, unknown> | null;
+}
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  research_profile_version: string | null;
+  target_niche_count: number;
+  initial_creators_per_niche: number;
+  creator_min_followers: number;
+  creator_max_followers: number;
+  human_gate_capacity: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignCreateInput {
+  name: string;
+  research_profile_version?: string | null;
+  target_niche_count?: number;
+  initial_creators_per_niche?: number;
+  creator_min_followers?: number;
+  creator_max_followers?: number;
+  human_gate_capacity?: number;
+}
+
+export type CampaignNicheStatus =
+  | "discovered"
+  | "candidate"
+  | "canonical"
+  | "verified"
+  | "qualified"
+  | "selected"
+  | "rejected";
+
+export interface CampaignNiche {
+  id: string;
+  campaign_id: string;
+  niche_id: string;
+  discovery_rank: number | null;
+  qualification_score: number | null;
+  confidence: number | null;
+  research_completeness: number | null;
+  creator_count_observed: number;
+  target_band_creator_count: number | null;
+  status: CampaignNicheStatus;
+  selected: boolean;
+  rationale: string | null;
+  created_at: string;
+  updated_at: string;
+  niche?: Niche;
+}
+
+export interface Niche {
+  id: string;
+  canonical_name: string;
+  description: string | null;
+  parent_domain: string | null;
+  policy_class: string | null;
+  lifecycle_status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SignalSummary {
