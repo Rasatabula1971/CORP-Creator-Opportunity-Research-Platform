@@ -370,6 +370,21 @@ async def _run_research_campaign(
         await _close(provider)
 
 
+async def _run_prune(retention_days: int, apply: bool) -> int:
+    from corp.database import async_session
+    from corp.workers.maintenance import PruneService
+
+    async with async_session() as session:
+        report = await PruneService(session, retention_days=retention_days).prune(apply=apply)
+        if apply:
+            await session.commit()
+
+    verb = "deleted" if apply else "would delete (dry-run; pass --apply to remove)"
+    print(f"prune retention={report.retention_days}d cutoff={report.cutoff}")
+    print(f"  metrics_snapshots: {report.metrics_snapshots:,} {verb}")
+    return 0
+
+
 async def _run_warm_init() -> int:
     from corp.warmstore.store import WarmStore
 
@@ -556,6 +571,16 @@ def main(argv: list[str] | None = None) -> int:
         "query", help="youtube: 'ytsearch5:<keywords>' (yt-dlp search); reddit: r/<subreddit>"
     )
 
+    prune = sub.add_parser(
+        "prune",
+        help="delete safe-to-drop bulk history (metrics_snapshots) from Postgres; "
+        "the warm store keeps the full record",
+    )
+    prune.add_argument("--retention-days", type=int, default=90)
+    prune.add_argument(
+        "--apply", action="store_true", help="actually delete (default is a dry-run)"
+    )
+
     sub.add_parser("warm-init", help="initialize the warm store SQLite database")
     sub.add_parser("warm-status", help="show warm store row counts and path")
     warm_export = sub.add_parser("warm-export", help="export warm store tables to JSONL")
@@ -608,6 +633,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.pipeline == "discover":
         return asyncio.run(_run_discover(args.campaign_id, args.source, args.query))
+    if args.pipeline == "prune":
+        return asyncio.run(_run_prune(args.retention_days, args.apply))
     if args.pipeline == "warm-init":
         return asyncio.run(_run_warm_init())
     if args.pipeline == "warm-status":
