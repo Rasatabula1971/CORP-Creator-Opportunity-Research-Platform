@@ -33,6 +33,21 @@ pip install -e ".[dev]"
 First run of the intelligence pipeline also downloads the `all-MiniLM-L6-v2`
 embedding model (~90 MB) via sentence-transformers.
 
+> **Windows note — `hdbscan` and `umap-learn`.** These two clustering
+> dependencies compile native/Numba code and often fail to build from source on
+> Windows with a plain `pip install`. If the install errors on either one:
+>
+> - Easiest: create the environment with conda and install them first —
+>   `conda install -c conda-forge hdbscan umap-learn` — then run
+>   `pip install -e ".[dev]"` for the rest.
+> - Or with pip: make sure you're on a recent Python that has prebuilt wheels
+>   for both, upgrade the build tooling (`pip install --upgrade pip setuptools wheel`),
+>   and if it still tries to compile, install the "Desktop development with C++"
+>   workload from the Visual Studio Build Tools.
+>
+> Everything else (Postgres, migrations, the API, the dashboard) has no native
+> build step and installs cleanly.
+
 ## 2. Start PostgreSQL + pgvector
 
 ```
