@@ -7,12 +7,9 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
-import google.generativeai as genai
-from google.api_core.exceptions import (
-    DeadlineExceeded,
-    ResourceExhausted,
-    ServiceUnavailable,
-)
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
@@ -24,7 +21,8 @@ from corp.workers.providers.errors import ProviderExhaustedError, ProviderUnavai
 
 logger = logging.getLogger(__name__)
 
-_TRANSIENT = (ServiceUnavailable, DeadlineExceeded)
+# Any 5xx (503 unavailable, 504 deadline, ...) is worth a retry; 4xx is not.
+_TRANSIENT = (genai_errors.ServerError,)
 _RETRY_IN_RE = re.compile(r"retry in (\d+(?:\.\d+)?)\s*s", re.IGNORECASE)
 
 
@@ -76,11 +74,7 @@ class GeminiProvider(LLMProvider):
         retry_wait_min: float = 2.0,
         retry_wait_max: float = 30.0,
     ) -> None:
-        genai.configure(api_key=api_key)
-        self._model = genai.GenerativeModel(
-            model,
-            system_instruction=None,
-        )
+        self._client = genai.Client(api_key=api_key)
         self._model_id = model
         self._temperature = temperature
         self._retry_attempts = retry_attempts
@@ -91,8 +85,8 @@ class GeminiProvider(LLMProvider):
     def model_name(self) -> str:
         return self._model_id
 
-    async def _generate_with_retry(self, model: Any, prompt: str, config: Any) -> Any:
-        """Retry only transient errors (503/504). A 429 is never retried here:
+    async def _generate_with_retry(self, prompt: str, config: Any) -> Any:
+        """Retry only transient errors (5xx). A 429 is never retried here:
         it becomes ProviderExhaustedError immediately so a pool can fail over
         instead of this call sleeping through a cap that will not clear."""
         try:
@@ -105,9 +99,13 @@ class GeminiProvider(LLMProvider):
                 reraise=True,
             ):
                 with attempt:
-                    return await model.generate_content_async(prompt, generation_config=config)
-        except ResourceExhausted as exc:
-            raise classify_quota_error(self._model_id, exc) from exc
+                    return await self._client.aio.models.generate_content(
+                        model=self._model_id, contents=prompt, config=config
+                    )
+        except genai_errors.ClientError as exc:
+            if exc.code == 429:
+                raise classify_quota_error(self._model_id, exc) from exc
+            raise
         except _TRANSIENT as exc:
             raise ProviderUnavailableError(
                 self._model_id, f"{type(exc).__name__} after {self._retry_attempts} attempts"
@@ -118,17 +116,12 @@ class GeminiProvider(LLMProvider):
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
     ) -> dict:
         del schema  # JSON mode only; the prompt describes the shape
-        model = self._model
-        if system:
-            model = genai.GenerativeModel(
-                self._model_id, system_instruction=system
-            )
-
-        config = genai.GenerationConfig(
+        config = genai_types.GenerateContentConfig(
+            system_instruction=system,
             response_mime_type="application/json",
             temperature=self._temperature,
         )
-        response = await self._generate_with_retry(model, prompt, config)
+        response = await self._generate_with_retry(prompt, config)
         raw = response.text
         result = json.loads(raw)
 

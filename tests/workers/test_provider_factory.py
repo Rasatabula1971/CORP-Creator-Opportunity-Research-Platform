@@ -54,9 +54,8 @@ def fake_fair(monkeypatch):
 @pytest.fixture
 def stub_genai(monkeypatch):
     """Keep GeminiProvider construction offline."""
-    monkeypatch.setattr("corp.workers.providers.registry.genai.configure", lambda **kw: None)
     monkeypatch.setattr(
-        "corp.workers.providers.registry.genai.GenerativeModel", lambda *a, **kw: object()
+        "corp.workers.providers.registry.genai.Client", lambda *a, **kw: object()
     )
 
 

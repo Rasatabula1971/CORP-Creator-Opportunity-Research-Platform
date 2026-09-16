@@ -33,12 +33,16 @@ async def test_response_hash_order_independent():
 # ── Gemini quota classification (offline: genai stubbed) ─────────────
 
 
-class _FakeModel:
+class _FakeClient:
+    """Stands in for genai.Client; scripts client.aio.models.generate_content."""
+
     def __init__(self, outcomes: list):
         self.outcomes = list(outcomes)
         self.calls = 0
+        self.aio = self
+        self.models = self
 
-    async def generate_content_async(self, prompt, generation_config=None):
+    async def generate_content(self, *, model, contents, config):
         self.calls += 1
         item = self.outcomes.pop(0)
         if isinstance(item, BaseException):
@@ -51,17 +55,30 @@ class _Response:
         self.text = text
 
 
+def _client_error(code: int, message: str):
+    from google.genai import errors as genai_errors
+
+    body = {"error": {"message": message, "status": "RESOURCE_EXHAUSTED"}}
+    return genai_errors.ClientError(code, body)
+
+
+def _server_error(code: int, message: str):
+    from google.genai import errors as genai_errors
+
+    body = {"error": {"message": message, "status": "UNAVAILABLE"}}
+    return genai_errors.ServerError(code, body)
+
+
 @pytest.fixture
 def gemini(monkeypatch):
-    """A GeminiProvider whose model is a scripted fake; retries are near-instant."""
-    fakes: list[_FakeModel] = []
+    """A GeminiProvider whose client is a scripted fake; retries are near-instant."""
+    fakes: list[_FakeClient] = []
 
     def make(outcomes):
-        fake = _FakeModel(outcomes)
+        fake = _FakeClient(outcomes)
         fakes.append(fake)
-        monkeypatch.setattr("corp.workers.providers.registry.genai.configure", lambda **kw: None)
         monkeypatch.setattr(
-            "corp.workers.providers.registry.genai.GenerativeModel", lambda *a, **kw: fake
+            "corp.workers.providers.registry.genai.Client", lambda *a, **kw: fake
         )
         return (
             GeminiProvider(
@@ -96,9 +113,7 @@ async def test_success_parses_json(gemini):
 
 
 async def test_daily_cap_is_exhausted_immediately_no_retry(gemini):
-    from google.api_core.exceptions import ResourceExhausted
-
-    provider, fake = gemini([ResourceExhausted(DAILY_429)])
+    provider, fake = gemini([_client_error(429, DAILY_429)])
     with pytest.raises(ProviderExhaustedError) as info:
         await provider.generate_json("p")
     assert info.value.daily is True
@@ -108,9 +123,7 @@ async def test_daily_cap_is_exhausted_immediately_no_retry(gemini):
 
 
 async def test_per_minute_limit_carries_retry_after(gemini):
-    from google.api_core.exceptions import ResourceExhausted
-
-    provider, fake = gemini([ResourceExhausted(MINUTE_429)])
+    provider, fake = gemini([_client_error(429, MINUTE_429)])
     with pytest.raises(ProviderExhaustedError) as info:
         await provider.generate_json("p")
     assert info.value.daily is False
@@ -119,20 +132,27 @@ async def test_per_minute_limit_carries_retry_after(gemini):
 
 
 async def test_transient_is_retried_then_unavailable(gemini):
-    from google.api_core.exceptions import ServiceUnavailable
-
-    provider, fake = gemini([ServiceUnavailable("503")] * 3)
+    provider, fake = gemini([_server_error(503, "unavailable")] * 3)
     with pytest.raises(ProviderUnavailableError):
         await provider.generate_json("p")
     assert fake.calls == 3
 
 
 async def test_transient_then_success_recovers(gemini):
-    from google.api_core.exceptions import DeadlineExceeded
-
-    provider, fake = gemini([DeadlineExceeded("504"), _Response('{"ok": 2}')])
+    provider, fake = gemini([_server_error(504, "deadline"), _Response('{"ok": 2}')])
     assert await provider.generate_json("p") == {"ok": 2}
     assert fake.calls == 2
+
+
+async def test_non_quota_client_error_passes_through(gemini):
+    # A 400 (bad request) is neither transient nor a quota signal: no retry,
+    # no ProviderExhaustedError — the original error surfaces.
+    from google.genai import errors as genai_errors
+
+    provider, fake = gemini([_client_error(400, "bad request")])
+    with pytest.raises(genai_errors.ClientError):
+        await provider.generate_json("p")
+    assert fake.calls == 1
 
 
 def test_classify_quota_error_daily_vs_minute():
