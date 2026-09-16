@@ -129,7 +129,8 @@ async def test_extract_observations_text_truncation():
 
 
 async def test_prompt_version_constant():
-    assert EXTRACTION_PROMPT_VERSION == "extract_v1"
+    # v3 = per-comment + batch mode with sentiment/urgency and cross-comment synthesis.
+    assert EXTRACTION_PROMPT_VERSION == "extract_v3"
 
 
 async def test_is_inferred_flag_preserved():

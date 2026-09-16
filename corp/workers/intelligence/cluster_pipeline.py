@@ -6,6 +6,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.content import ContentItem
 from corp.core.models.creator import CreatorStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
@@ -92,6 +93,14 @@ class ClusterPipeline:
                         observations, clusters, model_name, creator_id, embeddings
                     )
                     stats.extra["clusters"] = len(clusters)
+                    if creator_id:
+                        # Roll the cluster labels into ContentItem.topics so the
+                        # dashboard's per-content topic list carries both the
+                        # LLM-classified topics and the cluster-derived ones.
+                        # Cross-creator runs skip this since topics attach to
+                        # one creator's content, not to shared clusters.
+                        await self._unify_topics(creator_id, clusters)
+                        run.record_step("unify_topics", "completed")
                 stats.ok()
                 await finish_run(self._session, run, stats)
         except Exception as exc:
@@ -159,6 +168,64 @@ class ClusterPipeline:
                 )
 
             await self._session.flush()
+
+
+    async def _unify_topics(
+        self,
+        creator_id: str,
+        clusters: list[ClusterResult],
+    ) -> None:
+        """Merge cluster labels into the creator's ContentItem.topics list.
+
+        Produces a unified per-item topic list: cluster-derived topics (with
+        frequency and evidence strength) get merged with any existing LLM-
+        classified topics, deduplicated case-insensitively, and capped at 15.
+        Every content item for the creator receives the same unified list so
+        the front-end can render one topic pill row per creator regardless of
+        which content item it displays.
+        """
+        result = await self._session.execute(
+            select(ContentItem).where(ContentItem.creator_id == creator_id)
+        )
+        content_items = list(result.scalars().all())
+        if not content_items:
+            return
+
+        cluster_topics = [
+            {
+                "name": cr.label,
+                "confidence": round(cr.evidence_strength, 2),
+                "evidence_count": cr.frequency,
+                "source": "cluster",
+            }
+            for cr in clusters
+        ]
+        cluster_topics.sort(key=lambda t: t["evidence_count"], reverse=True)
+
+        existing_topics = content_items[0].topics or []
+        cluster_names_lower = {t["name"].lower() for t in cluster_topics}
+        unified = list(cluster_topics)
+        for et in existing_topics:
+            if not isinstance(et, dict):
+                continue
+            if et.get("name", "").lower() in cluster_names_lower:
+                continue
+            et_copy = dict(et)
+            et_copy.setdefault("source", "llm")
+            unified.append(et_copy)
+
+        unified = unified[:15]
+
+        for ci in content_items:
+            ci.topics = unified
+        await self._session.flush()
+        logger.info(
+            "Unified topics for creator %s: %d cluster + %d LLM → %d total",
+            creator_id,
+            len(cluster_topics),
+            len(existing_topics),
+            len(unified),
+        )
 
 
 def _cosine_to_centroid(vectors: np.ndarray, centroid: np.ndarray) -> np.ndarray:
