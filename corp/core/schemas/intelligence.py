@@ -23,8 +23,6 @@ class ProblemObservationResponse(BaseModel):
     text: str
     category: str | None
     is_inferred: bool
-    sentiment: str | None = None
-    urgency: str | None = None
     extraction_prompt_version: str
     model_version: str
     confidence: float | None
