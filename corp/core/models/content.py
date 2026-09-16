@@ -48,6 +48,11 @@ class ContentItem(TimestampMixin, Base):
     topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # Adapter metadata worth keeping: commerce_signals, link kinds, tags, music, domain.
     extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Typed video enrichment, cheaper to query than pulling them out of `extra`.
+    duration: Mapped[int | None] = mapped_column(Integer)
+    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(10))
+    is_short: Mapped[bool | None] = mapped_column()
 
     interactions: Mapped[list["AudienceInteraction"]] = relationship(
         back_populates="content_item", cascade="all, delete-orphan"

@@ -1,6 +1,7 @@
 from corp.core.models.base import Base, TimestampMixin
 from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
+from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
@@ -25,6 +26,9 @@ __all__ = [
     "CampaignStatus",
     "CampaignNiche",
     "CampaignNicheStatus",
+    "Competitor",
+    "CompetitorStrength",
+    "CompetitorType",
     "Creator",
     "CreatorPlatformAccount",
     "CreatorStatus",

@@ -29,6 +29,8 @@ class ProblemObservation(TimestampMixin, Base):
     source_side: Mapped[str] = mapped_column(
         String(20), default="audience", server_default="audience", nullable=False
     )
+    sentiment: Mapped[str | None] = mapped_column(String(20))
+    urgency: Mapped[str | None] = mapped_column(String(20))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     cluster_memberships: Mapped[list["ProblemClusterMember"]] = relationship(

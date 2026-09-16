@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, func
@@ -124,9 +124,34 @@ class ResearchRun(TimestampMixin, Base):
     prompt_versions: Mapped[dict | None] = mapped_column(JSONB)
     model_versions: Mapped[dict | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
+    # Per-stage progress log. Optional — populated by call sites that want
+    # fine-grained step tracking; the niche-discovery pipeline instead uses
+    # `stats` for its own run-lifecycle bookkeeping. Not yet unified.
+    steps: Mapped[list | None] = mapped_column(JSONB, default=list)
 
     # No delete cascade: query history is research memory (§13) and must
     # outlive the run that produced it — same reasoning as Slices 3–4.
     research_queries: Mapped[list["ResearchQuery"]] = relationship(
         back_populates="research_run"
     )
+
+    def record_step(
+        self,
+        name: str,
+        status: str,
+        detail: dict | None = None,
+    ) -> None:
+        if self.steps is None:
+            self.steps = []
+        now = datetime.now(timezone.utc).isoformat()
+        for step in self.steps:
+            if step["name"] == name:
+                step["status"] = status
+                step["completed_at"] = now
+                if detail:
+                    step["detail"] = detail
+                return
+        entry: dict = {"name": name, "status": status, "started_at": now}
+        if detail:
+            entry["detail"] = detail
+        self.steps.append(entry)
