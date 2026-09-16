@@ -11,7 +11,7 @@ import {
   useStartResearch,
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
-import type { ClusterDetail } from "../api/types";
+import type { ClusterDetail, Competitor } from "../api/types";
 
 export function CreatorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,7 +76,7 @@ export function CreatorDetailPage() {
 
       {/* Data Coverage + Score */}
       {dossier && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           <StatTile label="Score Band" value={dossier.score_band} />
           <StatTile
             label="Sources"
@@ -89,6 +89,10 @@ export function CreatorDetailPage() {
           <StatTile
             label="Clusters"
             value={String(dossier.data_coverage.cluster_count)}
+          />
+          <StatTile
+            label="Competitors"
+            value={String(dossier.data_coverage.competitor_count ?? 0)}
           />
         </div>
       )}
@@ -113,6 +117,11 @@ export function CreatorDetailPage() {
               <ClusterCard
                 key={c.id}
                 cluster={c}
+                competitors={
+                  dossier?.opportunities.find(
+                    (o) => o.cluster.id === c.id,
+                  )?.competitors ?? []
+                }
                 expanded={expandedCluster === c.id}
                 onToggle={() =>
                   setExpandedCluster(expandedCluster === c.id ? null : c.id)
@@ -197,10 +206,12 @@ function StatTile({ label, value }: { label: string; value: string }) {
 
 function ClusterCard({
   cluster,
+  competitors,
   expanded,
   onToggle,
 }: {
   cluster: ClusterDetail;
+  competitors: Competitor[];
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -295,10 +306,79 @@ function ClusterCard({
             </div>
           )}
 
+          {competitors.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-medium text-neutral-500">
+                Competitors ({competitors.length})
+              </p>
+              <ul className="space-y-1">
+                {competitors.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-start justify-between gap-2 rounded bg-neutral-50 px-2 py-1 text-xs dark:bg-neutral-800/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      {c.url ? (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium underline decoration-neutral-400 hover:decoration-neutral-700"
+                        >
+                          {c.name}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{c.name}</span>
+                      )}
+                      {c.gap_notes && (
+                        <p className="mt-0.5 text-neutral-500">{c.gap_notes}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-none gap-1">
+                      <CompetitorBadge kind="type" value={c.competitor_type} />
+                      <CompetitorBadge kind="strength" value={c.strength} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <ObservationsPreview clusterId={cluster.id} />
         </div>
       )}
     </div>
+  );
+}
+
+function CompetitorBadge({
+  kind,
+  value,
+}: {
+  kind: "type" | "strength";
+  value: string;
+}) {
+  const palette: Record<string, string> =
+    kind === "strength"
+      ? {
+          weak: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
+          moderate: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+          strong: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+        }
+      : {
+          direct: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+          substitute:
+            "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+          diy_workaround:
+            "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300",
+        };
+  const cls =
+    palette[value] ??
+    "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300";
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>
+      {value.replace(/_/g, " ")}
+    </span>
   );
 }
 
@@ -317,10 +397,28 @@ function ObservationsPreview({ clusterId }: { clusterId: string }) {
             key={obs.id}
             className="rounded bg-neutral-50 px-2 py-1 text-xs dark:bg-neutral-800/50"
           >
-            {obs.text}
-            {obs.category && (
-              <span className="ml-2 text-neutral-400">[{obs.category}]</span>
-            )}
+            <div>{obs.text}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+              {obs.category && (
+                <span className="text-neutral-400">[{obs.category}]</span>
+              )}
+              {obs.urgency && obs.urgency !== "low" && (
+                <UrgencyPill value={obs.urgency} />
+              )}
+              {obs.sentiment && obs.sentiment !== "neutral" && (
+                <SentimentPill value={obs.sentiment} />
+              )}
+              {obs.source_side === "creator" && (
+                <span className="rounded bg-sky-100 px-1 py-0.5 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">
+                  creator
+                </span>
+              )}
+              {obs.is_inferred && (
+                <span className="rounded bg-violet-100 px-1 py-0.5 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                  inferred
+                </span>
+              )}
+            </div>
           </li>
         ))}
         {data.totalCount > 5 && (
@@ -331,6 +429,26 @@ function ObservationsPreview({ clusterId }: { clusterId: string }) {
       </ul>
     </div>
   );
+}
+
+function UrgencyPill({ value }: { value: "low" | "medium" | "high" }) {
+  const cls =
+    value === "high"
+      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200"
+      : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200";
+  return <span className={`rounded px-1 py-0.5 font-medium ${cls}`}>{value}</span>;
+}
+
+function SentimentPill({
+  value,
+}: {
+  value: "positive" | "neutral" | "negative";
+}) {
+  const cls =
+    value === "positive"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+      : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200";
+  return <span className={`rounded px-1 py-0.5 font-medium ${cls}`}>{value}</span>;
 }
 
 function DecisionPanel({ creatorId }: { creatorId: string }) {

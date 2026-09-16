@@ -5,6 +5,7 @@ import type {
   CampaignCreateInput,
   CampaignNiche,
   ClusterDetail,
+  Competitor,
   Creator,
   CreatorCreateInput,
   CreatorDetail,
@@ -59,6 +60,14 @@ export function useDossier(creatorId: string | undefined) {
   return useQuery({
     queryKey: ["creators", creatorId, "dossier"],
     queryFn: () => api.get<DossierJson>(`/creators/${creatorId}/dossier.json`),
+    enabled: !!creatorId,
+  });
+}
+
+export function useCompetitors(creatorId: string | undefined) {
+  return useQuery({
+    queryKey: ["creators", creatorId, "competitors"],
+    queryFn: () => api.get<Competitor[]>(`/creators/${creatorId}/competitors`),
     enabled: !!creatorId,
   });
 }

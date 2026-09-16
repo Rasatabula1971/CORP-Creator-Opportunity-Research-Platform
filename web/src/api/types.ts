@@ -156,6 +156,24 @@ export interface ProblemObservation {
   text: string;
   category: string | null;
   is_inferred: boolean;
+  // Post-integration fields from the merged tier2 + niche-discovery pipelines.
+  sentiment?: "positive" | "neutral" | "negative" | null;
+  urgency?: "low" | "medium" | "high" | null;
+  source_side?: "audience" | "creator";
+}
+
+export type CompetitorType = "direct" | "substitute" | "diy_workaround";
+export type CompetitorStrength = "weak" | "moderate" | "strong";
+
+export interface Competitor {
+  id: string;
+  problem_cluster_id: string;
+  name: string;
+  competitor_type: CompetitorType;
+  strength: CompetitorStrength;
+  url: string | null;
+  gap_notes: string | null;
+  evidence_id: string | null;
 }
 
 export interface Decision {
@@ -188,12 +206,14 @@ export interface DossierJson {
     score: OpportunityScore;
     signal: SignalSummary | null;
     observations: ProblemObservation[];
+    competitors: Competitor[];
   }>;
   data_coverage: {
     source_count: number;
     evidence_count: number;
     cluster_count: number;
     observation_count: number;
+    competitor_count: number;
   };
   generated_at: string;
 }

@@ -9,7 +9,13 @@ import {
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
 
-const PIPELINE_STAGES = [
+interface PipelineStage {
+  readonly key: string;
+  readonly label: string;
+  readonly needsInput?: boolean;
+}
+
+const PIPELINE_STAGES: readonly PipelineStage[] = [
   { key: "discover", label: "Discover Niches", needsInput: true },
   { key: "candidates", label: "Generate Candidates" },
   { key: "canonicalize", label: "Canonicalize" },
@@ -19,7 +25,7 @@ const PIPELINE_STAGES = [
   { key: "select", label: "Select" },
   { key: "onboard", label: "Onboard Creators" },
   { key: "research-campaign", label: "Research Campaign" },
-] as const;
+];
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
