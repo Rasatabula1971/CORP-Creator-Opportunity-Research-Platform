@@ -1,9 +1,7 @@
 """API routes — CORP Step 8 endpoints."""
 
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,7 +18,7 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import Gate, ResearchRun
+from corp.core.models.workflow import ResearchRun
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheDetailResponse
 from corp.core.schemas.competitive import CompetitorResponse
@@ -342,18 +340,8 @@ async def create_decision(
     body: DecisionCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    # The URL scopes the decision to this creator and this endpoint only records
-    # Gate A. Reject a body that says otherwise instead of silently overriding it,
-    # so a caller never gets a 201 describing a decision different from what it sent.
-    if body.creator_id != creator_id:
-        raise HTTPException(
-            status_code=400, detail="Body creator_id does not match the URL"
-        )
-    if body.gate != Gate.GATE_A:
-        raise HTTPException(
-            status_code=400, detail="This endpoint only records Gate A decisions"
-        )
-
+    # The URL alone scopes the decision: DecisionCreate carries no creator_id
+    # or gate field, so the body cannot disagree with the endpoint.
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")

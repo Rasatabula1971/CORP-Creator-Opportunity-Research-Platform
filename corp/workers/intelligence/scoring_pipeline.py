@@ -377,12 +377,6 @@ class ScoringPipeline:
 
     # ── Scoring ──────────────────────────────────────────────────────
 
-    async def _get_competitor_strengths(self, cluster_id: str) -> list:
-        result = await self._session.execute(
-            select(Competitor.strength).where(Competitor.problem_cluster_id == cluster_id)
-        )
-        return list(result.scalars().all())
-
     async def _score_opportunity(
         self,
         cluster: ProblemCluster,
@@ -396,7 +390,6 @@ class ScoringPipeline:
 
         signal_level = signal.signal_level if signal else SignalLevel.WEAK
         signal_confidence = signal.confidence if signal and signal.confidence is not None else 0.0
-        competitor_strengths = await self._get_competitor_strengths(cluster.id)
 
         matching_creator = sum(
             1

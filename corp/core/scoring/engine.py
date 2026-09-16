@@ -13,9 +13,6 @@ from corp.core.models.intent import SignalLevel
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-
 def load_scoring_rules(rules_path: str) -> dict[str, Any]:
     path = Path(rules_path)
     if not path.is_absolute():

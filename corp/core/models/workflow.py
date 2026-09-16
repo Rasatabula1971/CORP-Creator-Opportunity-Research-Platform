@@ -141,17 +141,22 @@ class ResearchRun(TimestampMixin, Base):
         status: str,
         detail: dict | None = None,
     ) -> None:
-        if self.steps is None:
-            self.steps = []
+        # Copy-on-write: mutating the JSONB list/dicts in place never fires
+        # SQLAlchemy's change tracking, so updates after the first flush would
+        # silently not persist. Rebuilding the list and reassigning the
+        # attribute makes every call a tracked set.
         now = datetime.now(timezone.utc).isoformat()
-        for step in self.steps:
+        steps = [dict(step) for step in (self.steps or [])]
+        for step in steps:
             if step["name"] == name:
                 step["status"] = status
                 step["completed_at"] = now
                 if detail:
                     step["detail"] = detail
+                self.steps = steps
                 return
         entry: dict = {"name": name, "status": status, "started_at": now}
         if detail:
             entry["detail"] = detail
-        self.steps.append(entry)
+        steps.append(entry)
+        self.steps = steps

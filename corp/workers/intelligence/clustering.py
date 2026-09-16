@@ -1,4 +1,4 @@
-"""Problem observation clustering via BERTopic (UMAP + HDBSCAN + c-TF-IDF)."""
+"""Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling."""
 
 import logging
 from dataclasses import dataclass
@@ -42,10 +42,7 @@ def cluster_observations(
     timestamps: list[datetime | None] | None = None,
     config: ClusteringConfig | None = None,
 ) -> list[ClusterResult]:
-    """Cluster observation texts using BERTopic (UMAP + HDBSCAN + c-TF-IDF).
-
-    Uses pre-computed embeddings. BERTopic handles dimensionality reduction,
-    density-based clustering, and c-TF-IDF label generation internally.
+    """Cluster observation texts using UMAP + HDBSCAN.
 
     Args:
         texts: ProblemObservation.text values.
@@ -56,26 +53,19 @@ def cluster_observations(
     Returns:
         List of ClusterResult, one per discovered cluster (noise excluded).
     """
-    cfg = config or ClusteringConfig()
-
-    if len(texts) < cfg.min_cluster_size:
+    if len(texts) < (config or ClusteringConfig()).min_cluster_size:
         logger.info("Too few observations (%d) to cluster", len(texts))
         return []
 
-    topic_assignments = _fit_bertopic(texts, embeddings, cfg)
-    return _build_clusters(texts, topic_assignments, timestamps)
+    cfg = config or ClusteringConfig()
+
+    reduced = _reduce_dimensions(embeddings, cfg)
+    labels = _run_hdbscan(reduced, cfg)
+    return _build_clusters(texts, labels, timestamps)
 
 
-def _fit_bertopic(
-    texts: list[str],
-    embeddings: np.ndarray,
-    cfg: ClusteringConfig,
-) -> list[int]:
-    """Run BERTopic with pre-computed embeddings and return topic assignments."""
-    from bertopic import BERTopic
-    from hdbscan import HDBSCAN
-    from sklearn.feature_extraction.text import CountVectorizer
-    from umap import UMAP
+def _reduce_dimensions(embeddings: np.ndarray, cfg: ClusteringConfig) -> np.ndarray:
+    import umap
 
     n_samples = embeddings.shape[0]
     if n_samples <= cfg.umap_n_components + 1:
@@ -88,81 +78,43 @@ def _fit_bertopic(
     n_components = min(cfg.umap_n_components, n_samples - 1)
     n_neighbors = min(cfg.umap_n_neighbors, n_samples - 1)
 
-    umap_model = UMAP(
+    reducer = umap.UMAP(
         n_components=max(n_components, 2),
         n_neighbors=max(n_neighbors, 2),
         random_state=cfg.umap_seed,
         metric="cosine",
     )
-    hdbscan_model = HDBSCAN(
+    return reducer.fit_transform(embeddings)
+
+
+def _run_hdbscan(reduced: np.ndarray, cfg: ClusteringConfig) -> np.ndarray:
+    import hdbscan
+
+    clusterer = hdbscan.HDBSCAN(
         min_cluster_size=cfg.min_cluster_size,
         min_samples=cfg.min_samples,
         metric="euclidean",
     )
-    vectorizer = CountVectorizer(stop_words="english", min_df=1)
-
-    topic_model = BERTopic(
-        umap_model=umap_model,
-        hdbscan_model=hdbscan_model,
-        vectorizer_model=vectorizer,
-        calculate_probabilities=False,
-    )
-
-    topics, _ = topic_model.fit_transform(texts, embeddings=embeddings)
-
-    _TOPIC_MODEL_CACHE.model = topic_model
-    return list(topics)
-
-
-class _TopicModelCache:
-    """Holds the last fitted BERTopic model for label extraction."""
-    model = None
-
-_TOPIC_MODEL_CACHE = _TopicModelCache()
-
-
-def get_topic_labels() -> dict[int, str]:
-    """Return topic_id → c-TF-IDF label mapping from the last fit."""
-    model = _TOPIC_MODEL_CACHE.model
-    if model is None:
-        return {}
-    labels: dict[int, str] = {}
-    for topic_id in model.get_topic_info()["Topic"]:
-        if topic_id == -1:
-            continue
-        top_words = model.get_topic(topic_id)
-        if top_words:
-            labels[topic_id] = " ".join(w for w, _ in top_words[:4]).title()
-        else:
-            labels[topic_id] = f"Topic {topic_id}"
-    return labels
+    clusterer.fit(reduced)
+    return clusterer.labels_
 
 
 def _build_clusters(
     texts: list[str],
-    topic_assignments: list[int],
+    labels: np.ndarray,
     timestamps: list[datetime | None] | None,
 ) -> list[ClusterResult]:
     now = datetime.now(UTC)
     unique_labels = set(labels)
     unique_labels.discard(-1)
 
-    model = _TOPIC_MODEL_CACHE.model
     results: list[ClusterResult] = []
     for label_id in sorted(unique_labels):
         indices = [i for i, lbl in enumerate(labels) if lbl == label_id]
         cluster_texts = [texts[i] for i in indices]
 
-        if model is not None:
-            top_words = model.get_topic(topic_id)
-            if top_words:
-                label_str = " ".join(w for w, _ in top_words[:4]).title()
-            else:
-                label_str = f"Topic {topic_id}"
-        else:
-            label_str = f"Topic {topic_id}"
-
         representative = _pick_representative(cluster_texts)
+        label_str = _generate_label(cluster_texts)
 
         recency = 0.0
         if timestamps:
@@ -186,7 +138,7 @@ def _build_clusters(
         )
 
     logger.info(
-        "BERTopic: %d observations → %d clusters (%d noise)",
+        "Clustering: %d observations → %d clusters (%d noise)",
         len(texts),
         len(results),
         sum(1 for lbl in labels if lbl == -1),
@@ -197,3 +149,29 @@ def _build_clusters(
 def _pick_representative(texts: list[str]) -> str:
     """Pick the longest text as the representative description."""
     return max(texts, key=len) if texts else ""
+
+
+def _generate_label(texts: list[str]) -> str:
+    """Generate a cluster label from the most common words across texts."""
+    from collections import Counter
+
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "about", "like",
+        "through", "after", "over", "between", "out", "against", "during",
+        "without", "before", "under", "around", "among", "and", "but", "or",
+        "so", "if", "than", "too", "very", "just", "that", "this", "it",
+        "i", "my", "me", "we", "you", "your", "he", "she", "they", "them",
+        "not", "no", "don't", "doesn't", "didn't", "won't", "can't",
+    }
+    word_counts: Counter[str] = Counter()
+    for text in texts:
+        words = text.lower().split()
+        word_counts.update(w for w in words if w not in stop_words and len(w) > 2)
+
+    top = word_counts.most_common(4)
+    if not top:
+        return "Unlabeled cluster"
+    return " ".join(w for w, _ in top).title()

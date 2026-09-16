@@ -187,17 +187,9 @@ class DossierGenerator:
         return result.scalar_one_or_none()
 
     async def _load_opportunity_scores(self, creator_id: str) -> list[OpportunityScore]:
-        latest_run_id = (
-            select(ResearchRun.id)
-            .where(
-                ResearchRun.creator_id == creator_id,
-                ResearchRun.config_snapshot["pipeline"].as_string() == "scoring",
-                ResearchRun.status == "completed",
-            )
-            .order_by(ResearchRun.completed_at.desc())
-            .limit(1)
-            .scalar_subquery()
-        )
+        # Active-row filtering via superseded_at is the run-scoping mechanism:
+        # every new scoring run supersedes the previous run's rows, so the
+        # non-superseded set IS the latest completed run's output.
         result = await self._session.execute(
             select(OpportunityScore)
             .where(

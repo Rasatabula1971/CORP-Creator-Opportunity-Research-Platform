@@ -182,9 +182,10 @@ class IntelligencePipeline:
             except LLMCallError as exc:
                 stats.fail(exc)
                 return
-            self._persist_observations(observations, anchor_evidence=evidence)
+            new_obs = self._persist_observations(observations, anchor_evidence=evidence)
             stats.ok()
             await self._session.flush()
+            await mirror_observations(new_obs)
             return
 
         payload = [

@@ -10,7 +10,7 @@ from corp.core.scoring.engine import (
     get_score_band,
     score_audience_problem_frequency,
     score_commercial_intent,
-    score_competition_saturation,
+    score_competitor_saturation,
     score_creator_reach,
     score_evidence_depth,
     score_recency_trend,
@@ -108,33 +108,36 @@ async def test_creator_reach_above_cap():
     assert score_creator_reach(100_000_000) == 1.0
 
 
-async def test_competition_saturation_neutral():
-    assert score_competition_saturation() == 0.5
+# Post-merge: the Competitor-list signal is score_competitor_saturation;
+# score_competition_saturation now reads commerce-overlap (a float), tested
+# in tests/core/test_scoring_v2.py.
+async def test_competitor_saturation_neutral():
+    assert score_competitor_saturation() == 0.5
 
 
-async def test_competition_saturation_empty_list_neutral():
-    assert score_competition_saturation([]) == 0.5
+async def test_competitor_saturation_empty_list_neutral():
+    assert score_competitor_saturation([]) == 0.5
 
 
-async def test_competition_saturation_one_weak():
-    s = score_competition_saturation([CompetitorStrength.WEAK])
+async def test_competitor_saturation_one_weak():
+    s = score_competitor_saturation([CompetitorStrength.WEAK])
     assert abs(s - 0.9167) < 1e-4
 
 
-async def test_competition_saturation_mixed():
-    s = score_competition_saturation([CompetitorStrength.STRONG, CompetitorStrength.MODERATE])
+async def test_competitor_saturation_mixed():
+    s = score_competitor_saturation([CompetitorStrength.STRONG, CompetitorStrength.MODERATE])
     assert abs(s - 0.4667) < 1e-4
 
 
-async def test_competition_saturation_fully_saturated():
-    s = score_competition_saturation(
+async def test_competitor_saturation_fully_saturated():
+    s = score_competitor_saturation(
         [CompetitorStrength.STRONG, CompetitorStrength.STRONG, CompetitorStrength.STRONG]
     )
     assert s == 0.0
 
 
-async def test_competition_saturation_above_cap_clamped():
-    s = score_competition_saturation([CompetitorStrength.STRONG] * 5)
+async def test_competitor_saturation_above_cap_clamped():
+    s = score_competitor_saturation([CompetitorStrength.STRONG] * 5)
     assert s == 0.0
 
 

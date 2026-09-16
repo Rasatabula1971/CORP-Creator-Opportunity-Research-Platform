@@ -60,15 +60,6 @@ class QuotaExceededError(Exception):
     """Raised when YouTube API daily quota would be exceeded."""
 
 
-def _parse_duration(iso_duration: str) -> int:
-    """Parse ISO 8601 duration (e.g. 'PT4M13S') to total seconds."""
-    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso_duration or "")
-    if not match:
-        return 0
-    h, m, s = (int(g or 0) for g in match.groups())
-    return h * 3600 + m * 60 + s
-
-
 def _is_retryable_http_error(exc: BaseException) -> bool:
     if not isinstance(exc, HttpError):
         return False
@@ -462,42 +453,15 @@ class YouTubeAdapter(SourceAdapter):
     async def collect(self, identifier: str) -> list[NormalizedContent]:
         """Full collection: channel handle → videos + comments + captions."""
         channel_id = await self.resolve_channel(identifier)
-
-        channel_info = await self.get_channel_info(channel_id)
-        results: list[NormalizedContent] = []
-        if channel_info:
-            results.append(
-                NormalizedContent(
-                    source_platform="youtube",
-                    content_type="channel_metadata",
-                    external_id=channel_id,
-                    text="",
-                    access_method=self.access_method,
-                    compliance_status=self.compliance_status,
-                    metadata=channel_info,
-                )
-            )
-
         videos = await self.list_videos(channel_id)
-        results.extend(videos)
+        results: list[NormalizedContent] = list(videos)
 
-        async def _collect_video_extras(video: NormalizedContent) -> list[NormalizedContent]:
-            extras: list[NormalizedContent] = []
+        for video in videos:
             comments = await self.get_comment_threads(video.external_id)
-            extras.extend(comments)
+            results.extend(comments)
+
             caption = await self.get_captions(video.external_id)
             if caption:
-                extras.append(caption)
-            return extras
-
-        sem = asyncio.Semaphore(5)
-
-        async def _limited(video: NormalizedContent) -> list[NormalizedContent]:
-            async with sem:
-                return await _collect_video_extras(video)
-
-        batches = await asyncio.gather(*[_limited(v) for v in videos])
-        for batch in batches:
-            results.extend(batch)
+                results.append(caption)
 
         return results
