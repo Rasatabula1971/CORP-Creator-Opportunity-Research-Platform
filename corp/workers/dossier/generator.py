@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
@@ -34,6 +35,7 @@ class OpportunityContext:
     score: OpportunityScore
     signal: CommercialSignal | None
     observations: list[ProblemObservation]
+    competitors: list[Competitor] = field(default_factory=list)
 
 
 @dataclass
@@ -48,6 +50,7 @@ class DataCoverage:
     evidence_count: int = 0
     cluster_count: int = 0
     observation_count: int = 0
+    competitor_count: int = 0
 
 
 @dataclass
@@ -107,12 +110,14 @@ class DossierGenerator:
 
             signal = await self._load_signal(cluster.id)
             observations = await self._load_observations(cluster.id)
+            competitors = await self._load_competitors(cluster.id)
 
             opportunities.append(OpportunityContext(
                 cluster=cluster,
                 score=opp_score,
                 signal=signal,
                 observations=observations,
+                competitors=competitors,
             ))
 
             if signal:
@@ -222,6 +227,14 @@ class DossierGenerator:
         )
         return list(result.scalars().all())
 
+    async def _load_competitors(self, cluster_id: str) -> list[Competitor]:
+        result = await self._session.execute(
+            select(Competitor)
+            .where(Competitor.problem_cluster_id == cluster_id)
+            .order_by(Competitor.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def _compute_coverage(
         self,
         creator_id: str,
@@ -243,10 +256,12 @@ class DossierGenerator:
         evidence_count = ev_result.scalar() or 0
 
         obs_count = sum(len(o.observations) for o in opportunities)
+        comp_count = sum(len(o.competitors) for o in opportunities)
 
         return DataCoverage(
             source_count=source_count,
             evidence_count=evidence_count,
             cluster_count=len(opportunities),
             observation_count=obs_count,
+            competitor_count=comp_count,
         )
