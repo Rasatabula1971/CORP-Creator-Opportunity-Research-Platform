@@ -81,8 +81,6 @@ class IntelligencePipeline:
         )
         stats = PipelineStats()
 
-        await self._transition_status(creator_id, CreatorStatus.EXTRACTING)
-
         try:
             async with stage(
                 self._session,

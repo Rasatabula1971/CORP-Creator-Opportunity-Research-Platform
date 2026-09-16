@@ -149,8 +149,6 @@ class ExtractedObservation:
 
     text: str
     category: str
-    sentiment: str
-    urgency: str
     is_inferred: bool
     confidence: float
     sentiment: str = "neutral"

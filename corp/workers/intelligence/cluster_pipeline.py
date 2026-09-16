@@ -64,9 +64,6 @@ class ClusterPipeline:
         )
         stats = PipelineStats()
 
-        if creator_id:
-            await self._transition_status(creator_id, CreatorStatus.CLUSTERING)
-
         try:
             async with stage(
                 self._session,
@@ -139,7 +136,6 @@ class ClusterPipeline:
         self,
         observations: list[ProblemObservation],
         clusters: list[ClusterResult],
-        embeddings: np.ndarray,
         model_version: str,
         creator_id: str | None,
         embeddings: np.ndarray,

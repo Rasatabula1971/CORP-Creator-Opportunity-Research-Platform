@@ -320,7 +320,8 @@ async def get_competitors(
         raise HTTPException(status_code=404, detail="Creator not found")
 
     cluster_ids = select(OpportunityScore.problem_cluster_id).where(
-        OpportunityScore.creator_id == creator_id
+        OpportunityScore.creator_id == creator_id,
+        OpportunityScore.superseded_at.is_(None),
     )
     result = await session.execute(
         select(Competitor).where(Competitor.problem_cluster_id.in_(cluster_ids))
@@ -371,149 +372,6 @@ async def create_decision(
 
     await session.commit()
     return DecisionResponse.model_validate(decision)
-
-
-# ── Clusters ─────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/creators/{creator_id}/clusters",
-    response_model=list[ProblemClusterResponse],
-)
-async def get_clusters(
-    creator_id: str,
-    limit: int = Query(default=50, le=200),
-    session: AsyncSession = Depends(get_session),
-):
-    creator = await session.get(Creator, creator_id)
-    if creator is None:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    cluster_ids_subq = (
-        select(ProblemClusterMember.cluster_id)
-        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
-        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
-        .where(ResearchRun.creator_id == creator_id)
-        .distinct()
-    )
-    result = await session.execute(
-        select(ProblemCluster)
-        .where(ProblemCluster.id.in_(cluster_ids_subq))
-        .order_by(ProblemCluster.frequency.desc())
-        .limit(limit)
-    )
-    return [ProblemClusterResponse.model_validate(c) for c in result.scalars().all()]
-
-
-# ── Observations ─────────────────────────────────────────────────────
-
-
-@router.get(
-    "/creators/{creator_id}/observations",
-    response_model=list[ProblemObservationResponse],
-)
-async def get_observations(
-    creator_id: str,
-    category: str | None = None,
-    urgency: str | None = None,
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0, ge=0),
-    session: AsyncSession = Depends(get_session),
-):
-    creator = await session.get(Creator, creator_id)
-    if creator is None:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    run_ids = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
-    evidence_ids = select(Evidence.id).where(Evidence.research_run_id.in_(run_ids))
-
-    query = (
-        select(ProblemObservation)
-        .where(ProblemObservation.evidence_id.in_(evidence_ids))
-    )
-    if category:
-        query = query.where(ProblemObservation.category == category)
-    if urgency:
-        query = query.where(ProblemObservation.urgency == urgency)
-
-    query = query.order_by(ProblemObservation.confidence.desc()).offset(offset).limit(limit)
-    result = await session.execute(query)
-    return [ProblemObservationResponse.model_validate(o) for o in result.scalars().all()]
-
-
-# ── Signals ──────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/creators/{creator_id}/signals",
-    response_model=list[CommercialSignalResponse],
-)
-async def get_signals(
-    creator_id: str,
-    session: AsyncSession = Depends(get_session),
-):
-    creator = await session.get(Creator, creator_id)
-    if creator is None:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    cluster_ids_subq = (
-        select(ProblemClusterMember.cluster_id)
-        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
-        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
-        .where(ResearchRun.creator_id == creator_id)
-        .distinct()
-    )
-    result = await session.execute(
-        select(CommercialSignal)
-        .where(CommercialSignal.problem_cluster_id.in_(cluster_ids_subq))
-        .order_by(CommercialSignal.confidence.desc())
-    )
-    return [CommercialSignalResponse.model_validate(s) for s in result.scalars().all()]
-
-
-# ── Research Runs ────────────────────────────────────────────────────
-
-
-@router.get("/research-runs", response_model=list[ResearchRunResponse])
-async def list_research_runs(
-    creator_id: str | None = None,
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0, ge=0),
-    session: AsyncSession = Depends(get_session),
-):
-    query = select(ResearchRun)
-    if creator_id:
-        query = query.where(ResearchRun.creator_id == creator_id)
-    query = query.order_by(ResearchRun.created_at.desc()).offset(offset).limit(limit)
-    result = await session.execute(query)
-    return [ResearchRunResponse.model_validate(r) for r in result.scalars().all()]
-
-
-# ── Competitors ──────────────────────────────────────────────────────
-
-
-@router.get(
-    "/creators/{creator_id}/competitors",
-    response_model=list[CompetitorResponse],
-)
-async def get_competitors(
-    creator_id: str,
-    session: AsyncSession = Depends(get_session),
-):
-    creator = await session.get(Creator, creator_id)
-    if creator is None:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    cluster_ids = select(OpportunityScore.problem_cluster_id).where(
-        OpportunityScore.creator_id == creator_id,
-        OpportunityScore.superseded_at.is_(None),
-    )
-    result = await session.execute(
-        select(Competitor).where(Competitor.problem_cluster_id.in_(cluster_ids))
-    )
-    return [CompetitorResponse.model_validate(c) for c in result.scalars().all()]
 
 
 # ── Clusters ─────────────────────────────────────────────────────────
@@ -623,3 +481,22 @@ async def get_signals(
         .order_by(CommercialSignal.confidence.desc())
     )
     return [CommercialSignalResponse.model_validate(s) for s in result.scalars().all()]
+
+
+# ── Research Runs ────────────────────────────────────────────────────
+
+
+@router.get("/research-runs", response_model=list[ResearchRunResponse])
+async def list_research_runs(
+    creator_id: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    query = select(ResearchRun)
+    if creator_id:
+        query = query.where(ResearchRun.creator_id == creator_id)
+    query = query.order_by(ResearchRun.created_at.desc()).offset(offset).limit(limit)
+    result = await session.execute(query)
+    return [ResearchRunResponse.model_validate(r) for r in result.scalars().all()]
+

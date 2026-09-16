@@ -265,7 +265,10 @@ async def test_scoring_pipeline_competition_saturation_reflects_competitors(
         select(OpportunityScore).where(OpportunityScore.problem_cluster_id == cluster.id)
     )
     opp = result.scalar_one()
-    assert opp.component_scores["competition_saturation"] < 0.5
+    # Post-integration merge: main's Competitor-list signal now feeds
+    # `competitor_saturation` (not `competition_saturation`, which reads
+    # commerce-overlap from creator-web pages instead).
+    assert opp.component_scores["competitor_saturation"] < 0.5
 
 
 @pytest.mark.asyncio
