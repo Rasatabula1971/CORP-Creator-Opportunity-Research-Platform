@@ -15,14 +15,16 @@ from corp.core.scoring.engine import (
 from corp.core.scoring.text import containment, jaccard, tokens
 
 
-def test_rules_v2_weights_sum_to_one_and_cover_nine_components():
+def test_rules_v2_weights_sum_to_one_and_cover_ten_components():
     rules = load_scoring_rules("rules/scoring.yaml")
     weights = rules["weights"]
-    assert rules["version"] == "2.0.0"
-    assert len(weights) == 9
+    assert rules["version"] == "2.1.0"
+    assert len(weights) == 10
     assert sum(weights.values()) == pytest.approx(1.0)
-    new = {"engagement_velocity", "creator_content_alignment", "cross_platform_consistency"}
-    assert new <= set(weights)
+    v2_new = {"engagement_velocity", "creator_content_alignment", "cross_platform_consistency"}
+    assert v2_new <= set(weights)
+    # Both saturation signals ship side by side after the integration merge.
+    assert {"competition_saturation", "competitor_saturation"} <= set(weights)
 
 
 def test_weighted_evidence_count_discounts_scraped_rows():

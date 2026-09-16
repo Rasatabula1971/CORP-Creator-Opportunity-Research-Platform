@@ -25,6 +25,7 @@ from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.confidence import compute_confidence_band
+from corp.core.models.competitive import Competitor
 from corp.core.scoring.engine import (
     compute_hash,
     compute_score,
@@ -33,6 +34,7 @@ from corp.core.scoring.engine import (
     score_audience_problem_frequency,
     score_commercial_intent,
     score_competition_saturation,
+    score_competitor_saturation,
     score_creator_content_alignment,
     score_creator_reach,
     score_cross_platform_consistency,
@@ -344,6 +346,19 @@ class ScoringPipeline:
         )
         return result.scalar_one_or_none()
 
+    async def _get_competitor_strengths(self, cluster_id: str) -> list:
+        """Load the strength of every Competitor row known for this cluster.
+
+        Independent from the commerce-overlap signal above: this reads the
+        explicitly-tracked Competitor list (populated by competitive research
+        outside the automated pipeline). Empty list → the scoring function
+        returns its neutral 0.5, contributing nothing to the aggregate.
+        """
+        result = await self._session.execute(
+            select(Competitor.strength).where(Competitor.problem_cluster_id == cluster_id)
+        )
+        return list(result.scalars().all())
+
     async def _previous_frequency(self, cluster: ProblemCluster) -> int | None:
         """Frequency of the most recent superseded cluster with the same label."""
         result = await self._session.execute(
@@ -370,6 +385,7 @@ class ScoringPipeline:
     ) -> OpportunityScore:
         signal = await self._get_signal(cluster.id)
         ctx = await self._load_cluster_context(cluster)
+        competitor_strengths = await self._get_competitor_strengths(cluster.id)
 
         signal_level = signal.signal_level if signal else SignalLevel.WEAK
         signal_confidence = signal.confidence if signal else 0.0
@@ -398,6 +414,7 @@ class ScoringPipeline:
             "competition_saturation": score_competition_saturation(
                 commerce_overlap, creator.commerce_signal_count
             ),
+            "competitor_saturation": score_competitor_saturation(competitor_strengths),
             "creator_content_alignment": score_creator_content_alignment(matching_creator),
             "cross_platform_consistency": score_cross_platform_consistency(
                 platforms_with, len(creator.audience_platforms)

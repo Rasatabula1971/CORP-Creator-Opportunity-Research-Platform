@@ -193,6 +193,28 @@ class AcquisitionCollector:
                 account.subscriber_count = int(followers)
             if meta.get("handle") and not account.external_id:
                 account.external_id = str(meta["handle"])[:255]
+            # Populate main-lineage typed channel enrichment columns from adapter
+            # metadata when available. MetricsSnapshot below still captures the
+            # full time-series; these are the "latest value" cheap-read columns.
+            for field, key in (
+                ("total_view_count", "total_view_count"),
+                ("video_count", "video_count"),
+                ("country", "country"),
+                ("description", "description"),
+            ):
+                value = meta.get(key)
+                if value is not None:
+                    if field in ("total_view_count", "video_count"):
+                        setattr(account, field, int(value))
+                    else:
+                        # description / country are strings; truncate country to fit.
+                        as_str = str(value)
+                        if field == "country":
+                            as_str = as_str[:10]
+                        setattr(account, field, as_str)
+            joined_at = meta.get("joined_at")
+            if joined_at is not None and account.joined_at is None:
+                account.joined_at = joined_at
 
         snapshot = MetricsSnapshot(
             research_run_id=research_run_id,
@@ -219,6 +241,20 @@ class AcquisitionCollector:
             value = meta.get(field)
             if value is not None:
                 setattr(ci, field, int(value))
+        # Populate main-lineage typed video enrichment columns from adapter metadata.
+        # Nullable — an adapter that doesn't supply the field leaves it as-is.
+        duration = meta.get("duration")
+        if duration is not None:
+            ci.duration = int(duration)
+        tags = meta.get("tags")
+        if tags is not None:
+            ci.tags = list(tags) if not isinstance(tags, list) else tags
+        language = meta.get("language")
+        if language is not None:
+            ci.language = str(language)[:10]
+        is_short = meta.get("is_short")
+        if is_short is not None:
+            ci.is_short = bool(is_short)
         snapshot = MetricsSnapshot(
             research_run_id=research_run_id,
             content_item_id=ci.id,
