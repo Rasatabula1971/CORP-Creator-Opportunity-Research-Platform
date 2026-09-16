@@ -32,7 +32,7 @@ class CreatorScore(TimestampMixin, Base):
     )
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    research_run_id: Mapped[str | None] = mapped_column(String(36))
+    research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.
@@ -60,7 +60,7 @@ class OpportunityScore(TimestampMixin, Base):
     )
     rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    research_run_id: Mapped[str | None] = mapped_column(String(36))
+    research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Index, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from corp.core.models.base import Base, generate_uuid
@@ -44,4 +44,4 @@ class Evidence(Base):
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    research_run_id: Mapped[str | None] = mapped_column(String(36))
+    research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))

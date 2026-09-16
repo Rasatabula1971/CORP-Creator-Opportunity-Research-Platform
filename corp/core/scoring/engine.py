@@ -8,9 +8,14 @@ import yaml
 
 from corp.core.models.intent import SignalLevel
 
+# Resolve relative rules paths against the project root, not the process's CWD.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 def load_scoring_rules(rules_path: str) -> dict[str, Any]:
     path = Path(rules_path)
+    if not path.is_absolute():
+        path = _PROJECT_ROOT / path
     if not path.exists():
         raise FileNotFoundError(f"Scoring rules not found: {rules_path}")
     with open(path) as f:

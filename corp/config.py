@@ -141,8 +141,9 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000)
     # When set, every endpoint except /health requires header X-Api-Key to match.
     api_key: str = ""
-    # Comma-separated origins for CORS; "*" allows all (fine for local dev only).
-    cors_origins: str = "*"
+    # Comma-separated origins for CORS. Defaults to the local Vite dev server;
+    # set explicitly for any non-local deployment. "*" is never used as a fallback.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 
 settings = Settings()

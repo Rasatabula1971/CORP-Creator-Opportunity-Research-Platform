@@ -14,7 +14,7 @@ from corp.config import settings
 def create_app() -> FastAPI:
     app = FastAPI(title="CORP", description="Creator Opportunity Research Platform")
 
-    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] or ["*"]
+    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

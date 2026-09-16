@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
+
+# Resolve relative rules paths against the project root, not the process's CWD.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +36,10 @@ class QualificationResult:
 
 
 def load_rules(path: str) -> dict[str, Any]:
-    with open(path) as f:
+    resolved = Path(path)
+    if not resolved.is_absolute():
+        resolved = _PROJECT_ROOT / resolved
+    with open(resolved) as f:
         return yaml.safe_load(f)
 
 
