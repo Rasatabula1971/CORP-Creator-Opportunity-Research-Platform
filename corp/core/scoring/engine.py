@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from corp.core.models.competitive import CompetitorStrength
 from corp.core.models.intent import SignalLevel
 
 # Resolve relative rules paths against the project root, not the process's CWD.
@@ -158,3 +159,31 @@ def score_cross_platform_consistency(platforms_with_problem: int, total_platform
     if total_platforms <= 1:
         return 0.5
     return max(0.0, min(1.0, platforms_with_problem / total_platforms))
+
+
+# ── Competitor-list saturation (main lineage) ────────────────────────
+#
+# This runs alongside score_competition_saturation() (the commerce-overlap
+# signal, above). The two answer the same question — "how crowded is this
+# opportunity?" — from independent evidence: the creator's own storefront
+# vs an explicitly-tracked competitor list. Both are fed into the final
+# weighted aggregate; whichever signal you didn't gather returns its
+# neutral 0.5 and quietly contributes nothing.
+
+_STRENGTH_WEIGHT = {
+    CompetitorStrength.WEAK: 0.25,
+    CompetitorStrength.MODERATE: 0.6,
+    CompetitorStrength.STRONG: 1.0,
+}
+_SATURATION_CAP = 3.0  # pressure at which the market counts as fully saturated
+
+
+def score_competitor_saturation(competitors: list[CompetitorStrength] | None = None) -> float:
+    """Higher = more whitespace (less saturated), matching the "higher is better"
+    convention of the other components. Neutral 0.5 when no competitor research
+    has been done yet for this cluster — not evidence of an open market."""
+    if not competitors:
+        return 0.5
+    pressure = sum(_STRENGTH_WEIGHT.get(c, 0.5) for c in competitors)
+    saturation = min(1.0, pressure / _SATURATION_CAP)
+    return round(1.0 - saturation, 4)

@@ -9,6 +9,10 @@ class ProblemObservationCreate(BaseModel):
     extraction_prompt_version: str
     model_version: str
     confidence: float | None = None
+    # "audience" (comments) or "creator" (own titles/descriptions/transcripts)
+    source_side: str = "audience"
+    sentiment: str | None = None
+    urgency: str | None = None
 
 
 class ProblemObservationResponse(BaseModel):
@@ -22,6 +26,9 @@ class ProblemObservationResponse(BaseModel):
     extraction_prompt_version: str
     model_version: str
     confidence: float | None
+    source_side: str = "audience"
+    sentiment: str | None = None
+    urgency: str | None = None
 
 
 class ProblemClusterResponse(BaseModel):
