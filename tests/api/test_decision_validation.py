@@ -1,6 +1,11 @@
-"""No-DB tests: create_decision rejects a body inconsistent with the URL/endpoint."""
+"""No-DB tests: create_decision under the URL-scoped contract.
 
-from unittest.mock import MagicMock
+DecisionCreate carries no creator_id or gate field — the URL alone scopes the
+decision — so the old body-vs-URL mismatch checks no longer exist. What's left
+to validate without a DB: unknown creator → 404, bad decision value → 422.
+"""
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -20,38 +25,51 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _client() -> "TestClient":
+def _client(session: MagicMock | None = None) -> "TestClient":
     app = FastAPI()
     register_error_handlers(app)
     app.include_router(router)
 
     async def _fake_session():
-        # Validation runs before any DB access, so this is never used on the
-        # 400 paths under test.
-        yield MagicMock()
+        yield session if session is not None else MagicMock()
 
     app.dependency_overrides[get_session] = _fake_session
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_body_creator_id_mismatch_rejected():
+def test_unknown_creator_is_404():
+    session = MagicMock()
+    session.get = AsyncMock(return_value=None)
+    client = _client(session)
+    resp = client.post(
+        "/creators/ghost/decisions",
+        json={"decision": "approve"},
+    )
+    assert resp.status_code == 404
+    assert "Creator not found" in resp.json()["detail"]
+
+
+def test_invalid_decision_value_is_422():
+    # Pydantic rejects the enum before any DB access.
     client = _client()
     resp = client.post(
         "/creators/abc/decisions",
-        json={"creator_id": "different", "gate": "gate_a", "decision": "approve"},
+        json={"decision": "maybe"},
     )
-    assert resp.status_code == 400
-    assert "creator_id" in resp.json()["detail"]
+    assert resp.status_code == 422
 
 
-def test_non_gate_a_rejected():
-    client = _client()
+def test_extra_body_fields_ignored():
+    # Old clients may still send creator_id/gate; they're ignored, not a 400.
+    # With them ignored, the route proceeds to the creator lookup (404 here).
+    session = MagicMock()
+    session.get = AsyncMock(return_value=None)
+    client = _client(session)
     resp = client.post(
         "/creators/abc/decisions",
-        json={"creator_id": "abc", "gate": "gate_b", "decision": "approve"},
+        json={"creator_id": "different", "gate": "gate_b", "decision": "approve"},
     )
-    assert resp.status_code == 400
-    assert "Gate A" in resp.json()["detail"]
+    assert resp.status_code == 404
 
 
 def test_get_dossier_missing_creator_is_404():

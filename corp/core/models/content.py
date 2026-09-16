@@ -80,5 +80,14 @@ class AudienceInteraction(TimestampMixin, Base):
     like_count: Mapped[int | None] = mapped_column(Integer)
     parent_id: Mapped[str | None] = mapped_column(String(255))
     author_channel_id: Mapped[str | None] = mapped_column(String(255))
+    # Extraction bookkeeping. Set when this interaction was part of a
+    # successfully extracted chunk — whether or not it yielded observations.
+    # Without this, batch extraction can only mark the anchor comment as
+    # done (observations anchor to one evidence row), so the other comments
+    # in the chunk would be re-extracted on every re-run, duplicating
+    # inferred observations and re-spending LLM calls on empty comments.
+    extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    extracted_prompt_version: Mapped[str | None] = mapped_column(String(50))
+    extracted_model: Mapped[str | None] = mapped_column(String(100))
 
     content_item: Mapped["ContentItem"] = relationship(back_populates="interactions")

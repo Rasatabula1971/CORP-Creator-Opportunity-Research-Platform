@@ -1,6 +1,7 @@
 """Intelligence pipeline — orchestrates extraction and topic classification."""
 
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -148,7 +149,15 @@ class IntelligencePipeline:
                     )
                     stats.skip()
                     continue
+                # Primary idempotency check: the per-interaction stamp set after
+                # a successful chunk covers every comment in the chunk, anchored
+                # or not. The observation-existence check remains as a fallback
+                # for rows extracted before the stamp columns existed.
+                if self._stamp_matches(interaction):
+                    stats.skip()
+                    continue
                 if await self._already_extracted(interaction.external_id):
+                    self._stamp(interaction)
                     stats.skip()
                     continue
                 pending.append((interaction, evidence))
@@ -183,6 +192,7 @@ class IntelligencePipeline:
                 stats.fail(exc)
                 return
             new_obs = self._persist_observations(observations, anchor_evidence=evidence)
+            self._stamp(interaction)
             stats.ok()
             await self._session.flush()
             await mirror_observations(new_obs)
@@ -228,9 +238,27 @@ class IntelligencePipeline:
             )
             self._session.add(po)
             new_obs.append(po)
+        # Stamp every interaction in the chunk — anchored or not — so a re-run
+        # never re-extracts comments whose content already fed this batch.
+        for interaction, _ in chunk:
+            self._stamp(interaction)
         stats.ok()
         await self._session.flush()
         await mirror_observations(new_obs)
+
+    def _stamp(self, interaction: AudienceInteraction) -> None:
+        """Mark an interaction as extracted under the current prompt + model."""
+        interaction.extracted_at = datetime.now(UTC)
+        interaction.extracted_prompt_version = EXTRACTION_PROMPT_VERSION
+        interaction.extracted_model = self._provider.model_name
+
+    def _stamp_matches(self, interaction: AudienceInteraction) -> bool:
+        """True when this interaction was already extracted by the current
+        prompt version and any model in the provider's family."""
+        return (
+            interaction.extracted_prompt_version == EXTRACTION_PROMPT_VERSION
+            and interaction.extracted_model in self._model_family()
+        )
 
     def _persist_observations(
         self,

@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -73,7 +73,8 @@ class CreatorPlatformAccount(TimestampMixin, Base):
     # Point-in-time channel enrichment. MetricsSnapshot (metrics.py) tracks these
     # over time for growth/velocity scoring; these columns hold the latest value
     # for cheap reads that don't need history.
-    total_view_count: Mapped[int | None] = mapped_column(Integer)
+    # BigInteger: total view counts on large channels exceed int32's 2.1B cap.
+    total_view_count: Mapped[int | None] = mapped_column(BigInteger)
     video_count: Mapped[int | None] = mapped_column(Integer)
     joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     country: Mapped[str | None] = mapped_column(String(10))
