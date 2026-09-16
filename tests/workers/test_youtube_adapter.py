@@ -1,6 +1,6 @@
 """Unit tests for the YouTube adapter — all API calls mocked."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -183,7 +183,7 @@ async def test_list_videos_published_after_filter():
     stats_req.execute.return_value = _video_stats_response(["new_vid"])
     adapter._service.videos().list.return_value = stats_req
 
-    cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    cutoff = datetime(2026, 1, 1, tzinfo=UTC)
     videos = await adapter.list_videos("UC123", published_after=cutoff)
 
     assert len(videos) == 1
@@ -257,31 +257,57 @@ async def test_get_comment_threads_disabled():
     assert comments == []
 
 
+async def test_get_comment_threads_quota_403_raises():
+    # A 403 whose reason is quotaExceeded must not be swallowed as "disabled" —
+    # otherwise every remaining video silently gets zero comments.
+    import json
+
+    from corp.workers.adapters.youtube import QuotaExceededError
+
+    adapter = _make_adapter()
+    resp = MagicMock()
+    resp.status = 403
+    content = json.dumps(
+        {"error": {"errors": [{"reason": "quotaExceeded"}]}}
+    ).encode("utf-8")
+    error = HttpError(resp, content)
+    mock_req = MagicMock()
+    mock_req.execute.side_effect = error
+    adapter._service.commentThreads().list.return_value = mock_req
+
+    with pytest.raises(QuotaExceededError):
+        await adapter.get_comment_threads("v1")
+
+
 # ---- get_captions ----
 
 
 async def test_get_captions():
     adapter = _make_adapter()
 
-    mock_snippet = MagicMock()
-    mock_snippet.text = "Hello"
-    mock_transcript = [mock_snippet, MagicMock(text="world")]
+    mock_transcript = MagicMock()
+    mock_transcript.language_code = "en"
+    mock_transcript.is_generated = True
+    mock_transcript.to_raw_data.return_value = [
+        {"text": "Hello", "start": 0.0, "duration": 1.5},
+        {"text": "world", "start": 1.5, "duration": 1.5},
+    ]
 
-    with patch("corp.workers.adapters.youtube.YouTubeTranscriptApi", create=True) as mock_cls:
-        # Patch at the import location inside the _fetch closure
-        with patch(
-            "youtube_transcript_api.YouTubeTranscriptApi"
-        ) as mock_api_cls:
-            mock_instance = MagicMock()
-            mock_instance.fetch.return_value = mock_transcript
-            mock_api_cls.return_value = mock_instance
+    with patch(
+        "youtube_transcript_api.YouTubeTranscriptApi"
+    ) as mock_api_cls:
+        mock_instance = MagicMock()
+        mock_instance.fetch.return_value = mock_transcript
+        mock_api_cls.return_value = mock_instance
 
-            caption = await adapter.get_captions("v1")
+        caption = await adapter.get_captions("v1")
 
     assert caption is not None
     assert caption.content_type == "caption"
-    assert caption.text == "Hello world"
+    assert "Hello" in caption.text
+    assert "world" in caption.text
     assert caption.parent_id == "v1"
+    assert caption.metadata["language"] == "en"
 
 
 async def test_get_captions_unavailable():

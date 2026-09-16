@@ -44,6 +44,4 @@ class Evidence(Base):
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    research_run_id: Mapped[str | None] = mapped_column(
-        ForeignKey("research_runs.id"), nullable=True
-    )
+    research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))

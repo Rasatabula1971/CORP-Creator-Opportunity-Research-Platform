@@ -6,18 +6,29 @@ schema round-trips, and scoring determinism at the DB level.
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.campaign import Campaign, CampaignStatus
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
+from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
+from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
-from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
-from corp.core.schemas.creator import CreatorResponse, PlatformAccountResponse
+from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
+from corp.core.research.ledger import find_queries, record_query
+from corp.core.schemas.campaign import CampaignResponse
+from corp.core.schemas.campaign_niche import CampaignNicheResponse
+from corp.core.schemas.creator import CreatorResponse
+from corp.core.schemas.creator_niche import CreatorNicheResponse
 from corp.core.schemas.evidence import EvidenceResponse
-
+from corp.core.schemas.niche import NicheDetailResponse
+from corp.core.schemas.research_query import ResearchQueryResponse
 
 # ---------- Creator + PlatformAccount ----------
 
@@ -337,6 +348,74 @@ async def test_research_run(clean_db: AsyncSession):
     await session.flush()
     assert run.id is not None
     assert run.prompt_versions["extraction"] == "v1.0"
+    # Slice 5 must not change this: every pre-existing creator-run call site
+    # still gets run_type=CREATOR_RESEARCH by default, unmodified.
+    assert run.run_type == RunType.CREATOR_RESEARCH.value
+
+
+@pytest.mark.asyncio
+async def test_niche_verification_run_with_niche_and_no_creator(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    run = ResearchRun(
+        run_type=RunType.NICHE_VERIFICATION.value,
+        niche_id=niche.id,
+        status="running",
+    )
+    session.add(run)
+    await session.flush()
+
+    assert run.id is not None
+    assert run.creator_id is None
+    assert run.niche_id == niche.id
+
+
+@pytest.mark.asyncio
+async def test_niche_discovery_run_without_creator_or_niche(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Discovery Sweep")
+    session.add(campaign)
+    await session.flush()
+
+    run = ResearchRun(
+        run_type=RunType.NICHE_DISCOVERY.value,
+        campaign_id=campaign.id,
+        status="running",
+    )
+    session.add(run)
+    await session.flush()
+
+    assert run.id is not None
+    assert run.creator_id is None
+    assert run.niche_id is None
+    assert run.campaign_id == campaign.id
+
+
+@pytest.mark.asyncio
+async def test_niche_verification_without_niche_id_rejected(clean_db: AsyncSession):
+    """The one rule this slice enforces at the DB level (§11)."""
+    session = clean_db
+    session.add(ResearchRun(run_type=RunType.NICHE_VERIFICATION.value, status="running"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_cross_creator_research_run_still_allowed(clean_db: AsyncSession):
+    """The existing, designed cross-creator clustering capability
+    (ClusterPipeline.run(creator_id=None), run_type defaults to
+    CREATOR_RESEARCH) must not be broken by the new CHECK constraint —
+    see docs/DECISIONS/0005."""
+    session = clean_db
+    run = ResearchRun(scope="cross", status="running")
+    session.add(run)
+    await session.flush()
+
+    assert run.creator_id is None
+    assert run.run_type == RunType.CREATOR_RESEARCH.value
 
 
 # ---------- Full chain: Creator → Content → Interaction → Evidence → Observation ----------
@@ -392,3 +471,656 @@ async def test_full_evidence_chain(clean_db: AsyncSession):
     assert evidence.source_id == comment.external_id
     assert comment.content_item_id == video.id
     assert video.creator_id == creator.id
+
+
+# ---------- Campaign ----------
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Q4 Creator Sweep")
+    session.add(campaign)
+    await session.flush()
+
+    assert campaign.id is not None
+    assert campaign.status == CampaignStatus.DRAFT
+    assert campaign.target_niche_count == 10
+    assert campaign.initial_creators_per_niche == 10
+    assert campaign.creator_min_followers == 10_000
+    assert campaign.creator_max_followers == 200_000
+    assert campaign.human_gate_capacity == 50
+    assert campaign.created_at is not None
+    assert campaign.started_at is None
+    assert campaign.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_with_custom_config(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(
+        name="Reef Aquarium Pilot",
+        research_profile_version="v1",
+        target_niche_count=5,
+        initial_creators_per_niche=15,
+        creator_min_followers=5_000,
+        creator_max_followers=100_000,
+        human_gate_capacity=25,
+        status=CampaignStatus.ACTIVE,
+    )
+    session.add(campaign)
+    await session.flush()
+
+    assert campaign.target_niche_count == 5
+    assert campaign.initial_creators_per_niche == 15
+    assert campaign.creator_min_followers == 5_000
+    assert campaign.creator_max_followers == 100_000
+    assert campaign.human_gate_capacity == 25
+    assert campaign.status == CampaignStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_campaign_can_be_retrieved(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Home Espresso Pilot")
+    session.add(campaign)
+    await session.flush()
+    campaign_id = campaign.id
+
+    result = await session.execute(select(Campaign).where(Campaign.id == campaign_id))
+    loaded = result.scalar_one()
+    assert loaded.name == "Home Espresso Pilot"
+    assert loaded.id == campaign_id
+
+
+@pytest.mark.asyncio
+async def test_campaign_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Sim Racing Pilot", target_niche_count=8)
+    session.add(campaign)
+    await session.flush()
+
+    response = CampaignResponse.model_validate(campaign)
+    assert response.name == "Sim Racing Pilot"
+    assert response.target_niche_count == 8
+    assert response.status == CampaignStatus.DRAFT
+
+
+@pytest.mark.asyncio
+async def test_creator_creation_unaffected_by_campaign_addition(clean_db: AsyncSession):
+    """Slice 1 must not change existing creator behavior."""
+    session = clean_db
+    creator = await _create_creator(session, "Unaffected Creator")
+    assert creator.status == CreatorStatus.DISCOVERED
+    assert creator.id is not None
+
+
+# ---------- Niche + NicheAlias ----------
+
+
+@pytest.mark.asyncio
+async def test_create_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    assert niche.id is not None
+    assert niche.policy_class == NichePolicyClass.STANDARD
+    assert niche.lifecycle_status == NicheLifecycleStatus.CANDIDATE
+    assert niche.first_discovered_at is not None
+    assert niche.last_researched_at is None
+    assert niche.next_recheck_at is None
+
+
+@pytest.mark.asyncio
+async def test_niche_aliases_map_to_one_canonical_niche(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    alias1 = NicheAlias(niche_id=niche.id, alias="home barista")
+    alias2 = NicheAlias(niche_id=niche.id, alias="espresso hobbyist")
+    session.add_all([alias1, alias2])
+    await session.flush()
+
+    await session.refresh(niche, ["aliases"])
+    assert len(niche.aliases) == 2
+    assert {a.alias for a in niche.aliases} == {"home barista", "espresso hobbyist"}
+    assert all(a.niche_id == niche.id for a in niche.aliases)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_canonical_name_case_insensitive_rejected(clean_db: AsyncSession):
+    session = clean_db
+    session.add(Niche(canonical_name="DIY Performance Tuning"))
+    await session.flush()
+
+    session.add(Niche(canonical_name="diy performance tuning"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_alias_across_different_niches_rejected(clean_db: AsyncSession):
+    session = clean_db
+    niche_a = Niche(canonical_name="Home Espresso")
+    niche_b = Niche(canonical_name="Sim Racing")
+    session.add_all([niche_a, niche_b])
+    await session.flush()
+
+    session.add(NicheAlias(niche_id=niche_a.id, alias="hobby corner"))
+    await session.flush()
+
+    session.add(NicheAlias(niche_id=niche_b.id, alias="Hobby Corner"))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_niche_lifecycle_and_restricted_policy_persist(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(
+        canonical_name="Home Supplement Stacking",
+        policy_class=NichePolicyClass.RESTRICTED,
+        lifecycle_status=NicheLifecycleStatus.ACTIVE,
+    )
+    session.add(niche)
+    await session.flush()
+    niche_id = niche.id
+
+    result = await session.execute(select(Niche).where(Niche.id == niche_id))
+    loaded = result.scalar_one()
+    assert loaded.policy_class == NichePolicyClass.RESTRICTED
+    assert loaded.lifecycle_status == NicheLifecycleStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Reef Aquariums", parent_domain="Fish Keeping")
+    session.add(niche)
+    await session.flush()
+    session.add(NicheAlias(niche_id=niche.id, alias="saltwater tank hobby"))
+    await session.flush()
+    await session.refresh(niche, ["aliases"])
+
+    response = NicheDetailResponse.model_validate(niche)
+    assert response.canonical_name == "Reef Aquariums"
+    assert response.parent_domain == "Fish Keeping"
+    assert len(response.aliases) == 1
+    assert response.aliases[0].alias == "saltwater tank hobby"
+
+
+@pytest.mark.asyncio
+async def test_campaign_creation_unaffected_by_niche_addition(clean_db: AsyncSession):
+    """Slice 2 must not change existing campaign (or earlier) behavior."""
+    session = clean_db
+    campaign = Campaign(name="Unaffected Campaign")
+    session.add(campaign)
+    await session.flush()
+    assert campaign.status == CampaignStatus.DRAFT
+    assert campaign.id is not None
+
+
+# ---------- CampaignNiche ----------
+
+
+async def _create_campaign_and_niche(
+    session: AsyncSession, campaign_name: str = "Q4 Sweep", niche_name: str = "Home Espresso"
+) -> tuple[Campaign, Niche]:
+    campaign = Campaign(name=campaign_name)
+    niche = Niche(canonical_name=niche_name)
+    session.add_all([campaign, niche])
+    await session.flush()
+    return campaign, niche
+
+
+@pytest.mark.asyncio
+async def test_create_campaign_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+
+    cn = CampaignNiche(campaign_id=campaign.id, niche_id=niche.id)
+    session.add(cn)
+    await session.flush()
+
+    assert cn.id is not None
+    assert cn.status == CampaignNicheStatus.DISCOVERED
+    assert cn.selected is False
+    assert cn.creator_count_observed == 0
+    assert cn.qualification_score is None
+    assert cn.confidence is None
+    assert cn.research_completeness is None
+
+
+@pytest.mark.asyncio
+async def test_same_niche_appears_in_multiple_campaigns(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Reef Aquariums")
+    campaign_a = Campaign(name="Spring Sweep")
+    campaign_b = Campaign(name="Fall Sweep")
+    session.add_all([niche, campaign_a, campaign_b])
+    await session.flush()
+
+    cn_a = CampaignNiche(campaign_id=campaign_a.id, niche_id=niche.id, discovery_rank=3)
+    cn_b = CampaignNiche(campaign_id=campaign_b.id, niche_id=niche.id, discovery_rank=1)
+    session.add_all([cn_a, cn_b])
+    await session.flush()
+
+    result = await session.execute(
+        select(CampaignNiche).where(CampaignNiche.niche_id == niche.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.campaign_id for r in rows} == {campaign_a.id, campaign_b.id}
+
+
+@pytest.mark.asyncio
+async def test_duplicate_campaign_niche_pair_rejected(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+
+    session.add(CampaignNiche(campaign_id=campaign.id, niche_id=niche.id))
+    await session.flush()
+
+    session.add(CampaignNiche(campaign_id=campaign.id, niche_id=niche.id))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_campaign_niche_history_does_not_overwrite_canonical_niche(
+    clean_db: AsyncSession,
+):
+    """Two campaigns score the same niche differently; the canonical Niche row
+    and both CampaignNiche history rows must all remain independently intact."""
+    session = clean_db
+    niche = Niche(canonical_name="Sim Racing", description="Original description")
+    campaign_a = Campaign(name="Weak Pass")
+    campaign_b = Campaign(name="Strong Pass")
+    session.add_all([niche, campaign_a, campaign_b])
+    await session.flush()
+
+    cn_weak = CampaignNiche(
+        campaign_id=campaign_a.id,
+        niche_id=niche.id,
+        qualification_score=0.2,
+        status=CampaignNicheStatus.REJECTED,
+        rationale="Thin evidence in this pass",
+    )
+    cn_strong = CampaignNiche(
+        campaign_id=campaign_b.id,
+        niche_id=niche.id,
+        qualification_score=0.9,
+        status=CampaignNicheStatus.SELECTED,
+        selected=True,
+        rationale="Strong creator ecosystem this pass",
+    )
+    session.add_all([cn_weak, cn_strong])
+    await session.flush()
+
+    result = await session.execute(select(Niche).where(Niche.id == niche.id))
+    loaded_niche = result.scalar_one()
+    assert loaded_niche.description == "Original description"
+
+    result = await session.execute(
+        select(CampaignNiche).where(CampaignNiche.niche_id == niche.id)
+    )
+    rows = {r.campaign_id: r for r in result.scalars().all()}
+    assert rows[campaign_a.id].qualification_score == 0.2
+    assert rows[campaign_a.id].status == CampaignNicheStatus.REJECTED
+    assert rows[campaign_b.id].qualification_score == 0.9
+    assert rows[campaign_b.id].status == CampaignNicheStatus.SELECTED
+    assert rows[campaign_b.id].selected is True
+
+
+@pytest.mark.asyncio
+async def test_campaign_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    campaign, niche = await _create_campaign_and_niche(session)
+    cn = CampaignNiche(
+        campaign_id=campaign.id,
+        niche_id=niche.id,
+        discovery_rank=2,
+        target_band_creator_count=14,
+    )
+    session.add(cn)
+    await session.flush()
+
+    response = CampaignNicheResponse.model_validate(cn)
+    assert response.campaign_id == campaign.id
+    assert response.niche_id == niche.id
+    assert response.discovery_rank == 2
+    assert response.target_band_creator_count == 14
+    assert response.status == CampaignNicheStatus.DISCOVERED
+
+
+@pytest.mark.asyncio
+async def test_niche_creation_unaffected_by_campaign_niche_addition(clean_db: AsyncSession):
+    """Slice 3 must not change existing niche (or earlier) behavior."""
+    session = clean_db
+    niche = Niche(canonical_name="Unaffected Niche")
+    session.add(niche)
+    await session.flush()
+    assert niche.lifecycle_status == NicheLifecycleStatus.CANDIDATE
+    assert niche.id is not None
+
+
+# ---------- CreatorNiche ----------
+
+
+@pytest.mark.asyncio
+async def test_create_creator_niche_with_defaults(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session, "Espresso Creator")
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    cn = CreatorNiche(creator_id=creator.id, niche_id=niche.id)
+    session.add(cn)
+    await session.flush()
+
+    assert cn.id is not None
+    assert cn.confidence is None
+    assert cn.discovery_run_id is None
+    assert cn.first_observed_at is not None
+    assert cn.last_observed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_creator_maps_to_several_niches(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session, "Crossover Creator")
+    niche_a = Niche(canonical_name="Home Espresso")
+    niche_b = Niche(canonical_name="Sim Racing")
+    session.add_all([niche_a, niche_b])
+    await session.flush()
+
+    session.add_all(
+        [
+            CreatorNiche(creator_id=creator.id, niche_id=niche_a.id),
+            CreatorNiche(creator_id=creator.id, niche_id=niche_b.id),
+        ]
+    )
+    await session.flush()
+
+    result = await session.execute(
+        select(CreatorNiche).where(CreatorNiche.creator_id == creator.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.niche_id for r in rows} == {niche_a.id, niche_b.id}
+
+
+@pytest.mark.asyncio
+async def test_niche_maps_to_several_creators(clean_db: AsyncSession):
+    session = clean_db
+    creator_a = await _create_creator(session, "Creator A")
+    creator_b = await _create_creator(session, "Creator B")
+    niche = Niche(canonical_name="Reef Aquariums")
+    session.add(niche)
+    await session.flush()
+
+    session.add_all(
+        [
+            CreatorNiche(creator_id=creator_a.id, niche_id=niche.id),
+            CreatorNiche(creator_id=creator_b.id, niche_id=niche.id),
+        ]
+    )
+    await session.flush()
+
+    result = await session.execute(
+        select(CreatorNiche).where(CreatorNiche.niche_id == niche.id)
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+    assert {r.creator_id for r in rows} == {creator_a.id, creator_b.id}
+
+
+@pytest.mark.asyncio
+async def test_duplicate_creator_niche_pair_rejected(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session)
+    niche = Niche(canonical_name="Home Espresso")
+    session.add(niche)
+    await session.flush()
+
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    await session.flush()
+
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_creator_niche_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _create_creator(session)
+    niche = Niche(canonical_name="Reef Aquariums")
+    session.add(niche)
+    await session.flush()
+
+    cn = CreatorNiche(creator_id=creator.id, niche_id=niche.id, confidence=0.8)
+    session.add(cn)
+    await session.flush()
+
+    response = CreatorNicheResponse.model_validate(cn)
+    assert response.creator_id == creator.id
+    assert response.niche_id == niche.id
+    assert response.confidence == 0.8
+
+
+@pytest.mark.asyncio
+async def test_existing_creator_niche_string_field_still_works(clean_db: AsyncSession):
+    """Slice 4 explicitly does not remove Creator.niche — it must keep working
+    independently of CreatorNiche rows, matching the doc's own compatibility
+    requirement."""
+    session = clean_db
+    creator = Creator(name="Legacy Niche Creator", niche="tech", discovery_source="manual")
+    session.add(creator)
+    await session.flush()
+
+    assert creator.niche == "tech"
+
+    # A CreatorNiche row can coexist with the legacy string field without
+    # either overwriting the other.
+    niche = Niche(canonical_name="Sim Racing")
+    session.add(niche)
+    await session.flush()
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    await session.flush()
+
+    result = await session.execute(select(Creator).where(Creator.id == creator.id))
+    loaded = result.scalar_one()
+    assert loaded.niche == "tech"
+
+
+@pytest.mark.asyncio
+async def test_existing_creator_creation_and_research_still_works(clean_db: AsyncSession):
+    """Full compatibility check: the pre-Slice-4 creator + research path is
+    untouched by adding CreatorNiche."""
+    session = clean_db
+    creator = await _create_creator(session, "Untouched Pipeline Creator")
+    run = ResearchRun(
+        creator_id=creator.id,
+        status="running",
+        config_snapshot={"youtube_max_videos": 50},
+    )
+    session.add(run)
+    await session.flush()
+
+    assert creator.status == CreatorStatus.DISCOVERED
+    assert run.creator_id == creator.id
+
+
+# ---------- ResearchQuery (research memory: the query ledger) ----------
+
+
+async def _discovery_run(session: AsyncSession) -> ResearchRun:
+    run = ResearchRun(run_type=RunType.NICHE_DISCOVERY.value, status="running")
+    session.add(run)
+    await session.flush()
+    return run
+
+
+@pytest.mark.asyncio
+async def test_record_query_persists_all_fields(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+
+    row = await record_query(
+        session,
+        research_run_id=run.id,
+        source="youtube",
+        query="home espresso setup",
+        results_seen=40,
+        new_results=25,
+        duplicate_results=15,
+        archive_reference="corp_data/raw/youtube/abc123.jsonl",
+    )
+
+    assert row.id is not None
+    assert row.research_run_id == run.id
+    assert row.source == "youtube"
+    assert row.query == "home espresso setup"
+    assert row.results_seen == 40
+    assert row.new_results == 25
+    assert row.duplicate_results == 15
+    assert row.archive_reference == "corp_data/raw/youtube/abc123.jsonl"
+    assert row.status == ResearchQueryStatus.SUCCEEDED
+    assert row.error is None
+    assert row.executed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_record_query_defaults(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(session, research_run_id=run.id, source="reddit", query="q")
+    assert (row.results_seen, row.new_results, row.duplicate_results) == (0, 0, 0)
+    assert row.status == ResearchQueryStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_lookup_queries_by_run(clean_db: AsyncSession):
+    session = clean_db
+    run_a = await _discovery_run(session)
+    run_b = await _discovery_run(session)
+    await record_query(session, research_run_id=run_a.id, source="youtube", query="q1")
+    await record_query(session, research_run_id=run_a.id, source="reddit", query="q2")
+    await record_query(session, research_run_id=run_b.id, source="youtube", query="q3")
+
+    rows = await find_queries(session, research_run_id=run_a.id)
+    assert {r.query for r in rows} == {"q1", "q2"}
+    assert all(r.research_run_id == run_a.id for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_lookup_by_source_and_exact_query(clean_db: AsyncSession):
+    """Answers §13's 'has this exact query been used, on which source, with
+    what yield?' — the ledger's primary purpose."""
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(
+        session, research_run_id=run.id, source="youtube", query="sim racing rig", new_results=12
+    )
+    await record_query(
+        session, research_run_id=run.id, source="reddit", query="sim racing rig", new_results=3
+    )
+    await record_query(session, research_run_id=run.id, source="youtube", query="reef tank")
+
+    rows = await find_queries(session, source="youtube", query="sim racing rig")
+    assert len(rows) == 1
+    assert rows[0].source == "youtube"
+    assert rows[0].new_results == 12
+
+    assert await find_queries(session, source="tiktok", query="sim racing rig") == []
+
+
+@pytest.mark.asyncio
+async def test_same_query_recorded_again_in_later_run_keeps_history(clean_db: AsyncSession):
+    """Not unique on (source, query): re-running a query in a later run is
+    expected, and the per-run yield history is what makes staleness and
+    usefulness decay judgeable later."""
+    session = clean_db
+    run_a = await _discovery_run(session)
+    run_b = await _discovery_run(session)
+    await record_query(
+        session, research_run_id=run_a.id, source="youtube", query="reef tank", new_results=30
+    )
+    await record_query(
+        session, research_run_id=run_b.id, source="youtube", query="reef tank", new_results=2
+    )
+
+    rows = await find_queries(session, source="youtube", query="reef tank")
+    assert len(rows) == 2
+    assert {r.research_run_id for r in rows} == {run_a.id, run_b.id}
+    assert {r.new_results for r in rows} == {30, 2}
+
+
+@pytest.mark.asyncio
+async def test_lookup_exact_query_is_literal(clean_db: AsyncSession):
+    """Exact means exact. Semantic/equivalent-query matching is a later slice."""
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(session, research_run_id=run.id, source="youtube", query="Home Espresso")
+    assert await find_queries(session, source="youtube", query="home espresso") == []
+    assert len(await find_queries(session, source="youtube", query="Home Espresso")) == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_query_records_error(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(
+        session,
+        research_run_id=run.id,
+        source="reddit",
+        query="rate limited query",
+        status=ResearchQueryStatus.FAILED,
+        error="429 Too Many Requests",
+    )
+    assert row.status == ResearchQueryStatus.FAILED
+    assert row.error == "429 Too Many Requests"
+    assert row.results_seen == 0
+
+
+@pytest.mark.asyncio
+async def test_query_executed_at_is_per_query_not_per_transaction(clean_db: AsyncSession):
+    """Two queries recorded in one transaction must not share a timestamp —
+    the ledger records when each search actually ran."""
+    session = clean_db
+    run = await _discovery_run(session)
+    first = await record_query(session, research_run_id=run.id, source="youtube", query="a")
+    second = await record_query(session, research_run_id=run.id, source="youtube", query="b")
+    assert second.executed_at >= first.executed_at
+    assert first.executed_at.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_research_query_schema_round_trip(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    row = await record_query(
+        session, research_run_id=run.id, source="youtube", query="q", results_seen=5, new_results=5
+    )
+    response = ResearchQueryResponse.model_validate(row)
+    assert response.research_run_id == run.id
+    assert response.query == "q"
+    assert response.results_seen == 5
+    assert response.status == ResearchQueryStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_research_run_relationship_reaches_queries(clean_db: AsyncSession):
+    session = clean_db
+    run = await _discovery_run(session)
+    await record_query(session, research_run_id=run.id, source="youtube", query="q1")
+    await record_query(session, research_run_id=run.id, source="youtube", query="q2")
+    await session.refresh(run, ["research_queries"])
+    assert {q.query for q in run.research_queries} == {"q1", "q2"}
+    assert all(isinstance(q, ResearchQuery) for q in run.research_queries)

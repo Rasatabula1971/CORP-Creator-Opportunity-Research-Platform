@@ -9,6 +9,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0,<3",
     "alembic>=1.13,<2",
     "asyncpg>=0.29,<1",
+    # Sync driver for Alembic (env.py uses a sync engine; the app itself uses asyncpg).
+    "psycopg2-binary>=2.9,<3",
     "pydantic>=2.7,<3",
     "pydantic-settings>=2.3,<3",
     "pgvector>=0.3,<1",
@@ -16,6 +18,7 @@ dependencies = [
     "pyrate-limiter>=3.6,<5",
     "google-api-python-client>=2.130,<3",
     "youtube-transcript-api>=0.6,<2",
+    "yt-dlp>=2025.1",
     "google-generativeai>=0.7,<1",
     "sentence-transformers>=3.0,<4",
     "hdbscan>=0.8,<1",
@@ -23,6 +26,8 @@ dependencies = [
     "jinja2>=3.1,<4",
     "pyyaml>=6.0,<7",
     "httpx>=0.27,<1",
+    "aiosqlite>=0.20,<1",
+    "pyyaml>=6.0,<7",
 ]
 
 [project.optional-dependencies]
@@ -71,3 +76,9 @@ name = "core must not import api"
 type = "forbidden"
 source_modules = ["corp.core"]
 forbidden_modules = ["corp.api"]
+
+[[tool.importlinter.contracts]]
+name = "warmstore must not import workers or api"
+type = "forbidden"
+source_modules = ["corp.warmstore"]
+forbidden_modules = ["corp.workers", "corp.api"]

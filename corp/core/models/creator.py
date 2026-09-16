@@ -1,10 +1,14 @@
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from corp.core.models.creator_niche import CreatorNiche
 
 
 class CreatorStatus(str, enum.Enum):
@@ -47,6 +51,9 @@ class Creator(TimestampMixin, Base):
     platform_accounts: Mapped[list["CreatorPlatformAccount"]] = relationship(
         back_populates="creator", cascade="all, delete-orphan"
     )
+    # No delete cascade: a creator's niche-association history outlives any
+    # single row referencing it — same reasoning as Niche.campaign_niches.
+    creator_niches: Mapped[list["CreatorNiche"]] = relationship(back_populates="creator")
 
 
 class CreatorPlatformAccount(TimestampMixin, Base):
@@ -63,7 +70,10 @@ class CreatorPlatformAccount(TimestampMixin, Base):
     external_id: Mapped[str | None] = mapped_column(String(255))
     subscriber_count: Mapped[int | None] = mapped_column()
     verified: Mapped[bool] = mapped_column(default=False)
-    total_view_count: Mapped[int | None] = mapped_column(BigInteger)
+    # Point-in-time channel enrichment. MetricsSnapshot (metrics.py) tracks these
+    # over time for growth/velocity scoring; these columns hold the latest value
+    # for cheap reads that don't need history.
+    total_view_count: Mapped[int | None] = mapped_column(Integer)
     video_count: Mapped[int | None] = mapped_column(Integer)
     joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     country: Mapped[str | None] = mapped_column(String(10))

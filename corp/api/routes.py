@@ -7,8 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from corp.core.models.campaign import Campaign
+from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorStatus
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -17,7 +20,9 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import ResearchRun
+from corp.core.models.workflow import Gate, ResearchRun
+from corp.core.schemas.campaign import CampaignResponse
+from corp.core.schemas.campaign_niche import CampaignNicheDetailResponse
 from corp.core.schemas.competitive import CompetitorResponse
 from corp.core.schemas.creator import (
     CreatorDetailResponse,
@@ -46,11 +51,93 @@ from corp.workers.dossier.generator import DossierGenerator
 router = APIRouter()
 
 
+# ── Campaigns ────────────────────────────────────────────────────────
+
+
+@router.get("/campaigns", response_model=list[CampaignResponse])
+async def list_campaigns(
+    response: Response,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    total = (await session.execute(select(func.count()).select_from(Campaign))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
+    result = await session.execute(
+        select(Campaign).order_by(Campaign.created_at.desc()).offset(offset).limit(limit)
+    )
+    return [CampaignResponse.model_validate(c) for c in result.scalars().all()]
+
+
+@router.get("/campaigns/{campaign_id}", response_model=CampaignResponse)
+async def get_campaign(
+    campaign_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    campaign = await session.get(Campaign, campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return CampaignResponse.model_validate(campaign)
+
+
+@router.get(
+    "/campaigns/{campaign_id}/niches",
+    response_model=list[CampaignNicheDetailResponse],
+)
+async def list_campaign_niches(
+    campaign_id: str,
+    status: CampaignNicheStatus | None = None,
+    session: AsyncSession = Depends(get_session),
+):
+    if await session.get(Campaign, campaign_id) is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    query = (
+        select(CampaignNiche)
+        .options(selectinload(CampaignNiche.niche))
+        .where(CampaignNiche.campaign_id == campaign_id)
+    )
+    if status is not None:
+        query = query.where(CampaignNiche.status == status)
+    query = query.order_by(CampaignNiche.qualification_score.desc().nulls_last())
+    result = await session.execute(query)
+    return [CampaignNicheDetailResponse.model_validate(cn) for cn in result.scalars().all()]
+
+
+@router.get("/campaigns/{campaign_id}/creators", response_model=list[CreatorResponse])
+async def list_campaign_creators(
+    campaign_id: str,
+    niche_status: CampaignNicheStatus = CampaignNicheStatus.SELECTED,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    if await session.get(Campaign, campaign_id) is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    query = (
+        select(Creator)
+        .join(CreatorNiche, CreatorNiche.creator_id == Creator.id)
+        .join(CampaignNiche, CampaignNiche.niche_id == CreatorNiche.niche_id)
+        .where(
+            CampaignNiche.campaign_id == campaign_id,
+            CampaignNiche.status == niche_status,
+        )
+        .distinct()
+        .order_by(Creator.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(query)
+    return [CreatorResponse.model_validate(c) for c in result.scalars().all()]
+
+
 # ── Creators ─────────────────────────────────────────────────────────
 
 
 @router.get("/creators", response_model=list[CreatorResponse])
 async def list_creators(
+    response: Response,
     status: CreatorStatus | None = None,
     min_score: float | None = None,
     limit: int = Query(default=50, le=200),
@@ -65,11 +152,16 @@ async def list_creators(
     if min_score is not None:
         scored_ids = (
             select(CreatorScore.creator_id)
-            .where(CreatorScore.aggregate_score >= min_score)
+            .where(
+                CreatorScore.aggregate_score >= min_score,
+                CreatorScore.superseded_at.is_(None),
+            )
             .distinct()
         )
         query = query.where(Creator.id.in_(scored_ids))
 
+    total = (await session.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
     query = query.order_by(Creator.created_at.desc()).offset(offset).limit(limit)
     result = await session.execute(query)
     return [CreatorResponse.model_validate(c) for c in result.scalars().all()]
@@ -103,12 +195,11 @@ async def get_dossier(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    loop = asyncio.get_running_loop()
-    gen = await loop.run_in_executor(None, lambda: DossierGenerator(session))
-    try:
-        html = await gen.generate(creator_id)
-    except ValueError:
+    # Only a missing creator is a 404; other failures (e.g. a rules/YAML parse
+    # error inside the generator) must not be masked as "Creator not found".
+    if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
+    html = await DossierGenerator(session).generate(creator_id)
     return Response(content=html, media_type="text/html")
 
 
@@ -117,23 +208,22 @@ async def get_dossier_json(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    loop = asyncio.get_running_loop()
-    gen = await loop.run_in_executor(None, lambda: DossierGenerator(session))
-    try:
-        data = await gen.generate_data(creator_id)
-    except ValueError:
+    # Same 404-only-on-missing-creator semantics as the HTML endpoint above.
+    if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    opportunities = []
-    for opp in data.opportunities:
-        opportunities.append(DossierOpportunityResponse(
+    data = await DossierGenerator(session).generate_data(creator_id)
+
+    opportunities = [
+        DossierOpportunityResponse(
             cluster=ProblemClusterResponse.model_validate(opp.cluster),
             score=OpportunityScoreResponse.model_validate(opp.score),
             signal=CommercialSignalResponse.model_validate(opp.signal) if opp.signal else None,
             observations=[ProblemObservationResponse.model_validate(o) for o in opp.observations],
             competitors=[CompetitorResponse.model_validate(c) for c in opp.competitors],
-        ))
-
+        )
+        for opp in data.opportunities
+    ]
     signals = [
         DossierSignalResponse(
             cluster_label=s.cluster_label,
@@ -205,7 +295,10 @@ async def get_opportunities(
 
     result = await session.execute(
         select(OpportunityScore)
-        .where(OpportunityScore.creator_id == creator_id)
+        .where(
+            OpportunityScore.creator_id == creator_id,
+            OpportunityScore.superseded_at.is_(None),
+        )
         .order_by(OpportunityScore.aggregate_score.desc())
     )
     return [OpportunityScoreResponse.model_validate(o) for o in result.scalars().all()]
@@ -248,6 +341,18 @@ async def create_decision(
     body: DecisionCreate,
     session: AsyncSession = Depends(get_session),
 ):
+    # The URL scopes the decision to this creator and this endpoint only records
+    # Gate A. Reject a body that says otherwise instead of silently overriding it,
+    # so a caller never gets a 201 describing a decision different from what it sent.
+    if body.creator_id != creator_id:
+        raise HTTPException(
+            status_code=400, detail="Body creator_id does not match the URL"
+        )
+    if body.gate != Gate.GATE_A:
+        raise HTTPException(
+            status_code=400, detail="This endpoint only records Gate A decisions"
+        )
+
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -384,3 +489,137 @@ async def list_research_runs(
     query = query.order_by(ResearchRun.created_at.desc()).offset(offset).limit(limit)
     result = await session.execute(query)
     return [ResearchRunResponse.model_validate(r) for r in result.scalars().all()]
+
+
+# ── Competitors ──────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/competitors",
+    response_model=list[CompetitorResponse],
+)
+async def get_competitors(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids = select(OpportunityScore.problem_cluster_id).where(
+        OpportunityScore.creator_id == creator_id,
+        OpportunityScore.superseded_at.is_(None),
+    )
+    result = await session.execute(
+        select(Competitor).where(Competitor.problem_cluster_id.in_(cluster_ids))
+    )
+    return [CompetitorResponse.model_validate(c) for c in result.scalars().all()]
+
+
+# ── Clusters ─────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/clusters",
+    response_model=list[ProblemClusterResponse],
+)
+async def get_clusters(
+    creator_id: str,
+    limit: int = Query(default=50, le=200),
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids_subq = (
+        select(ProblemClusterMember.cluster_id)
+        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
+        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
+        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+        .where(ResearchRun.creator_id == creator_id)
+        .distinct()
+    )
+    result = await session.execute(
+        select(ProblemCluster)
+        .where(
+            ProblemCluster.id.in_(cluster_ids_subq),
+            ProblemCluster.superseded_at.is_(None),
+        )
+        .order_by(ProblemCluster.frequency.desc())
+        .limit(limit)
+    )
+    return [ProblemClusterResponse.model_validate(c) for c in result.scalars().all()]
+
+
+# ── Observations ─────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/observations",
+    response_model=list[ProblemObservationResponse],
+)
+async def get_observations(
+    creator_id: str,
+    category: str | None = None,
+    urgency: str | None = None,
+    source_side: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    run_ids = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
+    evidence_ids = select(Evidence.id).where(Evidence.research_run_id.in_(run_ids))
+
+    query = (
+        select(ProblemObservation)
+        .where(ProblemObservation.evidence_id.in_(evidence_ids))
+    )
+    if category:
+        query = query.where(ProblemObservation.category == category)
+    if urgency:
+        query = query.where(ProblemObservation.urgency == urgency)
+    if source_side:
+        query = query.where(ProblemObservation.source_side == source_side)
+
+    query = query.order_by(ProblemObservation.confidence.desc()).offset(offset).limit(limit)
+    result = await session.execute(query)
+    return [ProblemObservationResponse.model_validate(o) for o in result.scalars().all()]
+
+
+# ── Signals ──────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/creators/{creator_id}/signals",
+    response_model=list[CommercialSignalResponse],
+)
+async def get_signals(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cluster_ids_subq = (
+        select(ProblemClusterMember.cluster_id)
+        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
+        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
+        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
+        .where(ResearchRun.creator_id == creator_id)
+        .distinct()
+    )
+    result = await session.execute(
+        select(CommercialSignal)
+        .where(
+            CommercialSignal.problem_cluster_id.in_(cluster_ids_subq),
+            CommercialSignal.superseded_at.is_(None),
+        )
+        .order_by(CommercialSignal.confidence.desc())
+    )
+    return [CommercialSignalResponse.model_validate(s) for s in result.scalars().all()]

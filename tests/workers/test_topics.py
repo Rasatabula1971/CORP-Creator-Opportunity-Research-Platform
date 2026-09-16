@@ -1,5 +1,8 @@
 """Unit tests for topic classification — LLM calls mocked."""
 
+import pytest
+
+from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.topics import TOPIC_PROMPT_VERSION, classify_topics
 from corp.workers.providers.registry import LLMProvider
 
@@ -18,7 +21,9 @@ class FakeProvider(LLMProvider):
     def model_name(self) -> str:
         return "fake-model-v1"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         return self._response
 
 
@@ -27,7 +32,9 @@ class FailingProvider(LLMProvider):
     def model_name(self) -> str:
         return "failing-model"
 
-    async def generate_json(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_json(
+        self, prompt: str, system: str | None = None, *, schema: dict | None = None
+    ) -> dict:
         raise RuntimeError("API down")
 
 
@@ -56,10 +63,10 @@ async def test_classify_topics_malformed_response():
     assert topics == []
 
 
-async def test_classify_topics_provider_failure():
+async def test_classify_topics_provider_failure_raises():
     provider = FailingProvider()
-    topics = await classify_topics(provider, [{"title": "X"}])
-    assert topics == []
+    with pytest.raises(LLMCallError, match="topics:"):
+        await classify_topics(provider, [{"title": "X"}])
 
 
 async def test_classify_topics_clamps_confidence():

@@ -18,8 +18,42 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.adapters.captions import fetch_youtube_caption
 
 logger = logging.getLogger(__name__)
+
+_ISO8601_DURATION_RE = re.compile(
+    r"^P(?:(?P<days>\d+)D)?T?(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
+)
+
+
+def _parse_iso8601_duration(text: str) -> int | None:
+    """Return the duration of an ISO 8601 string in seconds, or None if unparseable.
+
+    YouTube reports every duration in this format (e.g. "PT4M13S" = 253s).
+    """
+    if not text:
+        return None
+    m = _ISO8601_DURATION_RE.match(text)
+    if not m:
+        return None
+    parts = {k: int(v or 0) for k, v in m.groupdict().items()}
+    return (
+        parts["days"] * 86400
+        + parts["hours"] * 3600
+        + parts["minutes"] * 60
+        + parts["seconds"]
+    )
+
+
+def _extract_channel_id(snippet: dict) -> str | None:
+    """authorChannelId on a comment snippet is either {"value": "UCxx"} or absent."""
+    channel = snippet.get("authorChannelId")
+    if isinstance(channel, dict):
+        return channel.get("value")
+    if isinstance(channel, str):
+        return channel
+    return None
 
 
 class QuotaExceededError(Exception):
@@ -39,6 +73,34 @@ def _is_retryable_http_error(exc: BaseException) -> bool:
     if not isinstance(exc, HttpError):
         return False
     return exc.resp.status in (429, 500, 502, 503, 504)
+
+
+# YouTube returns HTTP 403 for both "comments are off for this video"
+# (commentsDisabled) and quota/rate exhaustion. The first is a per-video fact to
+# skip past; the rest are systemic and must not be swallowed as "no comments".
+_QUOTA_REASONS = frozenset(
+    {"quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded", "userRateLimitExceeded"}
+)
+
+
+def _http_error_reason(exc: HttpError) -> str:
+    """Best-effort first ``reason`` from a YouTube HttpError, or ""."""
+    details = getattr(exc, "error_details", None)
+    if details:
+        for d in details:
+            if isinstance(d, dict) and d.get("reason"):
+                return str(d["reason"])
+    try:
+        import json
+
+        content = getattr(exc, "content", None)
+        payload = json.loads(content.decode("utf-8")) if content else {}
+        errors = payload.get("error", {}).get("errors", [])
+        if errors and isinstance(errors[0], dict):
+            return str(errors[0].get("reason", ""))
+    except Exception:
+        pass
+    return ""
 
 
 class _RateLimiter:
@@ -187,36 +249,41 @@ class YouTubeAdapter(SourceAdapter):
             if not video_ids:
                 return []
 
-            video_details: dict[str, dict] = {}
+            # main-lineage tier-1 enrichment: pull snippet + contentDetails +
+            # statistics in one batched call, so tags/language/duration/short
+            # land on ContentItem without an extra fetch. Quota cost stays 1
+            # per batch — parts don't multiply cost, only the id count does.
+            stats: dict[str, dict] = {}
+            details: dict[str, dict] = {}
+            enriched_snippets: dict[str, dict] = {}
             for i in range(0, len(video_ids), 50):
                 batch = video_ids[i : i + 50]
                 resp = self._execute(
                     self._service.videos().list(
-                        part="statistics,contentDetails,snippet",
-                        id=",".join(batch),
+                        part="statistics,contentDetails,snippet", id=",".join(batch)
                     ),
                     quota_cost=1,
                 )
                 for item in resp.get("items", []):
-                    video_details[item["id"]] = item
+                    vid = item["id"]
+                    stats[vid] = item.get("statistics", {})
+                    details[vid] = item.get("contentDetails", {})
+                    enriched_snippets[vid] = item.get("snippet", {})
 
             results: list[NormalizedContent] = []
             for vid_id in video_ids:
-                snip = snippets[vid_id]
-                detail = video_details.get(vid_id, {})
-                st = detail.get("statistics", {})
-                cd = detail.get("contentDetails", {})
-                vid_snip = detail.get("snippet", {})
-
-                duration = _parse_duration(cd.get("duration", ""))
-                tags = vid_snip.get("tags", [])
-                language = (
-                    vid_snip.get("defaultAudioLanguage")
-                    or vid_snip.get("defaultLanguage")
-                )
-
+                snip = enriched_snippets.get(vid_id) or snippets[vid_id]
+                st = stats.get(vid_id, {})
+                cd = details.get(vid_id, {})
                 pub = snip.get("publishedAt")
                 ts = datetime.fromisoformat(pub.replace("Z", "+00:00")) if pub else None
+                duration_iso = cd.get("duration")
+                duration_seconds = _parse_iso8601_duration(duration_iso) if duration_iso else None
+                is_short = (
+                    duration_seconds is not None and duration_seconds <= 60
+                    if duration_seconds is not None
+                    else None
+                )
 
                 results.append(
                     NormalizedContent(
@@ -235,10 +302,12 @@ class YouTubeAdapter(SourceAdapter):
                             "like_count": int(st.get("likeCount", 0)),
                             "comment_count": int(st.get("commentCount", 0)),
                             "channel_id": snip.get("channelId"),
-                            "duration": duration,
-                            "tags": tags,
-                            "language": language,
-                            "is_short": 0 < duration <= 60,
+                            # main-lineage typed enrichment (surfaces on ContentItem)
+                            "duration": duration_seconds,
+                            "tags": snip.get("tags") or [],
+                            "language": snip.get("defaultAudioLanguage")
+                            or snip.get("defaultLanguage"),
+                            "is_short": is_short,
                             "definition": cd.get("definition"),
                         },
                     )
@@ -276,19 +345,19 @@ class YouTubeAdapter(SourceAdapter):
                     )
                 except HttpError as e:
                     if e.resp.status == 403:
-                        reason = ""
-                        if hasattr(e, "error_details") and e.error_details:
-                            reason = str(e.error_details)
-                        elif hasattr(e, "reason"):
-                            reason = e.reason or ""
-                        if "commentsDisabled" in reason or "forbidden" in reason.lower():
-                            logger.warning("Comments disabled for video %s", video_id)
-                            return results
-                        logger.error(
-                            "HTTP 403 fetching comments for %s (not disabled): %s",
-                            video_id, reason,
+                        reason = _http_error_reason(e)
+                        if reason in _QUOTA_REASONS:
+                            # Systemic — raising stops the run instead of silently
+                            # returning zero comments for every remaining video.
+                            raise QuotaExceededError(
+                                f"YouTube quota/rate limit fetching comments ({reason})"
+                            ) from e
+                        logger.warning(
+                            "No comments for video %s (403: %s)",
+                            video_id,
+                            reason or "commentsDisabled",
                         )
-                        raise
+                        return results
                     raise
 
                 for thread in resp.get("items", []):
@@ -311,23 +380,24 @@ class YouTubeAdapter(SourceAdapter):
                             compliance_status=self.compliance_status,
                             metadata={
                                 "like_count": top_snip.get("likeCount", 0),
-                                "author_channel_id": top_snip.get(
-                                    "authorChannelId", {}
-                                ).get("value"),
+                                # main-lineage: capture the commenter's channel id so
+                                # the same audience member can be tracked across
+                                # comments on different videos.
+                                "author_channel_id": _extract_channel_id(top_snip),
                             },
                         )
                     )
                     remaining -= 1
 
-                    total_reply_count = thread["snippet"].get("totalReplyCount", 0)
                     inline_replies = thread.get("replies", {}).get("comments", [])
-
+                    total_reply_count = thread["snippet"].get("totalReplyCount", 0)
                     if total_reply_count > len(inline_replies):
-                        all_replies = self._fetch_all_replies(cid)
-                    else:
-                        all_replies = inline_replies
+                        # main-lineage: commentThreads only ships up to ~5 inline
+                        # replies. Fetch the rest with comments().list — otherwise
+                        # long threads silently drop most of the audience discussion.
+                        inline_replies = self._fetch_all_replies(cid)
 
-                    for reply in all_replies:
+                    for reply in inline_replies:
                         r_snip = reply["snippet"]
                         r_pub = r_snip.get("publishedAt")
                         r_ts = (
@@ -348,9 +418,7 @@ class YouTubeAdapter(SourceAdapter):
                                 compliance_status=self.compliance_status,
                                 metadata={
                                     "like_count": r_snip.get("likeCount", 0),
-                                    "author_channel_id": r_snip.get(
-                                        "authorChannelId", {}
-                                    ).get("value"),
+                                    "author_channel_id": _extract_channel_id(r_snip),
                                 },
                             )
                         )
@@ -363,91 +431,31 @@ class YouTubeAdapter(SourceAdapter):
 
         return await asyncio.to_thread(_fetch)
 
-    def _fetch_all_replies(self, parent_comment_id: str) -> list[dict]:
-        """Paginate through all replies for a comment thread."""
-        replies: list[dict] = []
+    def _fetch_all_replies(self, comment_id: str) -> list[dict]:
+        """Page through every reply for a top-level comment (main-lineage bugfix)."""
+        results: list[dict] = []
         page_token: str | None = None
         while True:
-            kwargs: dict = {
-                "part": "snippet",
-                "parentId": parent_comment_id,
-                "maxResults": 100,
-                "textFormat": "plainText",
-            }
+            kwargs = {"part": "snippet", "parentId": comment_id, "maxResults": 100}
             if page_token:
                 kwargs["pageToken"] = page_token
-            resp = self._execute(
-                self._service.comments().list(**kwargs), quota_cost=1
-            )
-            replies.extend(resp.get("items", []))
+            try:
+                resp = self._execute(
+                    self._service.comments().list(**kwargs), quota_cost=1
+                )
+            except HttpError as e:
+                logger.warning("reply fetch for %s failed: %s", comment_id, e)
+                return results
+            results.extend(resp.get("items", []))
             page_token = resp.get("nextPageToken")
             if not page_token:
-                break
-        return replies
+                return results
 
     async def get_captions(self, video_id: str) -> NormalizedContent | None:
         """Fetch transcript/captions for a video (no quota cost)."""
 
         def _fetch() -> NormalizedContent | None:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            from youtube_transcript_api._errors import (
-                TranscriptsDisabled,
-                NoTranscriptFound,
-                VideoUnavailable,
-            )
-
-            try:
-                api = YouTubeTranscriptApi()
-                transcript = api.fetch(video_id)
-                segments = [
-                    {"text": s.text, "start": s.start, "duration": s.duration}
-                    for s in transcript
-                ]
-                text = " ".join(s["text"] for s in segments)
-                return NormalizedContent(
-                    source_platform="youtube",
-                    content_type="caption",
-                    external_id=f"caption_{video_id}",
-                    text=text,
-                    parent_id=video_id,
-                    access_method=self.access_method,
-                    compliance_status=self.compliance_status,
-                    metadata={"segments": segments},
-                )
-            except (TranscriptsDisabled, NoTranscriptFound):
-                logger.debug("No captions available for video %s", video_id)
-                return None
-            except VideoUnavailable:
-                logger.warning("Video unavailable for captions: %s", video_id)
-                return None
-            except Exception:
-                logger.exception("Unexpected error fetching captions for %s", video_id)
-                return None
-
-        return await asyncio.to_thread(_fetch)
-
-    async def get_channel_info(self, channel_id: str) -> dict:
-        """Fetch channel-level statistics, snippet, and branding."""
-
-        def _fetch() -> dict:
-            req = self._service.channels().list(
-                part="statistics,snippet,brandingSettings", id=channel_id
-            )
-            resp = self._execute(req, quota_cost=1)
-            if not resp.get("items"):
-                return {}
-            item = resp["items"][0]
-            st = item.get("statistics", {})
-            snip = item.get("snippet", {})
-            joined = snip.get("publishedAt")
-            return {
-                "subscriber_count": int(st.get("subscriberCount", 0)),
-                "total_view_count": int(st.get("viewCount", 0)),
-                "video_count": int(st.get("videoCount", 0)),
-                "country": snip.get("country"),
-                "description": snip.get("description"),
-                "joined_at": joined,
-            }
+            return fetch_youtube_caption(video_id, self.access_method, self.compliance_status)
 
         return await asyncio.to_thread(_fetch)
 

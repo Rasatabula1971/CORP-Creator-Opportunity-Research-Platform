@@ -37,6 +37,9 @@ coverage.xml
 node_modules/
 web/dist/
 
+# Bulk research artifacts written by discovery runs (CORP_DATA_PATH default)
+corp_data/
+
 *.log
 .DS_Store
 

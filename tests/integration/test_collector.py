@@ -1,6 +1,6 @@
 """Integration tests for AcquisitionCollector against real Postgres."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -10,8 +10,8 @@ from corp.core.models.content import AudienceInteraction, ContentItem
 from corp.core.models.creator import Creator
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
 from corp.core.models.workflow import ResearchRun
-from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.acquisition.collector import AcquisitionCollector
+from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 
 
 class FakeAdapter(SourceAdapter):
@@ -37,7 +37,7 @@ class FakeAdapter(SourceAdapter):
 
     @staticmethod
     def _default_items() -> list[NormalizedContent]:
-        ts = datetime(2026, 1, 15, 10, 0, tzinfo=timezone.utc)
+        ts = datetime(2026, 1, 15, 10, 0, tzinfo=UTC)
         return [
             NormalizedContent(
                 source_platform="youtube",

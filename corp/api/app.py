@@ -1,31 +1,34 @@
 """FastAPI application factory."""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from corp.api.auth import require_api_key
+from corp.api.errors import register_error_handlers
 from corp.api.routes import router
+from corp.api.routes_ops import health
+from corp.api.routes_ops import router as ops_router
 from corp.config import settings
-
-
-def _get_cors_origins() -> list[str]:
-    if settings.cors_origins:
-        return [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    if settings.app_env == "development":
-        return ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
-    return []
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="CORP", description="Creator Opportunity Research Platform")
-    origins = _get_cors_origins()
-    if origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-    app.include_router(router)
+
+    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["X-Total-Count"],
+    )
+    register_error_handlers(app)
+
+    # /health is open; everything else requires the API key when one is configured.
+    app.add_api_route("/health", health, methods=["GET"], include_in_schema=False)
+    protected = [Depends(require_api_key)]
+    app.include_router(router, dependencies=protected)
+    app.include_router(ops_router, dependencies=protected)
     return app
 
 

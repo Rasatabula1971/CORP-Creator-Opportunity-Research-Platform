@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.evidence import Evidence
@@ -142,7 +143,7 @@ class DossierGenerator:
             opportunities=opportunities,
             signals=signals,
             data_coverage=coverage,
-            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         )
 
     def _render(self, data: DossierData) -> str:
@@ -176,7 +177,10 @@ class DossierGenerator:
     async def _load_creator_score(self, creator_id: str) -> CreatorScore | None:
         result = await self._session.execute(
             select(CreatorScore)
-            .where(CreatorScore.creator_id == creator_id)
+            .where(
+                CreatorScore.creator_id == creator_id,
+                CreatorScore.superseded_at.is_(None),
+            )
             .order_by(CreatorScore.created_at.desc())
             .limit(1)
         )
@@ -198,7 +202,7 @@ class DossierGenerator:
             select(OpportunityScore)
             .where(
                 OpportunityScore.creator_id == creator_id,
-                OpportunityScore.research_run_id == latest_run_id,
+                OpportunityScore.superseded_at.is_(None),
             )
             .order_by(OpportunityScore.aggregate_score.desc())
         )
@@ -213,7 +217,10 @@ class DossierGenerator:
     async def _load_signal(self, cluster_id: str) -> CommercialSignal | None:
         result = await self._session.execute(
             select(CommercialSignal)
-            .where(CommercialSignal.problem_cluster_id == cluster_id)
+            .where(
+                CommercialSignal.problem_cluster_id == cluster_id,
+                CommercialSignal.superseded_at.is_(None),
+            )
             .order_by(CommercialSignal.created_at.desc())
             .limit(1)
         )
@@ -233,7 +240,9 @@ class DossierGenerator:
 
     async def _load_competitors(self, cluster_id: str) -> list[Competitor]:
         result = await self._session.execute(
-            select(Competitor).where(Competitor.problem_cluster_id == cluster_id)
+            select(Competitor)
+            .where(Competitor.problem_cluster_id == cluster_id)
+            .order_by(Competitor.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -249,21 +258,21 @@ class DossierGenerator:
         )
         source_count = src_result.scalar() or 0
 
-        run_ids = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
+        creator_runs = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
         ev_result = await self._session.execute(
             select(func.count())
             .select_from(Evidence)
-            .where(Evidence.research_run_id.in_(run_ids))
+            .where(Evidence.research_run_id.in_(creator_runs))
         )
         evidence_count = ev_result.scalar() or 0
 
         obs_count = sum(len(o.observations) for o in opportunities)
-        competitor_count = sum(len(o.competitors) for o in opportunities)
+        comp_count = sum(len(o.competitors) for o in opportunities)
 
         return DataCoverage(
             source_count=source_count,
             evidence_count=evidence_count,
             cluster_count=len(opportunities),
             observation_count=obs_count,
-            competitor_count=competitor_count,
+            competitor_count=comp_count,
         )

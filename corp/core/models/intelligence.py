@@ -1,7 +1,8 @@
-from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
 
@@ -13,6 +14,7 @@ class ProblemObservation(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_observations_evidence_id", "evidence_id"),
         Index("ix_observations_category", "category"),
+        Index("ix_observations_source_side", "source_side"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -23,6 +25,10 @@ class ProblemObservation(TimestampMixin, Base):
     extraction_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
+    # "audience" (comments) or "creator" (own titles/descriptions/transcripts)
+    source_side: Mapped[str] = mapped_column(
+        String(20), default="audience", server_default="audience", nullable=False
+    )
     sentiment: Mapped[str | None] = mapped_column(String(20))
     urgency: Mapped[str | None] = mapped_column(String(20))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
@@ -34,8 +40,12 @@ class ProblemObservation(TimestampMixin, Base):
 
 class ProblemCluster(TimestampMixin, Base):
     __tablename__ = "problem_clusters"
+    __table_args__ = (Index("ix_clusters_creator_id", "creator_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    creator_id: Mapped[str | None] = mapped_column(ForeignKey("creators.id"), nullable=True)
+    # Set when a newer clustering run replaces this cluster. Rows are never deleted.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     frequency: Mapped[int] = mapped_column(Integer, default=0)
