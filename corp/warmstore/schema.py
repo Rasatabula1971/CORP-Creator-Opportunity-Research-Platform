@@ -46,6 +46,8 @@ problem_observations = Table(
     Column("model_version", String(100), nullable=False),
     Column("confidence", Float),
     Column("source_side", String(20), nullable=False, default="audience"),
+    Column("sentiment", String(20)),
+    Column("urgency", String(20)),
     Column("embedding", LargeBinary),
     Column("created_at", DateTime),
     Column("updated_at", DateTime),
@@ -68,6 +70,10 @@ content_items = Table(
     Column("url", String(500)),
     Column("topics", Text),
     Column("extra", Text),
+    Column("duration", Integer),
+    Column("tags", Text),
+    Column("language", String(10)),
+    Column("is_short", Integer),
     Column("created_at", DateTime),
     Column("updated_at", DateTime),
 )
@@ -84,6 +90,11 @@ audience_interactions = Table(
     Column("posted_at", DateTime),
     Column("like_count", Integer),
     Column("parent_id", String(255)),
+    Column("author_channel_id", String(255)),
+    # Extraction bookkeeping (see corp.core.models.content.AudienceInteraction).
+    Column("extracted_at", DateTime),
+    Column("extracted_prompt_version", String(50)),
+    Column("extracted_model", String(100)),
     Column("created_at", DateTime),
     Column("updated_at", DateTime),
 )

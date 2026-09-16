@@ -29,12 +29,12 @@ from corp.warmstore.schema import (
 )
 
 _JSON_COLUMNS = frozenset({
-    "topics", "extra", "component_scores", "diagnostics",
+    "topics", "extra", "tags", "component_scores", "diagnostics",
 })
 
 _DATETIME_COLUMNS = frozenset({
     "collected_at", "captured_at", "executed_at", "published_at",
-    "posted_at", "superseded_at", "created_at", "updated_at",
+    "posted_at", "superseded_at", "created_at", "updated_at", "extracted_at",
 })
 
 
@@ -81,10 +81,27 @@ class WarmStore:
         return self._engine
 
     async def init_db(self) -> None:
-        """Create all warm-store tables (idempotent)."""
+        """Create all warm-store tables (idempotent), then heal column drift.
+
+        ``metadata.create_all`` only creates tables that don't exist yet — an
+        existing SQLite file predating a schema.py column addition (e.g. the
+        extraction-stamp or tier-2 columns) keeps its old shape forever and
+        every mirror write into it raises OperationalError. Since this store
+        is a disposable bulk mirror (Postgres is the source of truth; see
+        module docstring), it's safe to widen it in place: add whatever
+        columns the current schema has that the on-disk table doesn't.
+        """
         engine = await self._get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
+            for table in ALL_TABLES:
+                result = await conn.execute(text(f"PRAGMA table_info([{table.name}])"))
+                existing = {row[1] for row in result.fetchall()}
+                for col in table.columns:
+                    if col.name in existing:
+                        continue
+                    ddl = f"ALTER TABLE [{table.name}] ADD COLUMN [{col.name}] {col.type}"
+                    await conn.execute(text(ddl))
 
     async def close(self) -> None:
         if self._engine is not None:
