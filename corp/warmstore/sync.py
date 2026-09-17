@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import numpy as np
+
 from corp.warmstore.store import WarmStore
 
 logger = logging.getLogger(__name__)
@@ -38,10 +40,21 @@ def model_to_dict(instance: object) -> dict[str, Any]:
         val = getattr(instance, col.key, None)
         if hasattr(val, "value"):
             val = val.value
-        if isinstance(val, bytes):
-            pass
         result[col.key] = val
     return result
+
+
+def embedding_to_bytes(emb: Any) -> bytes | None:
+    """Serialize an observation embedding for the warm store's BLOB column.
+
+    The ORM value is a pgvector ``Vector``: a ``list[float]`` right after the
+    cluster pipeline assigns it, or a ``numpy.ndarray`` once loaded from
+    Postgres. Both are stored as little-endian float32; read back with
+    ``np.frombuffer(blob, dtype="<f4")``.
+    """
+    if emb is None or isinstance(emb, bytes):
+        return emb
+    return np.asarray(emb, dtype="<f4").tobytes()
 
 
 async def mirror_evidence(rows: list) -> None:
@@ -64,9 +77,7 @@ async def mirror_observations(rows: list) -> None:
         dicts = []
         for r in rows:
             d = model_to_dict(r)
-            emb = getattr(r, "embedding", None)
-            if emb is not None and not isinstance(emb, bytes):
-                d["embedding"] = emb.tobytes() if hasattr(emb, "tobytes") else bytes(emb)
+            d["embedding"] = embedding_to_bytes(getattr(r, "embedding", None))
             dicts.append(d)
         await store.put_observations(dicts)
     except Exception:

@@ -19,8 +19,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Research runs may be niche- or cross-creator scoped; creator_id becomes optional.
-    op.alter_column("research_runs", "creator_id", existing_type=sa.String(36), nullable=True)
+    # Research runs may be niche- or cross-creator scoped. creator_id is already
+    # nullable (b4e7f2a1c3d5 owns that change); this revision only adds scope/stats.
     op.add_column(
         "research_runs",
         sa.Column("scope", sa.String(20), nullable=False, server_default="creator"),
@@ -59,5 +59,7 @@ def downgrade() -> None:
 
     op.drop_column("research_runs", "stats")
     op.drop_column("research_runs", "scope")
-    op.execute("DELETE FROM research_runs WHERE creator_id IS NULL")
-    op.alter_column("research_runs", "creator_id", existing_type=sa.String(36), nullable=False)
+    # Do NOT touch creator_id nullability here. At this point in the chain the
+    # research_run_id FKs from c6f9d3e5a7b1 still exist, so deleting NULL-creator
+    # runs (niche-discovery / cross-creator) would violate fk_evidence_research_run_id.
+    # b4e7f2a1c3d5.downgrade() restores NOT NULL after those FKs are dropped.
