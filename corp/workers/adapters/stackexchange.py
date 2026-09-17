@@ -108,16 +108,18 @@ class StackExchangeAdapter(SourceAdapter):
         return await self._fetch_questions(params)
 
     async def _collect_by_search(self, query: str) -> list[NormalizedContent]:
+        # /questions has no free-text search and rejects sort=relevance;
+        # keyword search lives on /search/advanced with the ``q`` parameter.
         params: dict[str, str | int] = {
-            "intitle": query,
+            "q": query,
             "sort": "relevance",
             "order": "desc",
             "filter": "withbody",
         }
-        return await self._fetch_questions(params)
+        return await self._fetch_questions(params, endpoint="/search/advanced")
 
     async def _fetch_questions(
-        self, params: dict[str, str | int]
+        self, params: dict[str, str | int], endpoint: str = "/questions"
     ) -> list[NormalizedContent]:
         results: list[NormalizedContent] = []
         page = 1
@@ -133,7 +135,7 @@ class StackExchangeAdapter(SourceAdapter):
             if self._api_key:
                 page_params["key"] = self._api_key
 
-            data = await self._get_json("/questions", page_params)
+            data = await self._get_json(endpoint, page_params)
             items = data.get("items", [])
             self.quota_remaining = data.get("quota_remaining")
 

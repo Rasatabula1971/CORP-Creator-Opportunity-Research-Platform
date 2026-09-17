@@ -134,8 +134,11 @@ async def test_collect_by_search(mock_client):
 
     call_args = mock_client.get.call_args
     params = call_args.kwargs.get("params") or call_args[1].get("params") or call_args[0][1]
-    assert params["intitle"] == "deploy Flask"
+    assert params["q"] == "deploy Flask"
     assert params["sort"] == "relevance"
+    assert "intitle" not in params
+    # Free-text search is only valid on /search/advanced, not /questions.
+    assert "/search/advanced" in str(call_args)
 
 
 # ── answers ─────────────────────────────────────────────────────────
