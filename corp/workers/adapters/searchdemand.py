@@ -33,6 +33,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.ids import stable_id
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ class SearchDemandAdapter(SourceAdapter):
         now = datetime.now(tz=UTC)
         results: list[NormalizedContent] = []
         for rank, suggestion in enumerate(suggestions):
-            ext_id = f"sd_{hash(suggestion) & 0xFFFFFFFF:08x}"
+            ext_id = stable_id("sd_", self._language, self._country, suggestion)
             results.append(
                 NormalizedContent(
                     source_platform="searchdemand",

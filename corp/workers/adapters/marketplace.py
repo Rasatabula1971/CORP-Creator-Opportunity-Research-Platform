@@ -36,6 +36,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.ids import stable_id
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +307,7 @@ def _parse_gumroad_listings(html: str, query: str) -> list[NormalizedContent]:
         url = link_match.group(1) if link_match else None
         rating = float(rating_match.group(1)) if rating_match else None
 
-        ext_id = f"gm_{hash(title + (url or '')) & 0xFFFFFFFF:08x}"
+        ext_id = stable_id("gm_", title, url)
         results.append(
             NormalizedContent(
                 source_platform="marketplace",
@@ -427,7 +428,7 @@ def _parse_udemy_response(
         instructors = course.get("visible_instructors", [])
         instructor = instructors[0].get("display_name") if instructors else None
 
-        course_id = course.get("id", hash(title) & 0xFFFFFFFF)
+        course_id = course.get("id") or stable_id("", title)
         url_path = course.get("url", "")
         url = f"https://www.udemy.com{url_path}" if url_path else None
 
@@ -480,7 +481,7 @@ def _parse_etsy_api_response(
             price = None
             currency = "USD"
 
-        listing_id = item.get("listing_id", hash(title) & 0xFFFFFFFF)
+        listing_id = item.get("listing_id") or stable_id("", title)
 
         results.append(
             NormalizedContent(

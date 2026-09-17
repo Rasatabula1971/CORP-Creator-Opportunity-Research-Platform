@@ -35,6 +35,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.ids import stable_id
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +293,7 @@ def _parse_reviews(html: str, asin: str) -> list[NormalizedContent]:
         date_str = _html_to_text(date_match.group(1)) if date_match else None
         timestamp = _parse_review_date(date_str) if date_str else None
 
-        ext_id = review_id or f"amz_{hash(text) & 0xFFFFFFFF:08x}"
+        ext_id = review_id or stable_id("amz_", text)
 
         results.append(
             NormalizedContent(
