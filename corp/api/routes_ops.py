@@ -35,7 +35,7 @@ from corp.core.schemas.creator import (
     PlatformAccountResponse,
 )
 from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
-from corp.core.schemas.scoring import OpportunityScoreResponse, ScoreResponse
+from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
 from corp.database import get_session
 from corp.workers.intelligence.runs import active_clusters_for_creator
@@ -81,16 +81,6 @@ class ClusterDetail(ProblemClusterResponse):
     signal: SignalSummary | None = None
     score: OpportunityScoreResponse | None = None
     member_count: int = 0
-
-
-class DossierJson(BaseModel):
-    creator: CreatorDetailResponse
-    creator_score: ScoreResponse | None
-    score_band: str
-    weights: dict[str, float]
-    opportunities: list[dict[str, Any]]
-    data_coverage: dict[str, int]
-    generated_at: str
 
 
 # ── Health (registered on the app without auth; see app.py) ─────────
@@ -143,20 +133,29 @@ async def provider_health() -> dict[str, Any]:
     if callable(member_names):
         payload["members"] = member_names()
 
-    if isinstance(provider, FairProvider):
-        try:
-            result = await provider.ping()
-        finally:
-            await provider.close()
-        payload["fair"] = {
-            "ok": result.ok,
-            "provider_count": result.provider_count,
-            "provider_ids": result.provider_ids,
-            "solve_status": result.solve_status,
-            "solve_provider": result.solve_provider,
-            "solve_model": result.solve_model,
-            "detail": result.detail,
-        }
+    try:
+        if isinstance(provider, FairProvider):
+            try:
+                result = await provider.ping()
+            except Exception as exc:  # noqa: BLE001 — a failed probe is the diagnosis
+                payload["fair"] = {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
+            else:
+                payload["fair"] = {
+                    "ok": result.ok,
+                    "provider_count": result.provider_count,
+                    "provider_ids": result.provider_ids,
+                    "solve_status": result.solve_status,
+                    "solve_provider": result.solve_provider,
+                    "solve_model": result.solve_model,
+                    "detail": result.detail,
+                }
+    finally:
+        # Every provider built here is throwaway. GroqProvider, PooledProvider
+        # and FairProvider all hold an async client behind close(); bare
+        # GeminiProvider does not expose one.
+        close = getattr(provider, "close", None)
+        if callable(close):
+            await close()
 
     return payload
 

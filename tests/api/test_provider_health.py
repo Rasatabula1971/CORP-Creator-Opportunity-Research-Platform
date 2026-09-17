@@ -7,8 +7,6 @@ JSON shape and the routing between the three cases the endpoint distinguishes
 (FAIR, non-FAIR, no usable provider).
 """
 
-from types import SimpleNamespace
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -61,7 +59,9 @@ async def test_fair_provider_returns_full_probe(client, monkeypatch):
         solve_model="openai/gpt-oss-20b",
         detail="solve accepted",
     )
-    fake = _FakeFair(ping, member_names=["fair-router", "gemini-3.6-flash", "groq/openai/gpt-oss-20b"])
+    fake = _FakeFair(
+        ping, member_names=["fair-router", "gemini-3.6-flash", "groq/openai/gpt-oss-20b"]
+    )
     monkeypatch.setattr(ops, "build_provider", lambda: fake)
 
     resp = await client.get("/providers/health")
@@ -169,11 +169,10 @@ async def test_unexpected_construction_error_returns_200_with_error_block(client
     assert "env_file" in body["error"]["detail"]
 
 
-async def test_close_runs_even_when_ping_raises(monkeypatch):
-    """A ping() that raises must still release the client — otherwise a bad
-    router leaks resources on every probe. Calls the endpoint function
-    directly so the assertion is on the finally block, not on FastAPI's
-    error-handler chain."""
+async def test_ping_exception_is_reported_not_raised_and_still_closes(client, monkeypatch):
+    """A ping() that raises is itself the diagnosis: the endpoint answers 200
+    with ``fair.ok=False`` and the exception text, never a 500 — and the
+    client is still released so a bad router doesn't leak on every probe."""
 
     class _Explodes(_FakeFair):
         async def ping(self):
@@ -185,6 +184,29 @@ async def test_close_runs_even_when_ping_raises(monkeypatch):
     )
     monkeypatch.setattr(ops, "build_provider", lambda: fake)
 
-    with pytest.raises(RuntimeError, match="router blew up"):
-        await ops.provider_health()
+    resp = await client.get("/providers/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider"] == "gemini-3.6-flash"
+    assert body["fair"] == {"ok": False, "detail": "RuntimeError: router blew up"}
     assert fake._closed is True
+
+
+async def test_non_fair_provider_with_close_is_closed(client, monkeypatch):
+    """GroqProvider and PooledProvider own an httpx.AsyncClient behind
+    close(); the probe must release it even though no FAIR ping runs."""
+
+    class _Groq:
+        model_name = "groq/openai/gpt-oss-20b"
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    fake = _Groq()
+    monkeypatch.setattr(ops, "build_provider", lambda: fake)
+
+    resp = await client.get("/providers/health")
+    assert resp.status_code == 200
+    assert "fair" not in resp.json()
+    assert fake.closed is True

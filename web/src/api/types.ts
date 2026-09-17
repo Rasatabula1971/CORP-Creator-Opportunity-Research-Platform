@@ -196,18 +196,57 @@ export interface ResearchRun {
   stats: Record<string, unknown> | null;
 }
 
+export interface CommercialSignal extends SignalSummary {
+  id: string;
+  problem_cluster_id: string;
+  evidence_id: string;
+  classification_model: string;
+  prompt_version: string;
+}
+
+// Mirrors corp/core/schemas/dossier.py DossierResponse, which is what
+// GET /creators/{id}/dossier.json returns.
+export interface ProblemCluster {
+  id: string;
+  label: string;
+  description: string | null;
+  frequency: number;
+  recency_score: number;
+  evidence_strength: number;
+  creator_count: number;
+  model_version: string | null;
+}
+
+export interface DossierOpportunity {
+  cluster: ProblemCluster;
+  score: OpportunityScore;
+  signal: CommercialSignal | null;
+  observations: ProblemObservation[];
+  competitors: Competitor[];
+}
+
 export interface DossierJson {
-  creator: CreatorDetail;
-  creator_score: Record<string, unknown> | null;
+  creator: {
+    id: string;
+    name: string;
+    niche: string | null;
+    status: CreatorStatus;
+  };
+  platform_accounts: Array<{
+    platform: string;
+    handle: string;
+    subscriber_count: number | null;
+  }>;
+  creator_score: {
+    id: string;
+    component_scores: Record<string, number>;
+    aggregate_score: number;
+    confidence_band: string;
+  } | null;
   score_band: string;
   weights: Record<string, number>;
-  opportunities: Array<{
-    cluster: ClusterDetail;
-    score: OpportunityScore;
-    signal: SignalSummary | null;
-    observations: ProblemObservation[];
-    competitors: Competitor[];
-  }>;
+  opportunities: DossierOpportunity[];
+  signals: Array<{ cluster_label: string; signal: CommercialSignal }>;
   data_coverage: {
     source_count: number;
     evidence_count: number;
