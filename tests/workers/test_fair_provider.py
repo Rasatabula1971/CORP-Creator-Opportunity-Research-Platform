@@ -1,17 +1,26 @@
 """Unit tests for the in-process FAIR provider adapter — no FAIR package needed."""
 
 import json
+import sys
+import types
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
 import pytest
 
+from corp.config import Settings
 from corp.workers.providers.errors import (
     ProviderError,
     ProviderExhaustedError,
     ProviderUnavailableError,
 )
-from corp.workers.providers.fair import FairProvider, PingResult, _strip_code_fence
+from corp.workers.providers.fair import (
+    FairProvider,
+    FairUnavailableError,
+    PingResult,
+    _strip_code_fence,
+    build_fair_provider,
+)
 from corp.workers.providers.registry import LLMProvider
 
 # ── a fake FAIR router with the surface the adapter uses ──────────────
@@ -363,3 +372,138 @@ async def test_ping_reports_non_accepted_status_with_reason():
     assert result.ok is False
     assert result.solve_status == "ESCALATION_REQUIRED"
     assert "ALL_FREE_MODELS_UNAVAILABLE" in result.detail
+
+
+# ── build_fair_provider — resilient to FAIR version drift ─────────────
+
+
+@pytest.fixture
+def stub_fair(monkeypatch):
+    """Install a fake ``fair.embedded.module.FAIR`` class for build_fair_provider
+    to import, letting each test dictate what FAIR looks like this run."""
+
+    def install(fair_cls):
+        pkg = types.ModuleType("fair")
+        embedded = types.ModuleType("fair.embedded")
+        module = types.ModuleType("fair.embedded.module")
+        module.FAIR = fair_cls
+        # Real fair package present? — stash it and restore on teardown.
+        monkeypatch.setitem(sys.modules, "fair", pkg)
+        monkeypatch.setitem(sys.modules, "fair.embedded", embedded)
+        monkeypatch.setitem(sys.modules, "fair.embedded.module", module)
+        return fair_cls
+
+    return install
+
+
+def _cfg() -> Settings:
+    return Settings(
+        _env_file=None,
+        gemini_api_key="g",
+        groq_api_key="q",
+        fair_env_file="",
+        fair_client_id="corp",
+        fair_quality_level="standard",
+        fair_priority="P2",
+        fair_max_output_tokens=2048,
+        fair_timeout_seconds=30.0,
+        fair_cache_enabled=True,
+    )
+
+
+class _WorkingFair:
+    """Fake FAIR that accepts CORP's full kwarg set."""
+
+    skipped: dict = {}
+
+    def __init__(
+        self,
+        *,
+        gemini_api_key=None,
+        groq_api_key=None,
+        env_file=None,
+        quality_level="standard",
+        timeout_seconds=30.0,
+        cache_enabled=True,
+    ):
+        self.kwargs = dict(
+            gemini_api_key=gemini_api_key,
+            groq_api_key=groq_api_key,
+            env_file=env_file,
+            quality_level=quality_level,
+            timeout_seconds=timeout_seconds,
+            cache_enabled=cache_enabled,
+        )
+
+    def providers(self):
+        return [{"provider_id": "groq", "models": ["m"]}]
+
+
+def test_build_fair_provider_happy_path(stub_fair):
+    stub_fair(_WorkingFair)
+    provider = build_fair_provider(_cfg())
+    assert isinstance(provider, FairProvider)
+    # Every kwarg reached the router — the empty string ``fair_env_file`` is
+    # normalized to None by ``... or None`` before being passed to FAIR.
+    assert provider._fair.kwargs["env_file"] is None
+    assert provider._fair.kwargs["quality_level"] == "standard"
+    assert provider._fair.kwargs["gemini_api_key"] == "g"
+
+
+def test_build_fair_provider_trims_unknown_kwargs_and_retries(stub_fair, caplog):
+    """An installed FAIR that doesn't accept ``env_file`` should be retried
+    without it, not crash the whole app (this is the bug the laptop hit)."""
+
+    class OldFair(_WorkingFair):
+        def __init__(
+            self,
+            *,
+            gemini_api_key=None,
+            groq_api_key=None,
+            quality_level="standard",
+            timeout_seconds=30.0,
+            cache_enabled=True,
+        ):
+            super().__init__(
+                gemini_api_key=gemini_api_key,
+                groq_api_key=groq_api_key,
+                env_file=None,
+                quality_level=quality_level,
+                timeout_seconds=timeout_seconds,
+                cache_enabled=cache_enabled,
+            )
+
+    stub_fair(OldFair)
+    with caplog.at_level("WARNING"):
+        provider = build_fair_provider(_cfg())
+    assert isinstance(provider, FairProvider)
+    assert any("ignored kwargs" in r.message for r in caplog.records)
+    # env_file was dropped; the rest survived.
+    assert provider._fair.kwargs["env_file"] is None
+    assert provider._fair.kwargs["quality_level"] == "standard"
+
+
+def test_build_fair_provider_unrecoverable_signature_mismatch_raises_unavailable(stub_fair):
+    """Signature so different that no kwargs match — must raise
+    FairUnavailableError so the factory's auto path falls back to the pool."""
+
+    class WeirdFair:
+        def __init__(self, some_other_param=None):
+            pass
+
+    stub_fair(WeirdFair)
+    with pytest.raises(FairUnavailableError, match="incompatible FAIR signature"):
+        build_fair_provider(_cfg())
+
+
+def test_build_fair_provider_non_typeerror_exception_becomes_unavailable(stub_fair):
+    """A FAIR that reads a bad env file at construction, or otherwise raises,
+    should also fall back to the pool via FairUnavailableError — not crash."""
+
+    class ExplodingFair(_WorkingFair):
+        def __init__(self, **kwargs):
+            raise RuntimeError("bad FAIR env file")
+
+    stub_fair(ExplodingFair)
+    with pytest.raises(FairUnavailableError, match="FAIR construction failed"):
+        build_fair_provider(_cfg())

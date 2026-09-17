@@ -122,14 +122,54 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
             f"FAIR_QUALITY_LEVEL must be one of {QUALITY_LEVELS}, got {cfg.fair_quality_level!r}"
         )
 
-    router = FAIR(
-        gemini_api_key=cfg.gemini_api_key or None,
-        groq_api_key=cfg.groq_api_key or None,
-        env_file=cfg.fair_env_file or None,
-        quality_level=cfg.fair_quality_level,
-        timeout_seconds=cfg.fair_timeout_seconds,
-        cache_enabled=cfg.fair_cache_enabled,
-    )
+    kwargs: dict[str, Any] = {
+        "gemini_api_key": cfg.gemini_api_key or None,
+        "groq_api_key": cfg.groq_api_key or None,
+        "env_file": cfg.fair_env_file or None,
+        "quality_level": cfg.fair_quality_level,
+        "timeout_seconds": cfg.fair_timeout_seconds,
+        "cache_enabled": cfg.fair_cache_enabled,
+    }
+    try:
+        router = FAIR(**kwargs)
+    except TypeError as exc:
+        # An installed ``fair`` package whose ``FAIR.__init__`` signature has
+        # changed (kwarg added, renamed or removed upstream) shouldn't crash
+        # the whole app — the auto path treats FairUnavailableError as a
+        # signal to fall back to the pool. Retry with only the kwargs the
+        # installed FAIR actually accepts; if that too fails, raise
+        # FairUnavailableError so auto mode picks the pool.
+        try:
+            import inspect
+
+            accepted = set(inspect.signature(FAIR.__init__).parameters)
+            trimmed = {k: v for k, v in kwargs.items() if k in accepted}
+        except (TypeError, ValueError):
+            trimmed = {}
+        if trimmed and trimmed != kwargs:
+            try:
+                router = FAIR(**trimmed)
+                logger.warning(
+                    "installed fair package ignored kwargs %s; continuing with %s",
+                    sorted(set(kwargs) - set(trimmed)),
+                    sorted(trimmed),
+                )
+            except Exception as retry_exc:  # noqa: BLE001
+                raise FairUnavailableError(
+                    f"installed fair package has an incompatible FAIR signature "
+                    f"({exc}); retry with matching kwargs also failed: {retry_exc}"
+                ) from retry_exc
+        else:
+            raise FairUnavailableError(
+                f"installed fair package has an incompatible FAIR signature: {exc}. "
+                "Update the fair package to match CORP, or set FAIR_ENABLED=false."
+            ) from exc
+    except Exception as exc:  # noqa: BLE001
+        # Any other construction failure (e.g. FAIR reading a bad env file):
+        # also fall back to the pool rather than crashing the app.
+        raise FairUnavailableError(
+            f"FAIR construction failed: {type(exc).__name__}: {exc}"
+        ) from exc
     providers = router.providers()
     if not providers:
         raise FairUnavailableError(

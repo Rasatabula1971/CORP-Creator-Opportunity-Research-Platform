@@ -113,11 +113,25 @@ async def provider_health() -> dict[str, Any]:
     whether a trivial schema-checked solve is accepted. The probe costs
     one real FAIR call — sits behind the same API key as the rest of
     ``routes_ops`` so it is not an unauthenticated way to burn quota.
+
+    Its whole purpose is to diagnose provider state, so an unhealthy
+    provider surfaces as data in the response, never as an HTTP 500:
+    a missing configuration returns 503 with the reason, and any other
+    provider construction failure returns 200 with an ``error`` block.
     """
     try:
         provider = build_provider()
     except ProviderConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "provider": None,
+            "kind": None,
+            "error": {
+                "code": "construction_failed",
+                "detail": f"{type(exc).__name__}: {exc}",
+            },
+        }
 
     payload: dict[str, Any] = {
         "provider": provider.model_name,

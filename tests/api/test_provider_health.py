@@ -149,6 +149,26 @@ async def test_provider_config_error_is_503(client, monkeypatch):
     assert "No LLM provider configured" in resp.json()["detail"]
 
 
+async def test_unexpected_construction_error_returns_200_with_error_block(client, monkeypatch):
+    """A diagnostic endpoint must never 500 for the very thing it exists to
+    diagnose. Non-ProviderConfigError construction failures (a FAIR version
+    mismatch, an incompatible kwarg, a bad env file) surface as data."""
+
+    def raise_it():
+        raise TypeError("FAIR.__init__() got an unexpected keyword argument 'env_file'")
+
+    monkeypatch.setattr(ops, "build_provider", raise_it)
+
+    resp = await client.get("/providers/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider"] is None
+    assert body["kind"] is None
+    assert body["error"]["code"] == "construction_failed"
+    assert "TypeError" in body["error"]["detail"]
+    assert "env_file" in body["error"]["detail"]
+
+
 async def test_close_runs_even_when_ping_raises(monkeypatch):
     """A ping() that raises must still release the client — otherwise a bad
     router leaks resources on every probe. Calls the endpoint function
