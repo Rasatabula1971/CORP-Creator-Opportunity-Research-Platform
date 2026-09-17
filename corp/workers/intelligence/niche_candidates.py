@@ -34,7 +34,7 @@ from corp.core.models.niche_candidate import (
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.state.research_run import validate_run_type
 from corp.workers.intelligence.clustering import ClusteringConfig, cluster_observations
-from corp.workers.intelligence.embeddings import Embedder, embed_texts
+from corp.workers.intelligence.embeddings import Embedder, embed_texts_async
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.niche_naming import NAMING_PROMPT_VERSION, name_cluster
 from corp.workers.intelligence.runs import (
@@ -113,7 +113,7 @@ class NicheCandidateGenerator:
             embeddings = np.empty((0, 0), dtype=np.float32)
             if evidence:
                 texts = [e.raw_text for e in evidence]
-                embeddings = embed_texts(texts, self._embedder)
+                embeddings = await embed_texts_async(texts, self._embedder)
                 clusters = cluster_observations(
                     texts,
                     embeddings,

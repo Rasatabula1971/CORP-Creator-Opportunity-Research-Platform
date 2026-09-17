@@ -20,7 +20,7 @@ from corp.workers.intelligence.clustering import (
     ClusterResult,
     cluster_observations,
 )
-from corp.workers.intelligence.embeddings import Embedder, embed_texts
+from corp.workers.intelligence.embeddings import Embedder, embed_texts_async
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -76,7 +76,7 @@ class ClusterPipeline:
                 stats.extra["observations"] = len(observations)
                 if observations:
                     texts = [o.text for o in observations]
-                    embeddings = embed_texts(texts, self._embedder)
+                    embeddings = await embed_texts_async(texts, self._embedder)
                     await self._store_embeddings(observations, embeddings)
 
                     timestamps = [o.created_at for o in observations]

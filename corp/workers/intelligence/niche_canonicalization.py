@@ -33,7 +33,7 @@ from corp.core.models.niche_candidate import (
     NicheCandidateStatus,
 )
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
-from corp.workers.intelligence.embeddings import Embedder, embed_texts
+from corp.workers.intelligence.embeddings import Embedder, embed_texts_async
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -93,7 +93,7 @@ class NicheCanonicalizer:
             existing_niches = await self._all_niches()
             niche_labels = [n.canonical_name for n in existing_niches]
             niche_embeddings = (
-                embed_texts(niche_labels, self._embedder) if niche_labels else None
+                await embed_texts_async(niche_labels, self._embedder) if niche_labels else None
             )
 
             promoted = 0
@@ -129,10 +129,10 @@ class NicheCanonicalizer:
                     cand.niche_id = niche.id
                     existing_niches.append(niche)
                     if niche_embeddings is not None:
-                        new_emb = embed_texts([cand.label], self._embedder)
+                        new_emb = await embed_texts_async([cand.label], self._embedder)
                         niche_embeddings = np.vstack([niche_embeddings, new_emb])
                     else:
-                        niche_embeddings = embed_texts([cand.label], self._embedder)
+                        niche_embeddings = await embed_texts_async([cand.label], self._embedder)
                     niche_labels.append(niche.canonical_name)
                     promoted += 1
                     logger.info(
@@ -176,7 +176,7 @@ class NicheCanonicalizer:
         if embeddings is None or len(existing) == 0:
             return None
 
-        cand_emb = embed_texts([label], self._embedder)
+        cand_emb = await embed_texts_async([label], self._embedder)
         sims = _cosine_batch(cand_emb[0], embeddings)
         best_idx = int(np.argmax(sims))
         if sims[best_idx] >= self._cfg.similarity_threshold:
