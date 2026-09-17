@@ -40,6 +40,8 @@ from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
 from corp.database import get_session
 from corp.workers.dossier.generator import DossierGenerator
 from corp.workers.intelligence.runs import active_clusters_for_creator
+from corp.workers.providers.factory import ProviderConfigError, build_provider
+from corp.workers.providers.fair import FairProvider
 
 router = APIRouter()
 
@@ -97,6 +99,53 @@ class DossierJson(BaseModel):
 
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# ── Providers: diagnose the active LLM provider ──────────────────────
+
+
+@router.get("/providers/health")
+async def provider_health() -> dict[str, Any]:
+    """Diagnose the active LLM provider.
+
+    Returns the active provider's name and, when it is FAIR, a live probe
+    of the embedded router: how many free providers it has keys for, and
+    whether a trivial schema-checked solve is accepted. The probe costs
+    one real FAIR call — sits behind the same API key as the rest of
+    ``routes_ops`` so it is not an unauthenticated way to burn quota.
+    """
+    try:
+        provider = build_provider()
+    except ProviderConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    payload: dict[str, Any] = {
+        "provider": provider.model_name,
+        "kind": type(provider).__name__,
+    }
+
+    # PooledProvider and FairProvider both expose member_names(); bare
+    # providers (GeminiProvider, GroqProvider) do not.
+    member_names = getattr(provider, "member_names", None)
+    if callable(member_names):
+        payload["members"] = member_names()
+
+    if isinstance(provider, FairProvider):
+        try:
+            result = await provider.ping()
+        finally:
+            await provider.close()
+        payload["fair"] = {
+            "ok": result.ok,
+            "provider_count": result.provider_count,
+            "provider_ids": result.provider_ids,
+            "solve_status": result.solve_status,
+            "solve_provider": result.solve_provider,
+            "solve_model": result.solve_model,
+            "detail": result.detail,
+        }
+
+    return payload
 
 
 # ── Creators: write ──────────────────────────────────────────────────

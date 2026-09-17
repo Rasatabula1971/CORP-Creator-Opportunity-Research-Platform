@@ -27,6 +27,7 @@ import importlib.util
 import json
 import logging
 import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from corp.workers.providers.errors import (
@@ -69,6 +70,25 @@ def _model_label(provider_id: str | None, model_id: str | None) -> str:
     model = model_id or "unknown"
     prefix = _VENDOR_PREFIX.get(provider, f"{provider}/")
     return f"{prefix}{model}"
+
+
+@dataclass(frozen=True, slots=True)
+class PingResult:
+    """Outcome of a FAIR end-to-end liveness probe.
+
+    ``ok`` is only true when at least one provider is registered AND a
+    trivial schema-checked task actually gets an ``ACCEPTED`` answer back;
+    an empty provider set, a router exception, or a non-ACCEPTED status
+    all count as not-ok, with ``detail`` naming the reason.
+    """
+
+    ok: bool
+    provider_count: int
+    provider_ids: list[str] = field(default_factory=list)
+    solve_status: str | None = None
+    solve_provider: str | None = None
+    solve_model: str | None = None
+    detail: str = ""
 
 
 class FairUnavailableError(Exception):
@@ -176,6 +196,78 @@ class FairProvider(LLMProvider):
 
     async def close(self) -> None:
         await self._fair.close()
+
+    # ── liveness probe ───────────────────────────────────────────────
+
+    async def ping(self) -> PingResult:
+        """Real end-to-end liveness probe: enumerate providers, then run a
+        trivial schema-checked solve.
+
+        ``ok=True`` means the router has at least one provider AND that
+        provider produced a schema-valid answer — not merely that keys are
+        configured. Anything else (no providers, ``providers()`` raises,
+        ``solve()`` raises, non-``ACCEPTED`` result) returns ``ok=False``
+        with ``detail`` naming the reason. This costs one real FAIR solve
+        call, so route it behind auth like any other quota-touching endpoint.
+        """
+        try:
+            entries = self._fair.providers()
+        except Exception as exc:
+            return PingResult(
+                ok=False,
+                provider_count=0,
+                detail=f"router.providers() raised: {type(exc).__name__}: {exc}",
+            )
+
+        provider_ids = [e.get("provider_id", "?") for e in entries]
+        if not entries:
+            return PingResult(
+                ok=False,
+                provider_count=0,
+                detail="no providers registered — set GEMINI_API_KEY and/or GROQ_API_KEY",
+            )
+
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["pong"],
+            "properties": {"pong": {"type": "boolean"}},
+        }
+        task = 'Respond with the JSON object {"pong": true}. Nothing else.'
+        try:
+            result = await self._fair.solve(
+                task,
+                task_type="extraction",
+                expected_schema=schema,
+                quality_level=self._quality_level,
+                client_id=self._client_id,
+                priority=self._priority,
+                max_output_tokens=64,
+            )
+        except Exception as exc:
+            return PingResult(
+                ok=False,
+                provider_count=len(entries),
+                provider_ids=provider_ids,
+                detail=f"solve raised: {type(exc).__name__}: {exc}",
+            )
+
+        status = getattr(result, "status", None)
+        ok = status == "ACCEPTED"
+        return PingResult(
+            ok=ok,
+            provider_count=len(entries),
+            provider_ids=provider_ids,
+            solve_status=status,
+            solve_provider=getattr(result, "provider_id", None),
+            solve_model=getattr(result, "model_id", None),
+            detail=(
+                "solve accepted"
+                if ok
+                else f"solve {status or 'no-status'} "
+                f"({getattr(result, 'reason_code', 'n/a')})"
+            ),
+        )
 
     # ── generation ───────────────────────────────────────────────────
 

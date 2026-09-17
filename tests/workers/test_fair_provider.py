@@ -11,7 +11,7 @@ from corp.workers.providers.errors import (
     ProviderExhaustedError,
     ProviderUnavailableError,
 )
-from corp.workers.providers.fair import FairProvider, _strip_code_fence
+from corp.workers.providers.fair import FairProvider, PingResult, _strip_code_fence
 from corp.workers.providers.registry import LLMProvider
 
 # ── a fake FAIR router with the surface the adapter uses ──────────────
@@ -292,3 +292,74 @@ async def test_classify_tolerates_bare_objects():
     )
     with pytest.raises(ProviderError, match="SOMETHING_NEW"):
         await FairProvider(fair).generate_json("p", schema=SCHEMA)
+
+
+# ── ping() — end-to-end liveness probe ────────────────────────────────
+
+
+async def test_ping_ok_when_solve_is_accepted():
+    fair = FakeFair(_accepted({"pong": True}))
+    result = await FairProvider(fair).ping()
+    assert isinstance(result, PingResult)
+    assert result.ok is True
+    assert result.provider_count == 2
+    assert result.provider_ids == ["google_gemini_api", "groq"]
+    assert result.solve_status == "ACCEPTED"
+    assert result.solve_provider == "groq"
+    assert result.solve_model == "openai/gpt-oss-20b"
+    assert result.detail == "solve accepted"
+    # Sends a real schema-checked task so "ok" cannot just mean "keys configured".
+    call = fair.calls[0]
+    assert call["expected_schema"]["required"] == ["pong"]
+
+
+async def test_ping_reports_no_providers_without_calling_solve():
+    class Empty(FakeFair):
+        def providers(self):
+            return []
+
+    fair = Empty()
+    result = await FairProvider(fair).ping()
+    assert result.ok is False
+    assert result.provider_count == 0
+    assert result.provider_ids == []
+    assert "no providers registered" in result.detail
+    assert fair.calls == []  # no wasted solve when nothing is registered
+
+
+async def test_ping_reports_providers_raising():
+    class Broken(FakeFair):
+        def providers(self):
+            raise RuntimeError("router in bad state")
+
+    result = await FairProvider(Broken()).ping()
+    assert result.ok is False
+    assert result.provider_count == 0
+    assert "RuntimeError" in result.detail
+    assert "router in bad state" in result.detail
+
+
+async def test_ping_reports_solve_raising_with_provider_context():
+    fair = FakeFair(ConnectionError("connection reset"))
+    result = await FairProvider(fair).ping()
+    assert result.ok is False
+    assert result.provider_count == 2
+    assert result.provider_ids == ["google_gemini_api", "groq"]
+    assert "ConnectionError" in result.detail
+    assert "connection reset" in result.detail
+
+
+async def test_ping_reports_non_accepted_status_with_reason():
+    fair = FakeFair(
+        SimpleNamespace(
+            status="ESCALATION_REQUIRED",
+            reason_code="ALL_FREE_MODELS_UNAVAILABLE",
+            output=None,
+            provider_id=None,
+            model_id=None,
+        )
+    )
+    result = await FairProvider(fair).ping()
+    assert result.ok is False
+    assert result.solve_status == "ESCALATION_REQUIRED"
+    assert "ALL_FREE_MODELS_UNAVAILABLE" in result.detail
