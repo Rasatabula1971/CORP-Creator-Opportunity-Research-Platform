@@ -17,10 +17,14 @@ import type {
   ResearchRun,
 } from "./types";
 
+// Backend list endpoints default to limit=50 and cap at 200; ask for the cap
+// so lists don't silently truncate.
+const LIST_LIMIT = 200;
+
 export function useCreators() {
   return useQuery({
     queryKey: ["creators"],
-    queryFn: () => api.getWithCount<Creator>("/creators"),
+    queryFn: () => api.getWithCount<Creator>(`/creators?limit=${LIST_LIMIT}`),
   });
 }
 
@@ -84,7 +88,7 @@ export function useDecisions(creatorId: string | undefined) {
 export function useResearchRuns() {
   return useQuery({
     queryKey: ["research-runs"],
-    queryFn: () => api.get<ResearchRun[]>("/research-runs"),
+    queryFn: () => api.get<ResearchRun[]>(`/research-runs?limit=${LIST_LIMIT}`),
   });
 }
 
@@ -92,7 +96,9 @@ export function useJobs(creatorId?: string) {
   return useQuery({
     queryKey: ["jobs", creatorId ?? "all"],
     queryFn: () =>
-      api.get<Job[]>(`/jobs${creatorId ? `?creator_id=${creatorId}` : ""}`),
+      api.get<Job[]>(
+        `/jobs?limit=${LIST_LIMIT}${creatorId ? `&creator_id=${creatorId}` : ""}`,
+      ),
     refetchInterval: 4000,
   });
 }
@@ -166,7 +172,7 @@ export function useStartPipeline() {
 export function useCampaigns() {
   return useQuery({
     queryKey: ["campaigns"],
-    queryFn: () => api.get<Campaign[]>("/campaigns"),
+    queryFn: () => api.get<Campaign[]>(`/campaigns?limit=${LIST_LIMIT}`),
   });
 }
 
@@ -240,7 +246,8 @@ export function useRecordDecision(creatorId: string) {
         gate: "gate_a",
         ...input,
       }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["creators", creatorId, "decisions"] }),
+    // The gate also transitions creator.status; the prefix key refreshes the
+    // detail (header badge, DecisionPanel gate) and the decisions list together.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["creators", creatorId] }),
   });
 }

@@ -12,7 +12,12 @@ export function CreatorsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Creators</h1>
+        <h1 className="text-xl font-semibold">
+          Creators
+          {data && data.totalCount > data.items.length
+            ? ` (${data.items.length} of ${data.totalCount})`
+            : ""}
+        </h1>
         <Button onClick={() => setShowForm((v) => !v)}>
           {showForm ? "Cancel" : "Add Creator"}
         </Button>

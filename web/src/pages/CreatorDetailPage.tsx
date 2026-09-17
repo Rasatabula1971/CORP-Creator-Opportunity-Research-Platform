@@ -204,6 +204,12 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Competitor URLs come from the LLM/scraping pipeline unvalidated; only let
+// http(s) through so a javascript:/data: value can't become a clickable href.
+function safeUrl(u: string | null | undefined): string | null {
+  return u && /^https?:\/\//i.test(u) ? u : null;
+}
+
 function ClusterCard({
   cluster,
   competitors,
@@ -318,11 +324,11 @@ function ClusterCard({
                     className="flex items-start justify-between gap-2 rounded bg-neutral-50 px-2 py-1 text-xs dark:bg-neutral-800/50"
                   >
                     <div className="min-w-0 flex-1">
-                      {c.url ? (
+                      {safeUrl(c.url) ? (
                         <a
-                          href={c.url}
+                          href={safeUrl(c.url)!}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noreferrer noopener"
                           className="font-medium underline decoration-neutral-400 hover:decoration-neutral-700"
                         >
                           {c.name}
