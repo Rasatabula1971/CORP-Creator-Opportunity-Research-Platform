@@ -21,6 +21,7 @@ wheels/
 
 .env
 .env.local
+fair.env
 *.db
 
 .venv/
