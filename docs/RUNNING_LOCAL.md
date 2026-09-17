@@ -6,7 +6,7 @@ deployment when you don't want CORP consuming a hosted database (e.g. keeping
 Railway free for other apps).
 
 ```
-Laptop ──> PostgreSQL + pgvector (Docker)   ← hot relational data + processed results
+Laptop ──> PostgreSQL 16 + pgvector (native) ← hot relational data + processed results
       ──> FastAPI app (uvicorn)             ← the API
       ──> React/Vite dashboard              ← the console
 Flash  ──> SQLite warm store (warm.db)      ← mirrored bulk (evidence, embeddings, …)
@@ -16,8 +16,10 @@ Flash  ──> SQLite warm store (warm.db)      ← mirrored bulk (evidence, emb
 ## Prerequisites
 
 - **Python 3.12+**
-- **Docker Desktop** (for Postgres + pgvector — installing pgvector natively on
-  Windows is painful, so use the container)
+- **PostgreSQL 16** installed natively, plus the **pgvector** extension
+  (Windows: the EDB installer for Postgres, then the prebuilt pgvector release
+  from https://github.com/pgvector/pgvector/releases copied into the Postgres
+  `lib/` and `share/extension/` folders)
 - **Node.js 18+** (for the dashboard)
 - A **flash drive** formatted **exFAT or NTFS** (not FAT32 — FAT32 caps any file
   at 4 GB and `warm.db` will grow past that)
@@ -48,15 +50,25 @@ embedding model (~90 MB) via sentence-transformers.
 > Everything else (Postgres, migrations, the API, the dashboard) has no native
 > build step and installs cleanly.
 
-## 2. Start PostgreSQL + pgvector
+## 2. Set up PostgreSQL + pgvector
+
+Install PostgreSQL 16 and pgvector natively (see Prerequisites), make sure the
+Windows service `postgresql-x64-16` is running, and create the role and
+database once as the `postgres` superuser:
 
 ```
-docker compose up -d db
+psql -U postgres -c "CREATE ROLE corp LOGIN PASSWORD 'corp';"
+psql -U postgres -c "CREATE DATABASE corp OWNER corp;"
+psql -U postgres -d corp -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-This runs `pgvector/pgvector:pg16` on `localhost:5432` (user/password/db all
-`corp`), with data stored in a Docker volume on your laptop. The pgvector
-extension is enabled automatically by the first migration.
+The reference setup listens on **port 5433** (`start_corp.bat` checks 5433
+first and falls back to 5432). Adjust the port in `.env` if your install uses
+the default 5432. Verify with:
+
+```
+pg_isready -h localhost -p 5433
+```
 
 ## 3. Configure `.env`
 
@@ -70,8 +82,8 @@ Set these for the laptop + flash split (Windows example paths shown — adjust t
 drive letter to yours):
 
 ```
-DATABASE_URL=postgresql+asyncpg://corp:corp@localhost:5432/corp
-DATABASE_URL_SYNC=postgresql://corp:corp@localhost:5432/corp
+DATABASE_URL=postgresql+asyncpg://corp:corp@localhost:5433/corp
+DATABASE_URL_SYNC=postgresql://corp:corp@localhost:5433/corp
 WARM_STORE_PATH=D:\CORP DATABASE\warm.db
 CORP_DATA_PATH=D:\CORP DATABASE\archives
 GEMINI_API_KEY=your-key-here        # or GROQ_API_KEY
@@ -94,11 +106,15 @@ pgvector, so this works against a clean database with no extra steps.
 
 ## 5. Run the app
 
-API (defaults to port 8000):
+API (defaults to port 8000; set `API_PORT` in `.env` to move it):
 
 ```
 uvicorn corp.api.app:app --reload
 ```
+
+On Windows, `start_corp.bat` does steps 2, 4 and 5 in one go: it checks
+Postgres, applies migrations, reads `API_PORT` from `.env`, refuses to start if
+that port is already taken, and launches uvicorn.
 
 Dashboard (defaults to calling `http://localhost:8000`; no config needed):
 

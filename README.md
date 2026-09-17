@@ -7,17 +7,17 @@ commercial opportunity, and produces a per-creator dossier for human review.
 ## Getting started
 
 **→ [docs/RUNNING_LOCAL.md](docs/RUNNING_LOCAL.md)** — run everything on your
-laptop (PostgreSQL + pgvector in Docker, the API, the dashboard) with the bulk
+laptop (native PostgreSQL + pgvector, the API, the dashboard) with the bulk
 warm store on an external flash drive. Start there.
 
 Quick version:
 
 ```
 pip install -e ".[dev]"
-docker compose up -d db
+# Install PostgreSQL 16 + the pgvector extension, create the `corp` role/db
 cp .env.example .env          # set DATABASE_URL(_SYNC), an LLM key, warm-store path
 alembic upgrade head
-uvicorn corp.api.app:app --reload
+uvicorn corp.api.app:app --reload   # or on Windows: start_corp.bat
 cd web && npm install && npm run dev
 ```
 
