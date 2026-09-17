@@ -51,6 +51,7 @@ INFO1 = {
     "channel_id": "UCabc123",
     "uploader_id": "@maker",
     "channel_url": "https://www.youtube.com/@maker",
+    "channel_follower_count": 4321,
     "timestamp": 1_700_000_000,
     "webpage_url": VID1,
     "view_count": 1000,
@@ -111,6 +112,10 @@ async def test_search_collect_yields_videos_but_no_profile():
     assert types.count("video") + types.count("short") == 2
     assert {i.external_id for i in items} == {"v1", "v2"}
     assert all(i.source_platform == "youtube" for i in items)
+    # Without a profile item, the channel size must ride on the video so the
+    # ecosystem estimator can band creators without a YouTube API key.
+    v1 = next(i for i in items if i.external_id == "v1")
+    assert v1.metadata["follower_count"] == 4321
 
 
 async def test_channel_collect_still_emits_profile():

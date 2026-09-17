@@ -42,6 +42,17 @@ logger = logging.getLogger(__name__)
 PIPELINE = "ecosystem_estimator"
 
 
+def _as_int_or_none(value: Any) -> int | None:
+    """yt-dlp counts are ints, but be defensive: a string would make the
+    ``min_followers <= fc`` comparison raise TypeError."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class SearchAdapter(Protocol):
     """Minimal interface: run a yt-dlp search and return items."""
 
@@ -211,7 +222,7 @@ class EcosystemEstimator:
             seen_channels[channel_id] = {
                 "channel": channel_id,
                 "name": getattr(item, "author", None),
-                "follower_count": meta.get("follower_count"),
+                "follower_count": _as_int_or_none(meta.get("follower_count")),
             }
 
         if self._enricher and seen_channels:

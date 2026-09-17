@@ -199,6 +199,9 @@ class YtDlpAdapter(SourceAdapter):
                 "like_count": info.get("like_count"),
                 "comment_count": info.get("comment_count"),
                 "share_count": info.get("repost_count"),
+                # Search results never get a profile item, so the ecosystem
+                # estimator reads the channel size from each video instead.
+                "follower_count": info.get("channel_follower_count"),
                 "duration": info.get("duration"),
                 "tags": info.get("tags") or [],
                 "music": (
