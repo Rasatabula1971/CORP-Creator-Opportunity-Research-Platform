@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { api } from "./client";
 import type {
   Campaign,
@@ -97,7 +98,8 @@ export function useJobs(creatorId?: string) {
 }
 
 export function useJob(jobId: string | undefined, opts?: { pollUntilDone?: boolean }) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: ["jobs", "detail", jobId],
     queryFn: () => api.get<Job>(`/jobs/${jobId}`),
     enabled: !!jobId,
@@ -107,6 +109,26 @@ export function useJob(jobId: string | undefined, opts?: { pollUntilDone?: boole
       return status === "completed" || status === "failed" ? false : 2000;
     },
   });
+
+  // A finished job has written clusters, scores, niches and creators that
+  // nothing else refetches (no refetchInterval on those queries, and
+  // staleTime keeps the cache warm). Invalidate once per job when it settles
+  // so the page shows the results without a navigate-away-and-back.
+  const status = query.data?.status;
+  const settledFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!jobId || !opts?.pollUntilDone) return;
+    if (status !== "completed" && status !== "failed") return;
+    if (settledFor.current === jobId) return;
+    settledFor.current = jobId;
+    qc.invalidateQueries({ queryKey: ["creators"] });
+    qc.invalidateQueries({ queryKey: ["campaigns"] });
+    qc.invalidateQueries({ queryKey: ["clusters"] });
+    qc.invalidateQueries({ queryKey: ["research-runs"] });
+    qc.invalidateQueries({ queryKey: ["jobs"] });
+  }, [jobId, status, opts?.pollUntilDone, qc]);
+
+  return query;
 }
 
 export function useStartResearch() {
