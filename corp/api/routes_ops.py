@@ -38,7 +38,6 @@ from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObserv
 from corp.core.schemas.scoring import OpportunityScoreResponse, ScoreResponse
 from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
 from corp.database import get_session
-from corp.workers.dossier.generator import DossierGenerator
 from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.factory import ProviderConfigError, build_provider
 from corp.workers.providers.fair import FairProvider
@@ -451,53 +450,3 @@ async def get_decisions(creator_id: str, session: AsyncSession = Depends(get_ses
         )
     ).scalars().all()
     return [DecisionResponse.model_validate(d) for d in rows]
-
-
-@router.get("/creators/{creator_id}/dossier.json", response_model=DossierJson)
-async def get_dossier_json(creator_id: str, session: AsyncSession = Depends(get_session)):
-    """The dossier as data, so the console can render it natively."""
-    try:
-        data = await DossierGenerator(session).generate_data(creator_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    creator = CreatorDetailResponse.model_validate(data.creator)
-    creator.platform_accounts = [
-        PlatformAccountResponse.model_validate(a) for a in data.platform_accounts
-    ]
-    opportunities = [
-        {
-            "cluster": ProblemClusterResponse.model_validate(o.cluster).model_dump(),
-            "score": OpportunityScoreResponse.model_validate(o.score).model_dump(mode="json"),
-            "signal": (
-                SignalSummary(
-                    signal_level=o.signal.signal_level.value,
-                    confidence=o.signal.confidence,
-                    rationale=o.signal.rationale,
-                ).model_dump()
-                if o.signal
-                else None
-            ),
-            "observations": [
-                ProblemObservationResponse.model_validate(obs).model_dump()
-                for obs in o.observations
-            ],
-        }
-        for o in data.opportunities
-    ]
-    return DossierJson(
-        creator=creator,
-        creator_score=(
-            ScoreResponse.model_validate(data.creator_score) if data.creator_score else None
-        ),
-        score_band=data.score_band,
-        weights=data.weights,
-        opportunities=opportunities,
-        data_coverage={
-            "source_count": data.data_coverage.source_count,
-            "evidence_count": data.data_coverage.evidence_count,
-            "cluster_count": data.data_coverage.cluster_count,
-            "observation_count": data.data_coverage.observation_count,
-        },
-        generated_at=data.generated_at,
-    )

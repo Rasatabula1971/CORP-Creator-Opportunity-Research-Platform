@@ -12,7 +12,6 @@ from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
-    ProblemCluster,
     ProblemClusterMember,
     ProblemObservation,
 )
@@ -360,42 +359,6 @@ async def create_decision(
 
     await session.commit()
     return DecisionResponse.model_validate(decision)
-
-
-# ── Clusters ─────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/creators/{creator_id}/clusters",
-    response_model=list[ProblemClusterResponse],
-)
-async def get_clusters(
-    creator_id: str,
-    limit: int = Query(default=50, le=200),
-    session: AsyncSession = Depends(get_session),
-):
-    creator = await session.get(Creator, creator_id)
-    if creator is None:
-        raise HTTPException(status_code=404, detail="Creator not found")
-
-    cluster_ids_subq = (
-        select(ProblemClusterMember.cluster_id)
-        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
-        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
-        .where(ResearchRun.creator_id == creator_id)
-        .distinct()
-    )
-    result = await session.execute(
-        select(ProblemCluster)
-        .where(
-            ProblemCluster.id.in_(cluster_ids_subq),
-            ProblemCluster.superseded_at.is_(None),
-        )
-        .order_by(ProblemCluster.frequency.desc())
-        .limit(limit)
-    )
-    return [ProblemClusterResponse.model_validate(c) for c in result.scalars().all()]
 
 
 # ── Observations ─────────────────────────────────────────────────────
