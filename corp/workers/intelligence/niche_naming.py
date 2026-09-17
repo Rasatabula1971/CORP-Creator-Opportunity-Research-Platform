@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from corp.workers.intelligence.coerce import as_bool, as_float
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.providers.registry import LLMProvider
 
@@ -128,14 +129,14 @@ async def name_cluster(
             terms,
             missing,
         )
-    try:
-        confidence = min(1.0, max(0.0, float(result.get("confidence", 0.5))))
-    except (TypeError, ValueError):
-        confidence = 0.5
+    confidence = min(1.0, max(0.0, as_float(result.get("confidence"), 0.5)))
     return ClusterName(
         name=name,
         description=str(result.get("description") or "").strip()[:2000],
-        is_broad_domain=bool(result.get("is_broad_domain", False)),
+        # Gemini/Groq drop the JSON schema, so this may arrive as the string
+        # "false"; bool("false") is True and would fail verification for
+        # every niche (reject_broad_domain defaults to True).
+        is_broad_domain=as_bool(result.get("is_broad_domain"), False),
         confidence=confidence,
         evidence_terms=terms[:10],
         grounded=grounded,
