@@ -11,7 +11,10 @@ REM       THIS process only — overrides any stray User-scope env vars
 REM    3. Detect which port Postgres is on (5433 preferred, 5432 fallback)
 REM    4. Start the Postgres 16 service if it isn't already accepting
 REM    5. Apply any pending alembic migrations
-REM    6. Launch uvicorn on http://127.0.0.1:8000 (blocks until Ctrl+C)
+REM    6. Read API_PORT from .env (default 8000) and refuse to start if
+REM       something is already listening there (e.g. FAIR, or a stale
+REM       CORP instance that never shut down)
+REM    7. Launch uvicorn on http://127.0.0.1:%API_PORT% (blocks until Ctrl+C)
 REM
 REM  Requirements: Python on PATH, Postgres 16 installed under the default
 REM  ``C:\Program Files\PostgreSQL\16\``, project deps installed
@@ -72,11 +75,38 @@ if exist fair.env (
   echo [corp] No fair.env found. FAIR will run with just GEMINI_API_KEY / GROQ_API_KEY from .env.
 )
 
+REM -- Pick the API port: API_PORT from .env, else 8000 --------------
+set "API_PORT=8000"
+if exist .env (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="API_PORT" set "API_PORT=%%B"
+  )
+)
+REM Strip any stray whitespace from the value
+for /f "tokens=1" %%A in ("!API_PORT!") do set "API_PORT=%%A"
+
+REM -- Refuse to start if the port is already taken -------------------
+set "PORT_PID="
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:"TCP.*:!API_PORT! .*LISTENING"') do set "PORT_PID=%%P"
+if defined PORT_PID (
+  echo.
+  echo [corp] Port !API_PORT! is already in use by PID !PORT_PID!:
+  for /f "tokens=*" %%L in ('powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=!PORT_PID!').CommandLine" 2^>nul') do (
+    if not "%%L"=="" echo [corp]   %%L
+  )
+  echo.
+  echo [corp] If that is a stale CORP instance, kill it and rerun:
+  echo [corp]   taskkill /F /PID !PORT_PID!
+  echo [corp] If it is FAIR or another service, set API_PORT in .env to a free port.
+  pause
+  exit /b 1
+)
+
 echo.
-echo [corp] Starting API on http://127.0.0.1:8000
+echo [corp] Starting API on http://127.0.0.1:!API_PORT!
 echo [corp] Ctrl+C to stop.
 echo.
-python -m uvicorn corp.api.app:app --host 127.0.0.1 --port 8000
+python -m uvicorn corp.api.app:app --host 127.0.0.1 --port !API_PORT!
 
 REM Keep the window open after uvicorn exits so any traceback stays visible.
 pause
