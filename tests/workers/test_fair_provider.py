@@ -317,9 +317,13 @@ async def test_ping_ok_when_solve_is_accepted():
     assert result.solve_provider == "groq"
     assert result.solve_model == "openai/gpt-oss-20b"
     assert result.detail == "solve accepted"
-    # Sends a real schema-checked task so "ok" cannot just mean "keys configured".
+    # Sends a real schema-checked task so "ok" cannot just mean "keys
+    # configured", and forces FAIR's ``commodity`` tier so a liveness probe
+    # passes on any live free model regardless of the provider's own
+    # configured quality level.
     call = fair.calls[0]
-    assert call["expected_schema"]["required"] == ["pong"]
+    assert call["expected_schema"] == {"type": "object"}
+    assert call["quality_level"] == "commodity"
 
 
 async def test_ping_reports_no_providers_without_calling_solve():

@@ -252,14 +252,18 @@ class FairProvider(LLMProvider):
 
     async def ping(self) -> PingResult:
         """Real end-to-end liveness probe: enumerate providers, then run a
-        trivial schema-checked solve.
+        trivial schema-checked solve at FAIR's ``commodity`` quality tier.
 
         ``ok=True`` means the router has at least one provider AND that
-        provider produced a schema-valid answer — not merely that keys are
-        configured. Anything else (no providers, ``providers()`` raises,
-        ``solve()`` raises, non-``ACCEPTED`` result) returns ``ok=False``
-        with ``detail`` naming the reason. This costs one real FAIR solve
-        call, so route it behind auth like any other quota-touching endpoint.
+        provider produced a well-formed JSON object — not merely that keys
+        are configured. Uses ``commodity`` explicitly (regardless of what
+        the provider is configured to run its real workload at) because a
+        liveness probe should pass on any live free model, not test the
+        higher quality tiers CORP uses for extraction. Anything else
+        (no providers, ``providers()`` raises, ``solve()`` raises,
+        non-``ACCEPTED`` result) returns ``ok=False`` with ``detail``
+        naming the reason. Costs one real FAIR solve call, so this endpoint
+        stays behind auth like the rest of ``routes_ops``.
         """
         try:
             entries = self._fair.providers()
@@ -278,19 +282,18 @@ class FairProvider(LLMProvider):
                 detail="no providers registered — set GEMINI_API_KEY and/or GROQ_API_KEY",
             )
 
-        schema = {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["pong"],
-            "properties": {"pong": {"type": "boolean"}},
-        }
-        task = 'Respond with the JSON object {"pong": true}. Nothing else.'
+        # Deliberately permissive: any JSON object counts. A chatty model
+        # that adds extra keys, or a very literal one that returns just
+        # {"pong": true}, both pass. The point is to confirm one provider
+        # can produce a well-formed structured answer at all.
+        schema = {"type": "object"}
+        task = 'Reply with a small JSON object like {"pong": true}. Object only, no prose.'
         try:
             result = await self._fair.solve(
                 task,
                 task_type="extraction",
                 expected_schema=schema,
-                quality_level=self._quality_level,
+                quality_level="commodity",
                 client_id=self._client_id,
                 priority=self._priority,
                 max_output_tokens=64,
