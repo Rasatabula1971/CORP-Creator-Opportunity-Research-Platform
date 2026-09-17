@@ -219,6 +219,21 @@ async def test_failed_video_is_skipped_not_fatal():
     assert [i.external_id for i in items] == ["profile_@maker", "v2"]
 
 
+async def test_none_info_from_ignoreerrors_is_skipped(monkeypatch):
+    """With ``ignoreerrors`` yt-dlp returns None for a private/removed video
+    instead of raising; that must not become a video with external_id "None"."""
+    captioned: list[str] = []
+    monkeypatch.setattr(
+        "corp.workers.adapters.ytdlp.fetch_youtube_caption",
+        lambda vid, *a, **k: captioned.append(vid),
+    )
+    a = _adapter({CHANNEL: LISTING, VID1: None, VID2: {"title": "no id"}})
+    items = await a.collect("@maker")
+    assert [i.external_id for i in items] == ["profile_@maker"]
+    assert "None" not in {i.external_id for i in items}
+    assert captioned == []
+
+
 async def test_tiktok_items_are_shorts_with_music():
     profile = "https://www.tiktok.com/@dancer"
     video_url = "https://www.tiktok.com/@dancer/video/t1"

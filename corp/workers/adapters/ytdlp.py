@@ -103,9 +103,15 @@ class YtDlpAdapter(SourceAdapter):
             if not entry_url:
                 continue
             try:
-                info = full.extract_info(entry_url, download=False) or {}
+                info = full.extract_info(entry_url, download=False)
             except Exception as exc:  # yt-dlp raises DownloadError subclasses
                 logger.warning("yt-dlp failed on %s: %s", entry_url, exc)
+                continue
+            # With ``ignoreerrors`` yt-dlp swallows extraction failures and
+            # returns None instead of raising; don't turn that into a video
+            # with external_id "None".
+            if not info or not info.get("id"):
+                logger.warning("yt-dlp returned no info for %s (skipped)", entry_url)
                 continue
             video = self._video_item(info)
             results.append(video)

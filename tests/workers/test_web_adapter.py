@@ -1,10 +1,28 @@
 """Unit tests for the creator-web adapter — HTTP mocked, no network."""
 
 import httpx
+import pytest
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily
-from corp.workers.adapters.web import WebPresenceAdapter, parse_page
+from corp.workers.adapters.web import (
+    MAX_BODY_BYTES,
+    WebPresenceAdapter,
+    is_public_url,
+    parse_page,
+)
+
+PUBLIC_IP = "93.184.216.34"
+
+
+@pytest.fixture(autouse=True)
+def public_dns(monkeypatch):
+    """Every hostname resolves to a public address unless a test overrides it."""
+
+    async def resolve(host: str) -> list[str]:
+        return [PUBLIC_IP]
+
+    monkeypatch.setattr("corp.workers.adapters.web._resolve_host", resolve)
 
 LANDING = """
 <html><head><title>Maker Hub</title>
@@ -144,4 +162,79 @@ async def test_no_duplicate_when_candidates_redirect_to_same_page():
     items = await a.collect("https://example.com/")
     shop_pages = [i for i in items if i.external_id == "https://example.com/shop"]
     assert len(shop_pages) == 1  # both redirects land on /shop; collected once
+    await a.close()
+
+
+# ── SSRF guard ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://127.0.0.1:8000/admin",
+        "http://localhost:8000/",
+        "http://[::1]/",
+        "http://10.0.0.5/",
+        "ftp://example.com/",
+        "https:///nohost",
+    ],
+)
+async def test_is_public_url_rejects_internal_and_non_http(url):
+    assert not await is_public_url(url)
+
+
+async def test_is_public_url_rejects_hosts_resolving_to_private_ranges(monkeypatch):
+    async def resolve(host: str) -> list[str]:
+        return [PUBLIC_IP, "192.168.1.10"]  # one private A record is enough to refuse
+
+    monkeypatch.setattr("corp.workers.adapters.web._resolve_host", resolve)
+    assert not await is_public_url("https://evil.example/")
+    assert await is_public_url("https://93.184.216.34/")
+
+
+async def test_collect_refuses_non_public_identifier_without_fetching():
+    calls: list[str] = []
+    a = _adapter({"http://169.254.169.254/latest/meta-data/": _html(SHOP)}, calls)
+    assert await a.collect("169.254.169.254/latest/meta-data/") == []
+    assert calls == []
+    await a.close()
+
+
+async def test_internal_links_and_redirects_are_not_followed(monkeypatch):
+    async def resolve(host: str) -> list[str]:
+        return ["10.0.0.5"] if host == "intranet.example" else [PUBLIC_IP]
+
+    monkeypatch.setattr("corp.workers.adapters.web._resolve_host", resolve)
+    landing = (
+        "<html><head><title>Hub</title></head><body>"
+        '<a href="http://intranet.example/shop">Internal shop</a>'
+        '<a href="/store">Store</a>'
+        "</body></html>"
+    )
+    calls: list[str] = []
+    routes = {
+        "https://example.com/": _html(landing),
+        "http://intranet.example/shop": _html(SHOP),
+        # A public link that bounces to the cloud metadata endpoint.
+        "https://example.com/store": httpx.Response(
+            302, headers={"location": "http://169.254.169.254/latest/meta-data/"}
+        ),
+        "http://169.254.169.254/latest/meta-data/": _html(SHOP),
+    }
+    a = _adapter(routes, calls, max_pages=10)
+    items = await a.collect("https://example.com/")
+    assert [i.external_id for i in items] == ["https://example.com/"]
+    assert "http://intranet.example/shop" not in calls
+    assert "http://169.254.169.254/latest/meta-data/" not in calls
+    await a.close()
+
+
+async def test_body_is_capped_not_buffered_whole():
+    huge = "<html><head><title>Big</title></head><body>" + ("x" * (MAX_BODY_BYTES * 2))
+    a = _adapter({"https://example.com/": _html(huge)}, max_text_chars=10_000_000)
+    items = await a.collect("https://example.com/")
+    assert len(items) == 1
+    assert len(items[0].text) <= MAX_BODY_BYTES
+    assert items[0].metadata["title"] == "Big"
     await a.close()

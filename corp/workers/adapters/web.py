@@ -11,8 +11,10 @@ creator published to be read.
 """
 
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -24,6 +26,13 @@ from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceA
 logger = logging.getLogger(__name__)
 
 DEFAULT_USER_AGENT = "corp-research/0.1 (creator opportunity research)"
+
+# Identifiers and outbound links come from API callers and creator pages, so
+# every hop is checked against public address space before it is fetched.
+MAX_REDIRECTS = 5
+# Bytes of a page body read before giving up; keeps a huge page from being
+# buffered whole just to keep ``max_text_chars`` of it.
+MAX_BODY_BYTES = 2_000_000
 
 # Outbound links whose host or path suggests monetisation or partnership.
 COMMERCE_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -196,18 +205,11 @@ class WebPresenceAdapter(SourceAdapter):
         return results
 
     async def _fetch_page(self, url: str) -> NormalizedContent | None:
-        client = self._get_client()
-        try:
-            resp = await client.get(url)
-            resp.raise_for_status()
-        except (httpx.HTTPError, httpx.InvalidURL) as exc:
-            logger.warning("Fetch failed for %s: %s", url, exc)
+        fetched = await self._fetch_html(url)
+        if fetched is None:
             return None
-        if "html" not in resp.headers.get("content-type", "").lower():
-            return None
-
-        final_url = str(resp.url)
-        parsed = parse_page(resp.text, final_url)
+        final_url, html = fetched
+        parsed = parse_page(html, final_url)
         text = parsed["text"][: self._max_text]
         return NormalizedContent(
             source_platform="web",
@@ -226,14 +228,87 @@ class WebPresenceAdapter(SourceAdapter):
             },
         )
 
+    async def _fetch_html(self, url: str) -> tuple[str, str] | None:
+        """GET ``url`` following redirects by hand so each hop is host-checked.
+
+        Returns ``(final_url, html)`` or None for non-public hosts, non-HTML
+        responses, HTTP errors and redirect loops.
+        """
+        client = self._get_client()
+        try:
+            for _ in range(MAX_REDIRECTS + 1):
+                if not await is_public_url(url):
+                    logger.warning("Refusing to fetch non-public URL %s", url)
+                    return None
+                async with client.stream("GET", url, follow_redirects=False) as resp:
+                    if resp.next_request is not None:
+                        url = str(resp.next_request.url)
+                        continue
+                    resp.raise_for_status()
+                    if "html" not in resp.headers.get("content-type", "").lower():
+                        return None
+                    buf = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        buf.extend(chunk)
+                        if len(buf) >= MAX_BODY_BYTES:
+                            logger.warning(
+                                "Body of %s exceeds %d bytes; truncated", url, MAX_BODY_BYTES
+                            )
+                            del buf[MAX_BODY_BYTES:]
+                            break
+                    return url, bytes(buf).decode(resp.encoding or "utf-8", errors="replace")
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            logger.warning("Fetch failed for %s: %s", url, exc)
+            return None
+        logger.warning("Too many redirects fetching %s", url)
+        return None
+
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 headers={"User-Agent": self._user_agent},
                 timeout=20.0,
-                follow_redirects=True,
             )
         return self._client
+
+
+async def _resolve_host(host: str) -> list[str]:
+    """All addresses ``host`` resolves to. Module-level so tests can stub it."""
+    infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    return [str(info[4][0]) for info in infos]
+
+
+async def is_public_url(url: str) -> bool:
+    """True only for http(s) URLs whose host resolves solely to public addresses.
+
+    Blocks loopback, private, link-local (cloud metadata) and reserved ranges
+    so an API-supplied identifier or a creator-page link can't point the worker
+    at internal services.
+    """
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if parsed.scheme not in ("http", "https") or not host:
+        return False
+    if host == "localhost" or host.endswith(".localhost"):
+        return False
+    try:
+        addrs = [str(ipaddress.ip_address(host))]
+    except ValueError:
+        try:
+            addrs = await _resolve_host(host)
+        except (socket.gaierror, OSError) as exc:
+            logger.warning("Cannot resolve %s: %s", host, exc)
+            return False
+    if not addrs:
+        return False
+    for addr in addrs:
+        try:
+            ip = ipaddress.ip_address(addr.split("%", 1)[0])
+        except ValueError:
+            return False
+        if not ip.is_global:
+            return False
+    return True
 
 
 def _normalize(url: str) -> str:

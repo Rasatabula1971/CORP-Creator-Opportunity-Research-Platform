@@ -45,7 +45,10 @@ DEFAULT_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
-STAR_FILTER = "1,2,3"
+# Amazon's own 1-3 star bucket. Other accepted values: one_star..five_star,
+# positive, all_stars. Anything else (e.g. "1,2,3") is silently ignored and
+# every rating comes back.
+STAR_FILTER = "critical"
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -172,6 +175,11 @@ class AmazonReviewAdapter(SourceAdapter):
             for r in reviews:
                 if len(results) >= limit:
                     break
+                # Amazon sometimes ignores the filter; never let 4-5 star
+                # reviews through when we promised critical ones.
+                stars = r.metadata.get("star_rating")
+                if self._star_filter == STAR_FILTER and stars is not None and stars > 3:
+                    continue
                 results.append(r)
             page += 1
 

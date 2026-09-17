@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from corp.workers.adapters.amazonreviews import (
+    STAR_FILTER,
     AmazonReviewAdapter,
     _extract_asins,
     _html_to_text,
@@ -269,3 +270,43 @@ async def test_request_count(mock_client):
 
     await adapter.collect("asin:B08TEST")
     assert adapter.request_count >= 1
+
+
+# ── star filter ────────────────────────────────────────────────────
+
+
+FIVE_STAR_REVIEW_HTML = """
+<div data-hook="review" id="R5GOOD999">
+    <span data-hook="review-star-rating"><span>5.0 out of 5 stars</span></span>
+    <a data-hook="review-title"><span>Love it</span></a>
+    <span class="a-profile-name">Happy Buyer</span>
+    <span data-hook="review-body"><span>Works perfectly.</span></span>
+</div>
+"""
+
+
+async def test_star_filter_uses_amazon_critical_bucket_and_drops_high_ratings(mock_client):
+    # "1,2,3" is not a value Amazon recognises; it silently returns every
+    # rating. "critical" is Amazon's own 1-3 star bucket.
+    assert STAR_FILTER == "critical"
+    adapter = AmazonReviewAdapter(max_reviews=10, client=mock_client)
+
+    captured_params: list[dict] = []
+    call_count = 0
+
+    async def mock_get(path, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        captured_params.append(kwargs.get("params") or {})
+        if call_count == 1:
+            return _mock_resp(SAMPLE_REVIEW_HTML + FIVE_STAR_REVIEW_HTML)
+        return _mock_resp("<html>no more</html>")
+
+    mock_client.get = mock_get
+
+    results = await adapter.collect("asin:B08N5WRWNW")
+
+    assert captured_params[0]["filterByStar"] == "critical"
+    # Even if Amazon ignores the filter, 4-5 star reviews never leak through.
+    assert [r.external_id for r in results] == ["R1ABC123", "R2DEF456"]
+    assert all(r.metadata["star_rating"] <= 3 for r in results)
