@@ -98,6 +98,34 @@ async def test_total_wait_is_bounded():
     assert q.calls == 2
 
 
+async def test_slow_failures_count_against_the_wait_bound():
+    """A provider that burns minutes timing out must not reset the cap.
+
+    Before: the bound only summed sleep() time. A 190s Groq timeout set a
+    cooldown that was already in the past, wait clamped to 0, and the loop
+    retried the same provider forever with no sleep to count.
+    """
+    clock = Clock()
+
+    class SlowFake(Fake):
+        async def generate_json(self, prompt, system=None, *, schema=None):
+            clock.t += 190.0  # the call itself takes longer than the cooldown
+            return await super().generate_json(prompt, system=system, schema=schema)
+
+    q = SlowFake("groq", [ProviderUnavailableError("groq", "timeout")] * 10)
+    pool = _pool(
+        Fake("gemini", [daily()]),
+        q,
+        clock=clock,
+        transient_cooldown_seconds=60,
+        max_wait_seconds=300,
+    )
+    with pytest.raises(ProviderExhaustedError, match="exceeds max wait"):
+        await pool.generate_json("p")
+    assert q.calls == 2  # t=1000 and again after the 60s cooldown; the third would pass the cap
+    assert clock.t - 1000.0 >= 300.0
+
+
 async def test_wait_uses_soonest_expiry_across_providers():
     g = Fake("gemini", [ProviderExhaustedError("gemini", "429", retry_after=30.0)])
     q = Fake("groq", [ProviderExhaustedError("groq", "429", retry_after=8.0), {"from": "groq"}])

@@ -85,7 +85,10 @@ class PooledProvider(LLMProvider):
     async def generate_json(
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        waited = 0.0
+        # Bound by wall-clock deadline, not by summed sleeps: a provider that
+        # takes minutes to time out must count against the cap too, otherwise
+        # a long outage spins forever with "0s" waits.
+        deadline = self._clock() + self._max_wait
         while True:
             now = self._clock()
             failures: list[str] = []
@@ -98,7 +101,7 @@ class PooledProvider(LLMProvider):
                 except ProviderExhaustedError as exc:
                     wait = self._cooldown_for(exc)
                     any_daily = any_daily or exc.daily
-                    self._cooling_until[index] = now + wait
+                    self._cooling_until[index] = self._clock() + wait
                     logger.warning(
                         "provider %s exhausted (%s); cooling down %.0fs",
                         provider.model_name,
@@ -108,7 +111,7 @@ class PooledProvider(LLMProvider):
                     failures.append(str(exc))
                     continue
                 except ProviderUnavailableError as exc:
-                    self._cooling_until[index] = now + self._transient_cooldown
+                    self._cooling_until[index] = self._clock() + self._transient_cooldown
                     logger.warning(
                         "provider %s unavailable; cooling down %.0fs: %s",
                         provider.model_name,
@@ -124,11 +127,11 @@ class PooledProvider(LLMProvider):
             # Nobody answered: every provider is cooling. If the soonest expiry
             # is near, wait for it rather than failing the call.
             soonest = min(self._cooling_until.get(i, now) for i in range(len(self._providers)))
-            wait = max(soonest - self._clock(), 0.0)
-            if waited + wait <= self._max_wait:
+            now = self._clock()
+            wait = max(soonest - now, 0.0)
+            if now + wait <= deadline:
                 logger.info("all providers cooling; waiting %.1fs for the soonest", wait)
                 await self._sleep(wait)
-                waited += wait
                 continue
 
             names = ", ".join(p.model_name for p in self._providers)
