@@ -507,3 +507,34 @@ def test_build_fair_provider_non_typeerror_exception_becomes_unavailable(stub_fa
     stub_fair(ExplodingFair)
     with pytest.raises(FairUnavailableError, match="FAIR construction failed"):
         build_fair_provider(_cfg())
+
+
+def test_build_fair_provider_providers_call_failing_falls_back(stub_fair):
+    """FAIR constructs fine, then ``router.providers()`` blows up (e.g. an
+    older embedded API): must still become FairUnavailableError so the
+    factory's auto path picks the pool, not an unhandled crash on every
+    LLM-using endpoint."""
+
+    class OldRouter(_WorkingFair):
+        def providers(self):
+            raise AttributeError("'FAIR' object has no attribute '_registry'")
+
+    stub_fair(OldRouter)
+    with pytest.raises(FairUnavailableError, match="router.providers\\(\\) failed"):
+        build_fair_provider(_cfg())
+
+
+def test_build_fair_provider_missing_skipped_attribute_is_tolerated(stub_fair):
+    """An older FAIR without a ``skipped`` attribute must not crash the log
+    line that reports it — it should just be treated as "nothing skipped"."""
+
+    class NoSkippedFair:  # deliberately does NOT inherit ``skipped``
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def providers(self):
+            return [{"provider_id": "groq", "models": ["m"]}]
+
+    stub_fair(NoSkippedFair)
+    provider = build_fair_provider(_cfg())
+    assert isinstance(provider, FairProvider)

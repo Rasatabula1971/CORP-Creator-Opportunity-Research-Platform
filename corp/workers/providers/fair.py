@@ -170,7 +170,17 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
         raise FairUnavailableError(
             f"FAIR construction failed: {type(exc).__name__}: {exc}"
         ) from exc
-    providers = router.providers()
+    # Post-construction verification. Older FAIR versions may not expose
+    # ``providers()`` / ``skipped`` in the shape we expect; any failure here
+    # must also become FairUnavailableError so auto mode falls back to the
+    # pool instead of crashing the whole app on every LLM-using endpoint.
+    try:
+        providers = router.providers()
+    except Exception as exc:  # noqa: BLE001
+        raise FairUnavailableError(
+            f"FAIR router.providers() failed: {type(exc).__name__}: {exc}. "
+            "The installed fair package likely predates the embedded router API."
+        ) from exc
     if not providers:
         raise FairUnavailableError(
             "FAIR found no provider keys (set GEMINI_API_KEY/GROQ_API_KEY or FAIR_ENV_FILE)"
@@ -178,10 +188,11 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
     logger.info(
         "LLM provider: FAIR with %d providers: %s",
         len(providers),
-        ", ".join(p["provider_id"] for p in providers),
+        ", ".join(p.get("provider_id", "?") for p in providers),
     )
-    if router.skipped:
-        logger.warning("FAIR skipped providers: %s", router.skipped)
+    skipped = getattr(router, "skipped", None)
+    if skipped:
+        logger.warning("FAIR skipped providers: %s", skipped)
     return FairProvider(
         router,
         client_id=cfg.fair_client_id,
