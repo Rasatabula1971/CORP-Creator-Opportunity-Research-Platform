@@ -15,6 +15,7 @@ from corp.core.models.intelligence import (
     ProblemObservation,
 )
 from corp.core.models.workflow import ResearchRun
+from corp.warmstore.sync import mirror_observations
 from corp.workers.intelligence.clustering import (
     ClusteringConfig,
     ClusterResult,
@@ -131,6 +132,9 @@ class ClusterPipeline:
         for obs, emb in zip(observations, embeddings, strict=True):
             obs.embedding = emb.tolist()
         await self._session.flush()
+        # Extraction mirrored these rows before they carried vectors; re-mirror
+        # so the warm store's embedding column is populated (INSERT OR REPLACE).
+        await mirror_observations(observations)
 
     async def _persist_clusters(
         self,
@@ -208,7 +212,11 @@ class ClusterPipeline:
         for et in existing_topics:
             if not isinstance(et, dict):
                 continue
-            if et.get("name", "").lower() in cluster_names_lower:
+            if et.get("source") == "cluster":
+                # Labels this method wrote on a previous run belong to clusters
+                # that were just superseded; rebuild them from ``clusters``.
+                continue
+            if (et.get("name") or "").lower() in cluster_names_lower:
                 continue
             et_copy = dict(et)
             et_copy.setdefault("source", "llm")

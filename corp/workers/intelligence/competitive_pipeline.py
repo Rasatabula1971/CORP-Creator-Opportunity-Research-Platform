@@ -15,6 +15,7 @@ from corp.core.models.intelligence import (
     ProblemObservation,
 )
 from corp.core.models.workflow import ResearchRun
+from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.registry import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,12 @@ _TYPE_MAP = {
     "substitute": CompetitorType.SUBSTITUTE,
     "diy_workaround": CompetitorType.DIY_WORKAROUND,
 }
+
+
+def _http_url_or_none(value: object) -> str | None:
+    """Keep only http(s) URLs: the dossier renders ``Competitor.url`` into an href."""
+    url = str(value or "").strip()[:500]
+    return url if url.lower().startswith(("http://", "https://")) else None
 
 
 class CompetitivePipeline:
@@ -122,18 +129,9 @@ class CompetitivePipeline:
         return run
 
     async def _load_clusters(self, creator_id: str) -> list[ProblemCluster]:
-        cluster_ids_subq = (
-            select(ProblemClusterMember.cluster_id)
-            .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
-            .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-            .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
-            .where(ResearchRun.creator_id == creator_id)
-            .distinct()
-        )
-        result = await self._session.execute(
-            select(ProblemCluster).where(ProblemCluster.id.in_(cluster_ids_subq))
-        )
-        return list(result.scalars().all())
+        # Only the current cluster generation: ClusterPipeline supersedes (never
+        # deletes) previous runs, so an unfiltered query would re-analyse them all.
+        return await active_clusters_for_creator(self._session, creator_id)
 
     async def _load_descriptions(self, creator_id: str) -> list[str]:
         result = await self._session.execute(
@@ -190,8 +188,10 @@ class CompetitivePipeline:
             )
             return
 
-        raw_competitors = result.get("competitors", [])
-        if not raw_competitors:
+        # Provider output is untrusted JSON: a top-level array or scalar must not
+        # escape the per-cluster "log and continue" contract.
+        raw_competitors = result.get("competitors", []) if isinstance(result, dict) else []
+        if not isinstance(raw_competitors, list) or not raw_competitors:
             return
 
         evidence = Evidence(
@@ -225,7 +225,7 @@ class CompetitivePipeline:
                 name=name,
                 competitor_type=_TYPE_MAP.get(type_str, CompetitorType.DIRECT),
                 strength=_STRENGTH_MAP.get(strength_str, CompetitorStrength.MODERATE),
-                url=str(item["url"])[:500] if item.get("url") else None,
+                url=_http_url_or_none(item.get("url")),
                 gap_notes=str(item.get("gap_notes", ""))[:1000] or None,
                 evidence_id=evidence.id,
             )
