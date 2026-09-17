@@ -91,22 +91,29 @@ class CampaignResearchBatch:
         stats = PipelineStats()
 
         try:
-            creators = await self._eligible_creators(campaign_id)
+            rows = await self._eligible_creators(campaign_id)
             if self._cfg.limit is not None:
-                creators = creators[: self._cfg.limit]
+                rows = rows[: self._cfg.limit]
+            # Plain values, not ORM instances. The orchestrator rolls the
+            # shared session back when a stage crash poisoned it, and a
+            # rollback expires every loaded Creator (expire_on_commit only
+            # covers commit). An AsyncSession cannot lazy-load an expired
+            # attribute, so the next creator's first touch would raise
+            # MissingGreenlet and sink the batch.
+            creators = [(c.id, c.name, c.status) for c in rows]
 
             results: list[dict] = []
             succeeded = incomplete = skipped = errored = 0
 
-            for creator in creators:
-                if not self._cfg.force and creator.status != DEFAULT_ELIGIBLE_STATUS:
+            for creator_id, name, status in creators:
+                if not self._cfg.force and status != DEFAULT_ELIGIBLE_STATUS:
                     skipped += 1
                     results.append({
-                        "creator_id": creator.id,
-                        "name": creator.name,
+                        "creator_id": creator_id,
+                        "name": name,
                         "outcome": "skipped",
                         "reason": (
-                            f"status={creator.status.value}, "
+                            f"status={status.value}, "
                             f"not {DEFAULT_ELIGIBLE_STATUS.value}"
                         ),
                     })
@@ -115,20 +122,21 @@ class CampaignResearchBatch:
 
                 try:
                     report = await self._researcher.run(
-                        creator.id, skip_collect=self._cfg.skip_collect,
+                        creator_id, skip_collect=self._cfg.skip_collect,
                     )
                 except Exception as exc:  # one bad creator must not sink the batch
                     errored += 1
                     results.append({
-                        "creator_id": creator.id,
-                        "name": creator.name,
+                        "creator_id": creator_id,
+                        "name": name,
                         "outcome": "errored",
                         "reason": str(exc)[:500],
                     })
                     stats.fail(exc)
                     logger.warning(
-                        "research batch: creator %s errored: %s", creator.id, exc,
+                        "research batch: creator %s errored: %s", creator_id, exc,
                     )
+                    run = await self._reattach_run(run)
                     continue
 
                 if report.final_status == CreatorStatus.HUMAN_REVIEW.value:
@@ -138,8 +146,8 @@ class CampaignResearchBatch:
                     incomplete += 1
                     outcome = "incomplete"
                 results.append({
-                    "creator_id": creator.id,
-                    "name": creator.name,
+                    "creator_id": creator_id,
+                    "name": name,
                     "outcome": outcome,
                     "reason": report.final_status,
                 })
@@ -155,12 +163,34 @@ class CampaignResearchBatch:
             )
             return await finish_run(self._session, run, stats)
         except Exception as exc:
-            if run.status == "running":
-                await fail_run(self._session, run, exc)
+            try:
+                if run.status == "running":
+                    await fail_run(self._session, run, exc)
+            except Exception:  # expired run or poisoned session: keep the original error
+                logger.exception(
+                    "could not mark batch run failed for campaign %s", campaign_id,
+                )
             logger.exception(
                 "Campaign research batch failed for campaign %s", campaign_id,
             )
             raise
+
+    async def _reattach_run(self, run: ResearchRun) -> ResearchRun:
+        """Make ``run`` safe to touch after a researcher crash.
+
+        ``ResearchOrchestrator._persist_after_crash`` rolls the shared session
+        back when the crash poisoned it. That expires ``run`` if its row was
+        already committed by an earlier orchestrator step, and expunges it if
+        the row was still pending; either way the batch's next read or flush
+        of it would misbehave. Refresh or re-add so the batch can keep going
+        and still close its own run.
+        """
+        if run in self._session:
+            await self._session.refresh(run)
+        else:
+            self._session.add(run)
+            await self._session.flush()
+        return run
 
     async def _eligible_creators(self, campaign_id: str) -> list[Creator]:
         result = await self._session.execute(

@@ -1,8 +1,14 @@
 """Unit tests for the LLM provider registry."""
 
+from collections.abc import Callable
+
 import pytest
 
-from corp.workers.providers.errors import ProviderExhaustedError, ProviderUnavailableError
+from corp.workers.providers.errors import (
+    ProviderError,
+    ProviderExhaustedError,
+    ProviderUnavailableError,
+)
 from corp.workers.providers.registry import (
     GeminiProvider,
     LLMProvider,
@@ -51,8 +57,13 @@ class _FakeClient:
 
 
 class _Response:
-    def __init__(self, text: str):
+    def __init__(self, text: str | None, finish_reason: object = None) -> None:
         self.text = text
+        self.candidates = (
+            [type("Candidate", (), {"finish_reason": finish_reason})()]
+            if finish_reason is not None
+            else []
+        )
 
 
 def _client_error(code: int, message: str):
@@ -94,6 +105,8 @@ def gemini(monkeypatch):
     return make
 
 
+_Gemini = Callable[[list[object]], tuple[GeminiProvider, _FakeClient]]
+
 DAILY_429 = (
     "429 You exceeded your current quota. * Quota exceeded for metric: "
     "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20 "
@@ -110,6 +123,33 @@ async def test_success_parses_json(gemini):
     provider, fake = gemini([_Response('{"ok": 1}')])
     assert await provider.generate_json("p") == {"ok": 1}
     assert fake.calls == 1
+
+
+@pytest.mark.parametrize("text", [None, "", "  \n"])
+async def test_empty_completion_is_a_provider_error(gemini: _Gemini, text: str | None) -> None:
+    # response.text is None on a safety block, MAX_TOKENS on a thought-only
+    # part, or no candidates. That must be a ProviderError the caller can
+    # count against the item — not a TypeError out of json.loads(None), and
+    # not a pool signal (exhausted/unavailable) either.
+    from enum import Enum
+
+    class FinishReason(Enum):
+        MAX_TOKENS = "MAX_TOKENS"
+
+    provider, fake = gemini([_Response(text, finish_reason=FinishReason.MAX_TOKENS)])
+    with pytest.raises(ProviderError) as info:
+        await provider.generate_json("p")
+    assert not isinstance(info.value, ProviderExhaustedError | ProviderUnavailableError)
+    assert info.value.provider == "gemini-3.6-flash"
+    assert "empty completion" in str(info.value)
+    assert "finish_reason=MAX_TOKENS" in str(info.value)
+    assert fake.calls == 1
+
+
+async def test_empty_completion_without_candidates_names_unknown_reason(gemini: _Gemini) -> None:
+    provider, _ = gemini([_Response(None)])
+    with pytest.raises(ProviderError, match=r"finish_reason=None"):
+        await provider.generate_json("p")
 
 
 async def test_daily_cap_is_exhausted_immediately_no_retry(gemini):

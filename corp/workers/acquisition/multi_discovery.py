@@ -115,6 +115,16 @@ class MultiSourceDiscovery:
 
         self._health.save()
 
+        if not any(s.get("status") in ("ok", "failed") for s in per_source.values()):
+            # Every source was skipped (breaker open, build error, wrong
+            # family): nothing was attempted, so stats would read 0/0 and the
+            # run would close "completed" having done no work. Fail it and
+            # name why each source was passed over.
+            stats.fail(RuntimeError(
+                "no niche source was available: "
+                + ", ".join(f"{p}={s.get('reason')}" for p, s in per_source.items())
+            ))
+
         archive_ref = self._archive(run.id, query, all_items)
         stats.extra.update({
             "per_source": per_source,

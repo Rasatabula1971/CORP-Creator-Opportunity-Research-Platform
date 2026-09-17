@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from jinja2 import Environment, FileSystemLoader
 
 from corp.core.models.competitive import CompetitorStrength, CompetitorType
@@ -73,7 +74,7 @@ class FakeCompetitor:
     name = "GenericBatteryCo replacement kit"
     competitor_type = CompetitorType.SUBSTITUTE
     strength = CompetitorStrength.MODERATE
-    url = "https://example.com/kit"
+    url: str | None = "https://example.com/kit"
     gap_notes = "Does not fit this device battery compartment without modification"
 
 
@@ -290,3 +291,51 @@ async def test_data_coverage_section():
     assert "Data Sources" in html
     assert "Total Evidence" in html
     assert "25" in html
+
+
+async def _render_competitor(url: str | None) -> str:
+    comp = FakeCompetitor()
+    comp.url = url
+    opp = FakeOpportunity()
+    opp.competitors = [comp]
+    return _render_template(
+        creator=FakeCreator(),
+        platform_accounts=[],
+        creator_score=FakeCreatorScore(),
+        score_band="Strong opportunity",
+        weights={},
+        opportunities=[opp],
+        signals=[FakeSignalCtx()],
+        data_coverage=FakeDataCoverage(),
+        generated_at="2025-01-15 10:30 UTC",
+    )
+
+
+async def test_competitor_http_url_is_a_link() -> None:
+    html = await _render_competitor("HTTPS://example.com/kit")
+    assert (
+        '<a href="HTTPS://example.com/kit" rel="noopener noreferrer">'
+        "GenericBatteryCo replacement kit</a>"
+    ) in html
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "javascript:alert(1)",
+        "JavaScript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "example.com/kit",
+        "ftp://example.com",
+        "",
+        None,
+    ],
+)
+async def test_competitor_non_http_url_is_never_an_href(url: str | None) -> None:
+    # Competitor.url is LLM output derived from scraped text: anything that
+    # is not http(s) must render as plain text, never as a clickable href.
+    html = await _render_competitor(url)
+    assert "GenericBatteryCo replacement kit" in html
+    assert "<a href=" not in html.split("<h2>Competitive Landscape</h2>")[1].split("</table>")[0]
+    if url:
+        assert f'href="{url}"' not in html

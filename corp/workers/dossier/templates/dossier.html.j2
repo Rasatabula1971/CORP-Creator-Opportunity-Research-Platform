@@ -243,7 +243,8 @@
   {% for comp in opp.competitors %}
   <tr>
     <td>
-      {% if comp.url %}<a href="{{ comp.url }}">{{ comp.name }}</a>{% else %}{{ comp.name }}{% endif %}
+      {# comp.url is LLM output: only http(s) may become a live link #}
+      {% if comp.url and comp.url.lower().startswith(("https://", "http://")) %}<a href="{{ comp.url }}" rel="noopener noreferrer">{{ comp.name }}</a>{% else %}{{ comp.name }}{% endif %}
     </td>
     <td><span class="badge badge-{{ comp.competitor_type.value }}">{{ comp.competitor_type.value | replace("_", " ") | upper }}</span></td>
     <td><span class="badge badge-{{ comp.strength.value }}">{{ comp.strength.value | upper }}</span></td>

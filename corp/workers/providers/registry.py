@@ -17,7 +17,11 @@ from tenacity import (
     wait_exponential,
 )
 
-from corp.workers.providers.errors import ProviderExhaustedError, ProviderUnavailableError
+from corp.workers.providers.errors import (
+    ProviderError,
+    ProviderExhaustedError,
+    ProviderUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +127,13 @@ class GeminiProvider(LLMProvider):
         )
         response = await self._generate_with_retry(prompt, config)
         raw = response.text
+        # ``text`` is None when no part carried text: safety block, MAX_TOKENS
+        # on a thought-only part, no candidates. json.loads(None) would be an
+        # opaque TypeError against the item; name it as a provider error.
+        if not isinstance(raw, str) or not raw.strip():
+            raise ProviderError(
+                self._model_id, f"empty completion (finish_reason={_finish_reason(response)})"
+            )
         result = json.loads(raw)
 
         response_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
@@ -133,6 +144,13 @@ class GeminiProvider(LLMProvider):
             len(prompt),
         )
         return result
+
+
+def _finish_reason(response: Any) -> str | None:
+    """Why the first candidate stopped, for error messages; None when unknown."""
+    candidates = getattr(response, "candidates", None) or []
+    reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    return getattr(reason, "name", reason)  # enum -> its name; str/None as-is
 
 
 def _response_hash(data: dict) -> str:

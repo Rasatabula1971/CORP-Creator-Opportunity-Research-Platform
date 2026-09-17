@@ -1,5 +1,6 @@
 """Tests for multi-source niche discovery — all DB + HTTP calls mocked."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -390,3 +391,54 @@ async def test_archive_written(
     assert archive_ref is not None
     archive_path = tmp_path / archive_ref
     assert archive_path.exists()
+
+
+# ── All sources skipped ──────────────────────────────────────────────
+
+
+@patch("corp.workers.acquisition.multi_discovery.mirror_evidence", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.record_query", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.validate_run_type")
+@patch("corp.workers.acquisition.multi_discovery.finish_run", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.start_run", new_callable=AsyncMock)
+@patch("corp.workers.acquisition.multi_discovery.build_adapter")
+async def test_all_sources_skipped_is_a_failed_run(
+    mock_build: MagicMock,
+    mock_start: AsyncMock,
+    mock_finish: AsyncMock,
+    mock_validate: MagicMock,
+    mock_record: AsyncMock,
+    mock_mirror: AsyncMock,
+    mock_session: AsyncMock,
+    tracker: SourceHealthTracker,
+    tmp_path: Path,
+) -> None:
+    # One source is circuit-broken, the other cannot be built. Nothing was
+    # attempted, so 0/0 must not read as a completed run that did no work.
+    from corp.workers.intelligence.runs import resolve_status
+
+    run = MagicMock()
+    run.id = "run-none"
+    mock_start.return_value = run
+    mock_finish.return_value = run
+
+    for _ in range(6):
+        tracker.record_failure("hackernews", RuntimeError("down"))
+    mock_build.side_effect = RuntimeError("no api key")
+
+    disco = MultiSourceDiscovery(
+        mock_session,
+        str(tmp_path),
+        platforms=("hackernews", "wikipedia"),
+        health_tracker=tracker,
+    )
+    await disco.discover("camp-1", "python")
+
+    stats = mock_finish.call_args[0][2]
+    assert stats.extra["total_sources_attempted"] == 0
+    assert stats.extra["total_sources_skipped"] == 2
+    assert stats.attempted == stats.failed == 1
+    assert resolve_status(stats, 0.5) == "failed"
+    assert "hackernews=disconnected" in stats.last_error
+    assert "wikipedia=build_error: no api key" in stats.last_error
+    assert mock_record.call_count == 0
