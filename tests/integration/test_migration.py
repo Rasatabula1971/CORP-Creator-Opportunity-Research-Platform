@@ -7,7 +7,7 @@ from pathlib import Path
 ALEMBIC_CMD = ["alembic"]
 ENV = {
     **os.environ,
-    "DATABASE_URL_SYNC": "postgresql://corp:corp@localhost:5432/corp_test",
+    "DATABASE_URL_SYNC": "postgresql://corp:corp@localhost:5433/corp_test",
 }
 
 # Repo root = two levels up from tests/integration/. Deriving it avoids a

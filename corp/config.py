@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    database_url: str = "postgresql+asyncpg://corp:corp@localhost:5432/corp"
-    database_url_sync: str = "postgresql://corp:corp@localhost:5432/corp"
+    database_url: str = "postgresql+asyncpg://corp:corp@localhost:5433/corp"
+    database_url_sync: str = "postgresql://corp:corp@localhost:5433/corp"
 
     youtube_api_key: str = ""
     youtube_daily_quota_units: int = 10000

@@ -5,10 +5,10 @@ import os
 # is this suite's own override point; the hardcoded default assumes a local Postgres
 # with pgvector installed.
 os.environ["DATABASE_URL"] = os.environ.get(
-    "CORP_TEST_DATABASE_URL", "postgresql+asyncpg://corp:corp@localhost:5432/corp_test"
+    "CORP_TEST_DATABASE_URL", "postgresql+asyncpg://corp:corp@localhost:5433/corp_test"
 )
 os.environ["DATABASE_URL_SYNC"] = os.environ.get(
-    "CORP_TEST_DATABASE_URL_SYNC", "postgresql://corp:corp@localhost:5432/corp_test"
+    "CORP_TEST_DATABASE_URL_SYNC", "postgresql://corp:corp@localhost:5433/corp_test"
 )
 
 from collections.abc import AsyncGenerator
