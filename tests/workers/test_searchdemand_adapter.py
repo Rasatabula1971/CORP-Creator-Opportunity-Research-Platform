@@ -189,3 +189,23 @@ async def test_timestamps_present(mock_client):
 
     assert results[0].timestamp is not None
     assert results[0].timestamp.tzinfo is not None
+
+
+async def test_implements_search_intent_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Search Demand is SearchIntentProvider, delegating to collect()."""
+    from corp.workers.providers.capabilities import SearchIntentProvider
+
+    adapter = SearchDemandAdapter()
+    assert isinstance(adapter, SearchIntentProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_search_intent("home espresso") is sentinel
+    assert calls == ["home espresso"]

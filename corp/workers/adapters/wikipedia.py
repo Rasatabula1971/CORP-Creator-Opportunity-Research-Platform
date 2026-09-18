@@ -32,6 +32,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.providers.capabilities import TrendProvider
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class WikipediaAdapter(SourceAdapter):
+class WikipediaAdapter(SourceAdapter, TrendProvider):
     """Collects Wikipedia article summaries with pageview trend data.
 
     Each article becomes a ``pageview_trend`` content item. The metadata
@@ -102,6 +103,15 @@ class WikipediaAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    async def fetch_trend(self, query: str) -> list[NormalizedContent]:
+        """TrendProvider (CORP1 Stage 4/5, T2): sustained article pageviews
+        are a demand-validation signal. Not in the CORP1 spec's original
+        Phase 1.2 mapping table (a gap found while implementing T2 — the
+        table covered 9 adapters + Web Presence but omitted this one);
+        assigned here based on this adapter's own documented purpose.
+        Delegates to collect() unchanged."""
+        return await self.collect(query)
 
     async def _search_and_collect(self, query: str) -> list[NormalizedContent]:
         articles = await self._search_articles(query)

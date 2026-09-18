@@ -38,6 +38,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.ids import stable_id
+from corp.workers.providers.capabilities import TrendProvider
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def _has_pytrends() -> bool:
         return False
 
 
-class GoogleTrendsAdapter(SourceAdapter):
+class GoogleTrendsAdapter(SourceAdapter, TrendProvider):
     """Collects trending topics and search interest data from Google Trends.
 
     Trending topics from the RSS feed become ``trend`` items. Interest-
@@ -108,6 +109,11 @@ class GoogleTrendsAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    async def fetch_trend(self, query: str) -> list[NormalizedContent]:
+        """TrendProvider (CORP1 Stage 4/5, T2): delegates to collect()
+        unchanged."""
+        return await self.collect(query)
 
     async def _collect_trending(self, geo: str) -> list[NormalizedContent]:
         xml_text = await self._get_page(

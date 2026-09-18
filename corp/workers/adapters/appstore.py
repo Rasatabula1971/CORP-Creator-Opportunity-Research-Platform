@@ -35,6 +35,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.ids import stable_id
+from corp.workers.providers.capabilities import DissatisfactionProvider, SolutionProvider
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class AppStoreAdapter(SourceAdapter):
+class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
     """Collects app reviews from Apple's App Store via RSS feed.
 
     Each review becomes a ``review`` content item. Metadata includes
@@ -103,6 +104,17 @@ class AppStoreAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    # ── Capability interfaces (CORP1 Stage 4/5, T2) ────────────────────
+    # Both delegate to the same collect() unchanged — the apps found ARE
+    # the existing solutions (competitive landscape), and their low-star
+    # reviews ARE the dissatisfaction signal, from the same collection.
+
+    async def fetch_solutions(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
+
+    async def fetch_dissatisfaction(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
 
     async def _collect_by_search(self, query: str) -> list[NormalizedContent]:
         app_ids = await self._search_apps(query)

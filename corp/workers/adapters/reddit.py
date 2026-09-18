@@ -30,6 +30,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.providers.capabilities import DissatisfactionProvider, ProblemProvider
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class RedditAdapter(SourceAdapter):
+class RedditAdapter(SourceAdapter, ProblemProvider, DissatisfactionProvider):
     """Collects posts and full comment trees from a subreddit or user profile."""
 
     def __init__(
@@ -88,6 +89,18 @@ class RedditAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    # ── Capability interfaces (CORP1 Stage 4/5, T2) ────────────────────
+    # Both delegate to the same collect() unchanged — Reddit posts and
+    # comments are read through two different lenses (a stated problem,
+    # or an expression of dissatisfaction with current solutions), not
+    # two different collections.
+
+    async def fetch_problems(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
+
+    async def fetch_dissatisfaction(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
 
     # ── Listings ─────────────────────────────────────────────────────
 

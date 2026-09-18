@@ -259,3 +259,26 @@ async def test_close(mock_client):
     adapter = AppStoreAdapter(client=mock_client)
     await adapter.close()
     mock_client.aclose.assert_called_once()
+
+
+async def test_implements_solution_and_dissatisfaction_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: App Store is SolutionProvider + DissatisfactionProvider,
+    both delegating to the same collect()."""
+    from corp.workers.providers.capabilities import DissatisfactionProvider, SolutionProvider
+
+    adapter = AppStoreAdapter()
+    assert isinstance(adapter, SolutionProvider)
+    assert isinstance(adapter, DissatisfactionProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_solutions("budget tracker") is sentinel
+    assert await adapter.fetch_dissatisfaction("budget tracker") is sentinel
+    assert calls == ["budget tracker", "budget tracker"]

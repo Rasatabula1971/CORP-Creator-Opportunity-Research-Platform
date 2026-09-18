@@ -310,3 +310,23 @@ async def test_star_filter_uses_amazon_critical_bucket_and_drops_high_ratings(mo
     # Even if Amazon ignores the filter, 4-5 star reviews never leak through.
     assert [r.external_id for r in results] == ["R1ABC123", "R2DEF456"]
     assert all(r.metadata["star_rating"] <= 3 for r in results)
+
+
+async def test_implements_dissatisfaction_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Amazon Reviews is DissatisfactionProvider, delegating to collect()."""
+    from corp.workers.providers.capabilities import DissatisfactionProvider
+
+    adapter = AmazonReviewAdapter()
+    assert isinstance(adapter, DissatisfactionProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_dissatisfaction("search:espresso machine") is sentinel
+    assert calls == ["search:espresso machine"]

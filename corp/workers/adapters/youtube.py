@@ -20,6 +20,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.adapters.captions import fetch_youtube_caption
+from corp.workers.providers.capabilities import ProblemProvider
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class _RateLimiter:
             self._last_call = time.monotonic()
 
 
-class YouTubeAdapter(SourceAdapter):
+class YouTubeAdapter(SourceAdapter, ProblemProvider):
     """Collects videos, comments, and captions from a YouTube channel."""
 
     def __init__(
@@ -472,3 +473,9 @@ class YouTubeAdapter(SourceAdapter):
                 results.append(caption)
 
         return results
+
+    async def fetch_problems(self, query: str) -> list[NormalizedContent]:
+        """ProblemProvider (CORP1 Stage 4/5, T2): audience comments on a
+        creator's own videos are a direct problem signal. Delegates to the
+        existing collection logic unchanged."""
+        return await self.collect(query)

@@ -28,6 +28,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.providers.capabilities import ProblemProvider
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class HackerNewsAdapter(SourceAdapter):
+class HackerNewsAdapter(SourceAdapter, ProblemProvider):
     """Collects stories and comments from Hacker News via Algolia API.
 
     Stories become ``story`` items; comments become ``comment`` items
@@ -87,6 +88,12 @@ class HackerNewsAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    async def fetch_problems(self, query: str) -> list[NormalizedContent]:
+        """ProblemProvider (CORP1 Stage 4/5, T2): delegates to collect()
+        unchanged — comments/show-HN posts double as technical problem
+        signals."""
+        return await self.collect(query)
 
     async def _search(
         self, query: str, tags: str = "story"

@@ -299,3 +299,23 @@ async def test_timestamps(mock_client):
     assert ts is not None
     assert ts.tzinfo is not None
     assert isinstance(ts, datetime)
+
+
+async def test_implements_problem_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Stack Exchange is ProblemProvider, delegating to collect()."""
+    from corp.workers.providers.capabilities import ProblemProvider
+
+    adapter = StackExchangeAdapter()
+    assert isinstance(adapter, ProblemProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_problems("tag:python") is sentinel
+    assert calls == ["tag:python"]

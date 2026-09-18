@@ -410,3 +410,23 @@ async def test_collect_full_flow():
     assert "video" in types
     assert "comment" in types
     assert "reply" in types
+
+
+async def test_implements_problem_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: YouTube is ProblemProvider, delegating to collect()."""
+    from corp.workers.providers.capabilities import ProblemProvider
+
+    adapter = _make_adapter()
+    assert isinstance(adapter, ProblemProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_problems("home espresso") is sentinel
+    assert calls == ["home espresso"]

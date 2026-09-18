@@ -201,3 +201,23 @@ async def test_close(mock_client):
     adapter = GoogleTrendsAdapter(client=mock_client)
     await adapter.close()
     mock_client.aclose.assert_called_once()
+
+
+async def test_implements_trend_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Google Trends is TrendProvider, delegating to collect()."""
+    from corp.workers.providers.capabilities import TrendProvider
+
+    adapter = GoogleTrendsAdapter()
+    assert isinstance(adapter, TrendProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_trend("trending") is sentinel
+    assert calls == ["trending"]

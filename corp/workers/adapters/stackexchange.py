@@ -33,6 +33,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.marketplace import _html_to_text
+from corp.workers.providers.capabilities import ProblemProvider
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class StackExchangeAdapter(SourceAdapter):
+class StackExchangeAdapter(SourceAdapter, ProblemProvider):
     """Collects questions (and their answers) from a Stack Exchange site.
 
     Each question becomes a ``question`` content item; its accepted/top
@@ -97,6 +98,11 @@ class StackExchangeAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    async def fetch_problems(self, query: str) -> list[NormalizedContent]:
+        """ProblemProvider (CORP1 Stage 4/5, T2): "How do I X?" questions are
+        a direct unmet-need signal. Delegates to collect() unchanged."""
+        return await self.collect(query)
 
     async def _collect_by_tag(self, tag_spec: str) -> list[NormalizedContent]:
         tags = tag_spec.replace(",", ";")

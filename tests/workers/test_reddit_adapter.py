@@ -93,6 +93,29 @@ def test_implements_source_adapter():
     assert adapter.compliance_status == ComplianceStatus.VERIFY
 
 
+async def test_implements_problem_and_dissatisfaction_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Reddit is ProblemProvider + DissatisfactionProvider,
+    both delegating to the same collect()."""
+    from corp.workers.providers.capabilities import DissatisfactionProvider, ProblemProvider
+
+    adapter = RedditAdapter(request_interval_seconds=0.0)
+    assert isinstance(adapter, ProblemProvider)
+    assert isinstance(adapter, DissatisfactionProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_problems("home espresso") is sentinel
+    assert await adapter.fetch_dissatisfaction("home espresso") is sentinel
+    assert calls == ["home espresso", "home espresso"]
+
+
 @pytest.mark.parametrize(
     "identifier, path",
     [

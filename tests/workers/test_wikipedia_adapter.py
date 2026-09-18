@@ -221,3 +221,24 @@ async def test_close(mock_client):
     adapter = WikipediaAdapter(client=mock_client)
     await adapter.close()
     mock_client.aclose.assert_called_once()
+
+
+async def test_implements_trend_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Wikipedia is TrendProvider (a gap-fill correction --
+    not in the original Phase 1.2 mapping table), delegating to collect()."""
+    from corp.workers.providers.capabilities import TrendProvider
+
+    adapter = WikipediaAdapter()
+    assert isinstance(adapter, TrendProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_trend("home espresso") is sentinel
+    assert calls == ["home espresso"]

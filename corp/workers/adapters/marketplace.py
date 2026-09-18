@@ -37,6 +37,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.ids import stable_id
+from corp.workers.providers.capabilities import SolutionProvider, TransactionProvider
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ def _html_to_text(html: str) -> str:
     return p.get_text()
 
 
-class MarketplaceAdapter(SourceAdapter):
+class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
     """Collects product listings from digital marketplaces as saturation signals.
 
     Each listing becomes a ``listing`` content item. The metadata includes
@@ -129,6 +130,18 @@ class MarketplaceAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    # ── Capability interfaces (CORP1 Stage 4/5, T2) ────────────────────
+    # Both delegate to the same collect() unchanged — a marketplace
+    # listing IS a transaction signal (people already pay) and IS a
+    # solution signal (this is what's already competing), from the same
+    # listing data.
+
+    async def fetch_transactions(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
+
+    async def fetch_solutions(self, query: str) -> list[NormalizedContent]:
+        return await self.collect(query)
 
     async def _collect_all(self, query: str) -> list[NormalizedContent]:
         results: list[NormalizedContent] = []

@@ -34,6 +34,7 @@ from tenacity import (
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.ids import stable_id
+from corp.workers.providers.capabilities import SearchIntentProvider
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def _is_retryable(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
-class SearchDemandAdapter(SourceAdapter):
+class SearchDemandAdapter(SourceAdapter, SearchIntentProvider):
     """Collects Google autocomplete suggestions as search-demand signals.
 
     Each suggestion becomes a ``question`` content item whose text is the
@@ -106,6 +107,12 @@ class SearchDemandAdapter(SourceAdapter):
     async def close(self) -> None:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
+
+    async def fetch_search_intent(self, query: str) -> list[NormalizedContent]:
+        """SearchIntentProvider (CORP1 Stage 4/5, T2): autocomplete
+        suggestions reveal what people actively type. Delegates to
+        collect() unchanged."""
+        return await self.collect(query)
 
     async def _collect_base(self, query: str) -> list[NormalizedContent]:
         suggestions = await self._fetch_suggestions(query)

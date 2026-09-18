@@ -382,3 +382,26 @@ async def test_all_marketplaces_failing_raises(mock_client):
 
     with pytest.raises(RuntimeError, match="All marketplaces failed"):
         await adapter.collect("python")
+
+
+async def test_implements_transaction_and_solution_provider(monkeypatch):
+    """CORP1 Stage 4/5, T2: Marketplace is TransactionProvider + SolutionProvider,
+    both delegating to the same collect()."""
+    from corp.workers.providers.capabilities import SolutionProvider, TransactionProvider
+
+    adapter = MarketplaceAdapter()
+    assert isinstance(adapter, TransactionProvider)
+    assert isinstance(adapter, SolutionProvider)
+
+    sentinel: list[object] = []
+    calls: list[str] = []
+
+    async def fake_collect(identifier: str) -> list[object]:
+        calls.append(identifier)
+        return sentinel
+
+    monkeypatch.setattr(adapter, "collect", fake_collect)
+
+    assert await adapter.fetch_transactions("invoicing template") is sentinel
+    assert await adapter.fetch_solutions("invoicing template") is sentinel
+    assert calls == ["invoicing template", "invoicing template"]
