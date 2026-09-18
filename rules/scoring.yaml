@@ -1,21 +1,42 @@
-version: "2.1.0"
+version: "2.2.0"
 
-# scoring_v2 — ten components, weights sum to 1.0.
-# Frequency and commercial intent stay the largest levers. The two saturation
-# components (competition_saturation, competitor_saturation) run side by side —
-# the first reads the creator's own storefront pages, the second the tracked
-# Competitor list. Whichever wasn't researched returns a neutral 0.5.
+# scoring_v2 — fourteen components, weights sum to 1.0.
+# Frequency and commercial intent stay the largest levers. The three
+# saturation components (competition_saturation, competitor_saturation,
+# solution_saturation) run side by side — the creator's own storefront
+# pages, a manually tracked Competitor list, and SolutionProvider evidence
+# (marketplace/app-store/Product-Hunt listings) respectively. Whichever
+# wasn't researched returns a neutral 0.5.
+#
+# CORP1 Stage 5, T7 added the last four (external_demand_strength,
+# solution_saturation, purchase_intent, audience_dissatisfaction) —
+# capability-type-driven components (corp.core.scoring.engine, T1's
+# EvidenceType), not yet wired into the live scoring pipeline (planned
+# for Phase 3.6, once every adapter in the CORP1 spec's capability table
+# exists to feed them). Until then a component_scores dict that only
+# supplies the original ten still normalizes correctly — compute_score
+# divides by the weight actually present, not the full weights dict.
+#
+# The original ten weights were scaled by 0.76 (uniformly, preserving
+# their relative proportions exactly) to make room for the new 0.24 —
+# 0.06 external_demand_strength, 0.04 solution_saturation, 0.08
+# purchase_intent (the spec's own "most powerful demand signal
+# available"), 0.06 audience_dissatisfaction.
 weights:
-  audience_problem_frequency: 0.20
-  recency_trend: 0.05
-  engagement_velocity: 0.10
-  commercial_intent_strength: 0.20
-  evidence_depth: 0.10
-  creator_reach: 0.10
-  competition_saturation: 0.05
-  competitor_saturation: 0.05
-  creator_content_alignment: 0.10
-  cross_platform_consistency: 0.05
+  audience_problem_frequency: 0.152
+  recency_trend: 0.038
+  engagement_velocity: 0.076
+  commercial_intent_strength: 0.152
+  evidence_depth: 0.076
+  creator_reach: 0.076
+  competition_saturation: 0.038
+  competitor_saturation: 0.038
+  creator_content_alignment: 0.076
+  cross_platform_consistency: 0.038
+  external_demand_strength: 0.060
+  solution_saturation: 0.040
+  purchase_intent: 0.080
+  audience_dissatisfaction: 0.060
 
 confidence_thresholds:
   high:

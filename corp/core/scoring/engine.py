@@ -187,3 +187,73 @@ def score_competitor_saturation(competitors: list[CompetitorStrength] | None = N
     pressure = sum(_STRENGTH_WEIGHT.get(c, 0.5) for c in competitors)
     saturation = min(1.0, pressure / _SATURATION_CAP)
     return round(1.0 - saturation, 4)
+
+
+# ── CORP1 Stage 5, T7: capability-type components ────────────────────
+#
+# The three components above answer "how crowded is this opportunity?"
+# from evidence the CREATOR-research pipeline gathers (own storefront,
+# a manually tracked competitor list). These four instead read evidence
+# the niche-DISCOVERY pipeline gathers (T1's capability interfaces, wired
+# to adapters by T2) — by Evidence.evidence_type, never by which platform
+# happened to produce it. Each function takes a plain evidence count (or
+# counts) as input rather than querying the database itself: matching
+# every other function in this module, this is a pure scoring-math
+# library — corp.workers.intelligence.scoring_pipeline (not touched by
+# this task) is responsible for the actual evidence_type-keyed query,
+# planned for Phase 3.6 ("Full Scoring Integration") once every adapter
+# in the CORP1 spec's capability table exists to feed it.
+
+
+def score_external_demand_strength(
+    trend_evidence_count: int, search_intent_evidence_count: int, cap: int = 30
+) -> float:
+    """From TrendProvider + SearchIntentProvider evidence (Google Trends
+    interest, search autocomplete volume) — demand independent of
+    anything the creator's own audience said. Log-scaled like the other
+    count-based components; zero evidence of either kind means no
+    external demand signal has been gathered yet, not that demand is
+    necessarily weak."""
+    total = max(0, trend_evidence_count) + max(0, search_intent_evidence_count)
+    if total <= 0:
+        return 0.0
+    return min(1.0, math.log1p(total) / math.log1p(cap))
+
+
+def score_solution_saturation(solution_evidence_count: int, cap: int = 20) -> float:
+    """Higher = less saturated = more room, from SolutionProvider evidence
+    (marketplace listings, app store apps, Product Hunt launches,
+    published books) — a different evidence source from
+    score_competition_saturation (creator's own storefront) and
+    score_competitor_saturation (a manually tracked Competitor list); all
+    three run independently and are blended into the same aggregate.
+    Neutral 0.5 with no SolutionProvider evidence gathered yet, matching
+    those two components' convention — absence of research is not
+    evidence of an open market."""
+    if solution_evidence_count <= 0:
+        return 0.5
+    saturation = min(1.0, solution_evidence_count / cap)
+    return round(1.0 - saturation, 4)
+
+
+def score_purchase_intent(transaction_evidence_count: int, cap: int = 15) -> float:
+    """From TransactionProvider evidence — marketplace sales, Kickstarter/
+    Indiegogo backers, existing paid listings. The strongest demand
+    signal available: someone already paid real money for something like
+    this (CORP1 spec, Phase 2.3)."""
+    if transaction_evidence_count <= 0:
+        return 0.0
+    return min(1.0, math.log1p(transaction_evidence_count) / math.log1p(cap))
+
+
+def score_audience_dissatisfaction(
+    dissatisfaction_evidence_count: int, cap: int = 20
+) -> float:
+    """From DissatisfactionProvider evidence — low-star reviews,
+    complaints about existing solutions. Higher = more evidence that
+    current solutions fail people = a stronger opportunity signal, unlike
+    every saturation component above where higher means LESS existing
+    competition; this one means more existing failure to build on."""
+    if dissatisfaction_evidence_count <= 0:
+        return 0.0
+    return min(1.0, math.log1p(dissatisfaction_evidence_count) / math.log1p(cap))
