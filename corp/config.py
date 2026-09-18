@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     appstore_max_apps: int = 5
     appstore_country: str = "us"
 
+    # Crowdfunding adapter (niche-signal: Kickstarter + Indiegogo backing as
+    # purchase-intent evidence). Both platforms' internal search endpoints,
+    # verified live; no official API, no key.
+    crowdfunding_max_projects: int = 30
+
     # Source health tracker — circuit breaker for tolerated adapters.
     # Consecutive failures before degrading a source.
     health_degrade_after: int = 3

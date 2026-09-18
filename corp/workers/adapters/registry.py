@@ -7,7 +7,7 @@ from corp.workers.adapters.base import SourceAdapter
 KNOWN_PLATFORMS = (
     "youtube", "reddit", "tiktok", "web", "stackexchange",
     "searchdemand", "amazon_reviews", "marketplace",
-    "hackernews", "wikipedia", "googletrends", "appstore",
+    "hackernews", "wikipedia", "googletrends", "appstore", "crowdfunding",
 )
 
 
@@ -142,6 +142,11 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
             max_apps=cfg.appstore_max_apps,
             country=cfg.appstore_country,
         )
+
+    if name == "crowdfunding":
+        from corp.workers.adapters.crowdfunding import CrowdfundingAdapter
+
+        return CrowdfundingAdapter(max_projects=cfg.crowdfunding_max_projects)
 
     known = ", ".join(KNOWN_PLATFORMS)
     raise AdapterConfigError(f"Unknown platform {platform!r}; known: {known}")
