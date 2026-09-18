@@ -10,11 +10,12 @@ import {
   useJob,
   usePersistedDossier,
   useRecordDecision,
+  useRecordDossierDecision,
   useStartResearch,
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
 import { ApiError } from "../api/client";
-import type { ClusterDetail, Competitor } from "../api/types";
+import type { ClusterDetail, Competitor, DossierDecisionType } from "../api/types";
 
 export function CreatorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,7 @@ export function CreatorDetailPage() {
   const { data: clusters } = useClusters(id);
   const { data: dossier } = useDossier(id);
   const { data: decisions } = useDecisions(id);
+  const { data: persistedDossier } = usePersistedDossier(id);
   const startResearch = useStartResearch();
   const [activeJobId, setActiveJobId] = useState<string | undefined>();
   const { data: job } = useJob(activeJobId, { pollUntilDone: true });
@@ -107,6 +109,14 @@ export function CreatorDetailPage() {
 
       {/* Persisted Dossier (CORP1 Stage 5, T6) */}
       {id && <PersistedDossierPanel creatorId={id} />}
+
+      {/* Dossier Decision Gate (CORP1 Stage 5, T8) */}
+      {id &&
+        persistedDossier &&
+        persistedDossier.status !== "approved" &&
+        persistedDossier.status !== "rejected" && (
+          <DossierDecisionPanel creatorId={id} dossierId={persistedDossier.id} />
+        )}
 
       {/* Opportunities / Clusters */}
       <Card>
@@ -624,6 +634,106 @@ function DecisionPanel({ creatorId }: { creatorId: string }) {
             disabled={recordDecision.isPending}
           >
             Approve
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => submit("watch")}
+            disabled={recordDecision.isPending}
+          >
+            Watch
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => submit("reject")}
+            disabled={recordDecision.isPending}
+          >
+            Reject
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setShowForm(false)}
+            disabled={recordDecision.isPending}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// CORP1 Stage 5, T8 — the dossier-level four-state decision gate (Reject /
+// Research More / Watch / Approve), distinct from the Gate A DecisionPanel
+// above (creator-status-scoped, unchanged by this task).
+function DossierDecisionPanel({
+  creatorId,
+  dossierId,
+}: {
+  creatorId: string;
+  dossierId: string;
+}) {
+  const recordDecision = useRecordDossierDecision(creatorId, dossierId);
+  const [rationale, setRationale] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  function submit(decision: DossierDecisionType) {
+    recordDecision.mutate(
+      { decision, rationale: rationale || null },
+      {
+        onSuccess: () => {
+          setRationale("");
+          setShowForm(false);
+        },
+      },
+    );
+  }
+
+  if (!showForm) {
+    return (
+      <Card>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Dossier Decision</h2>
+          <Button variant="secondary" onClick={() => setShowForm(true)}>
+            Record Decision
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-3 text-sm font-semibold">Dossier Decision</h2>
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-500">
+            Rationale (optional)
+          </label>
+          <textarea
+            value={rationale}
+            onChange={(e) => setRationale(e.target.value)}
+            rows={2}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+          />
+        </div>
+
+        {recordDecision.error && <ErrorBanner error={recordDecision.error} />}
+        {recordDecision.data?.job_id && (
+          <p className="text-xs text-neutral-500">
+            Research More started (job {recordDecision.data.job_id.slice(0, 8)}).
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => submit("approve")} disabled={recordDecision.isPending}>
+            Approve
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => submit("research_more")}
+            disabled={recordDecision.isPending}
+          >
+            Research More
           </Button>
           <Button
             variant="secondary"

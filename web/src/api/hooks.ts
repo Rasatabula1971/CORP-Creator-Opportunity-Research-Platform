@@ -10,6 +10,8 @@ import type {
   CreatorCreateInput,
   CreatorDetail,
   Decision,
+  DossierDecisionInput,
+  DossierDecisionResult,
   DossierJson,
   Job,
   PersistedDossier,
@@ -238,5 +240,19 @@ export function useRecordDecision(creatorId: string) {
     // The gate also transitions creator.status; the prefix key refreshes the
     // detail (header badge, DecisionPanel gate) and the decisions list together.
     onSuccess: () => qc.invalidateQueries({ queryKey: ["creators", creatorId] }),
+  });
+}
+
+// CORP1 Stage 5, T8 — the dossier-level four-state decision gate, distinct
+// from useRecordDecision above (Gate A, creator-status-scoped, unchanged).
+export function useRecordDossierDecision(creatorId: string, dossierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DossierDecisionInput) =>
+      api.post<DossierDecisionResult>(`/dossiers/${dossierId}/decision`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["creators", creatorId, "dossier", "persisted"] });
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
   });
 }

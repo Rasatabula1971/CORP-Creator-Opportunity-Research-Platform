@@ -1,4 +1,4 @@
-"""Recursive niche discovery (CORP1 Stage 3/4/5, T3).
+"""Recursive niche discovery (CORP1 Stage 3/4/5, T3; extended by T8).
 
 Supersedes the single-level "discover -> drill-down" description from the
 CORP1 spec's Phase 1.3/1.4 with the frozen recursive behavior: a broad
@@ -7,6 +7,11 @@ LLM synthesizes named niches from the returned evidence -- grounded only,
 never invented -- and each niche that is not yet specific enough for a
 concrete digital product recurses into itself as the next query, one level
 deeper, until it is specific enough or the depth-3 hard cap is reached.
+
+CORP1 Stage 5, T8 (four-state decision gate) added ``research_more()``: a
+second public entrypoint, distinct from ``discover()``, that resumes
+drilling one already-canonical niche one level deeper instead of starting
+a fresh depth-0 scan from a broad topic. See its docstring.
 
 Two design decisions made here, not fully settled by the frozen spec:
 
@@ -311,6 +316,97 @@ class RecursiveNicheDiscovery:
             logger.exception("Recursive niche discovery failed for campaign %s", campaign_id)
             raise
 
+    async def research_more(self, niche_id: str, campaign_id: str) -> ResearchRun:
+        """CORP1 Stage 5, T8's "Research More" decision outcome: resume
+        drilling one SPECIFIC canonical niche one level deeper and re-query
+        evidence sources for it, per the Stage 3 spec's own wording ("CORP1
+        automatically drills one level deeper into the niche and re-queries
+        all evidence sources for that specific niche").
+
+        Unlike :meth:`discover`, which always starts a fresh recursion at
+        depth 0 for a broad topic, this resumes from wherever the niche's
+        own drill history left off: it anchors the new candidates as
+        children of the most recently promoted :class:`NicheCandidate` for
+        this niche (if one exists) at ``that candidate's depth + 1``, or
+        falls back to ``niche.depth + 1`` with no parent anchor if the
+        niche has no traceable candidate lineage (e.g. seeded manually).
+
+        Also bypasses the registry-freshness skip that :meth:`_drill` would
+        otherwise apply — a human explicitly asking to research this niche
+        again right now must not silently no-op just because it was
+        recently scanned. Only this top-level call bypasses the check;
+        any further auto-recursion triggered from here still respects it
+        normally, same as every other drill.
+        """
+        niche = await self._session.get(Niche, niche_id)
+        if niche is None:
+            raise ValueError(f"Niche not found: {niche_id}")
+        if await self._session.get(Campaign, campaign_id) is None:
+            raise ValueError(f"Campaign not found: {campaign_id}")
+
+        # NicheCandidate.niche_id is set by BOTH the PROMOTED branch of
+        # canonicalization (this candidate created the niche) and the
+        # MERGED branch (this candidate was folded into an existing
+        # niche from some other, possibly unrelated, campaign/drill run)
+        # -- see niche_canonicalization.canonicalize(). Only a PROMOTED
+        # candidate's depth/lineage is this niche's own drill history; a
+        # MERGED one is a different candidate's history that happens to
+        # point here, and anchoring on it would silently research_more()
+        # against the wrong tree (Stage 8 review finding).
+        parent_candidate = (
+            await self._session.execute(
+                select(NicheCandidate)
+                .where(
+                    NicheCandidate.niche_id == niche_id,
+                    NicheCandidate.status == NicheCandidateStatus.PROMOTED,
+                )
+                .order_by(NicheCandidate.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        parent_candidate_id = parent_candidate.id if parent_candidate else None
+        depth = (parent_candidate.depth if parent_candidate else niche.depth) + 1
+
+        run = await start_run(
+            self._session,
+            pipeline=PIPELINE,
+            creator_id=None,
+            config={
+                "topic": niche.canonical_name,
+                "research_more_of_niche_id": niche.id,
+                "max_depth": self._config.max_depth,
+                "breadth_per_branch": self._config.breadth_per_branch,
+            },
+            prompt_versions={"synthesis": "niche_discovery_v1"},
+            model_versions={"primary": self._provider.model_name},
+            scope=RunScope.NICHE,
+            run_type=RunType.NICHE_DISCOVERY,
+            campaign_id=campaign_id,
+            niche_id=niche.id,
+        )
+        stats = PipelineStats()
+        try:
+            await self._drill(
+                run,
+                campaign_id,
+                niche.canonical_name,
+                parent_candidate_id=parent_candidate_id,
+                depth=depth,
+                stats=stats,
+                skip_registry_check=True,
+            )
+            used = getattr(self._provider, "models_used", None)
+            run.model_versions = {
+                **(run.model_versions or {}),
+                "used": sorted(used()) if used else [self._provider.model_name],
+            }
+            return await finish_run(self._session, run, stats)
+        except Exception as exc:
+            if run.status == "running":
+                await fail_run(self._session, run, exc)
+            logger.exception("Research More failed for niche %s", niche_id)
+            raise
+
     # ── The recursive step ──────────────────────────────────────────────
 
     async def _drill(
@@ -321,8 +417,10 @@ class RecursiveNicheDiscovery:
         parent_candidate_id: str | None,
         depth: int,
         stats: PipelineStats,
+        *,
+        skip_registry_check: bool = False,
     ) -> None:
-        if await self._is_registry_fresh(keyword):
+        if not skip_registry_check and await self._is_registry_fresh(keyword):
             logger.info("Skipping %r at depth %d: registry entry still fresh", keyword, depth)
             stats.skip()
             return

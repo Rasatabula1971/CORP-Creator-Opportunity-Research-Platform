@@ -1,5 +1,6 @@
 """Write endpoints, background jobs, and the reads the review console needs."""
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
@@ -18,7 +19,9 @@ from corp.api.jobs import (
     run_research,
 )
 from corp.core.models.campaign import Campaign
+from corp.core.models.campaign_niche import CampaignNiche
 from corp.core.models.creator import Creator, CreatorPlatformAccount
+from corp.core.models.dossier import Dossier, DossierStatus
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -26,7 +29,7 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import OpportunityScore
-from corp.core.models.workflow import HumanDecision, ResearchRun
+from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
 from corp.core.schemas.campaign import CampaignCreate, CampaignResponse
 from corp.core.schemas.creator import (
     CreatorCreate,
@@ -81,6 +84,28 @@ class ClusterDetail(ProblemClusterResponse):
     signal: SignalSummary | None = None
     score: OpportunityScoreResponse | None = None
     member_count: int = 0
+
+
+# CORP1 Stage 5, T8: the dossier-level four-state decision gate. Local to
+# this module (not corp.core.schemas.workflow) because DecisionCreate/
+# DecisionResponse there are the existing, still-unchanged Gate A
+# (creator-status) contract this task must not disturb -- see ADR-0038.
+class DossierDecisionRequest(BaseModel):
+    decision: DecisionType
+    rationale: str | None = None
+    decided_by: str | None = None
+
+
+class DossierDecisionResponse(BaseModel):
+    id: str
+    dossier_id: str
+    creator_id: str
+    decision: DecisionType
+    gate: Gate
+    rationale: str | None
+    decided_at: datetime
+    dossier_status: DossierStatus
+    job_id: str | None = None
 
 
 # ── Health (registered on the app without auth; see app.py) ─────────
@@ -458,3 +483,118 @@ async def get_decisions(
         )
     ).scalars().all()
     return [DecisionResponse.model_validate(d) for d in rows]
+
+
+# ── Dossier decision gate (CORP1 Stage 5, T8) ───────────────────────
+
+
+async def _run_research_more(niche_id: str, campaign_id: str) -> dict[str, Any]:
+    """Work function for the Research More decision outcome. Mirrors
+    corp.api.jobs.run_campaign_pipeline's "discover" branch but calls
+    RecursiveNicheDiscovery.research_more (added by this task) instead of
+    discover -- resumes drilling the dossier's specific niche one level
+    deeper rather than starting a fresh depth-0 scan. Defined here, not in
+    corp.api.jobs, to stay within T8's frozen route-file scope."""
+    from corp.database import async_session
+    from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
+    from corp.workers.providers.factory import build_provider
+
+    provider = build_provider()
+    try:
+        async with async_session() as session:
+            discovery = RecursiveNicheDiscovery(
+                session, provider, "rules/niche_discovery_prompt.yaml"
+            )
+            run = await discovery.research_more(niche_id, campaign_id)
+            await session.commit()
+    finally:
+        close = getattr(provider, "close", None)
+        if callable(close):
+            await close()
+    return {"run_id": run.id, "status": run.status, "stats": run.stats}
+
+
+@router.post(
+    "/dossiers/{dossier_id}/decision",
+    response_model=DossierDecisionResponse,
+    status_code=201,
+)
+async def record_dossier_decision(
+    dossier_id: str,
+    body: DossierDecisionRequest,
+    background: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> DossierDecisionResponse:
+    """The four-state dossier decision gate: Reject / Research More / Watch
+    / Approve, exhaustively typed by DecisionType so no other value can
+    reach here. Distinct from POST /creators/{id}/decisions (Gate A,
+    creator-status-scoped, untouched by this task) -- this gate decides on
+    a specific Dossier and always records a new, append-only HumanDecision
+    row naming it via dossier_id."""
+    dossier = await session.get(Dossier, dossier_id)
+    if dossier is None:
+        raise HTTPException(status_code=404, detail="Dossier not found")
+
+    campaign_niche: CampaignNiche | None = None
+    if body.decision == DecisionType.RESEARCH_MORE:
+        campaign_niche = (
+            await session.execute(
+                select(CampaignNiche)
+                .where(CampaignNiche.niche_id == dossier.niche_id)
+                .order_by(CampaignNiche.created_at.desc())
+            )
+        ).scalars().first()
+        if campaign_niche is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Dossier's niche has no campaign association; cannot start Research More",
+            )
+        if (active := registry.active_for_campaign(campaign_niche.campaign_id)) is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A job is already running for this campaign: {active.id}",
+            )
+
+    decision_row = HumanDecision(
+        creator_id=dossier.creator_id,
+        dossier_id=dossier.id,
+        decision=body.decision,
+        gate=Gate.GATE_D,
+        rationale=body.rationale,
+        decided_by=body.decided_by,
+    )
+    session.add(decision_row)
+
+    job_id: str | None = None
+    if body.decision == DecisionType.REJECT:
+        dossier.status = DossierStatus.REJECTED
+    elif body.decision == DecisionType.WATCH:
+        dossier.status = DossierStatus.WATCHING
+    elif body.decision == DecisionType.APPROVE:
+        dossier.status = DossierStatus.APPROVED
+        # T9 (CORP2 handoff export, not yet built) reacts to this status --
+        # CORP1 never reaches into CORP2 directly, it only produces a
+        # package CORP2 pulls once T9 exists. No call out from here.
+    elif body.decision == DecisionType.RESEARCH_MORE:
+        assert campaign_niche is not None  # validated above
+        dossier.status = DossierStatus.RESEARCH_MORE_IN_PROGRESS
+        job = registry.create("research_more", campaign_id=campaign_niche.campaign_id)
+        job_id = job.id
+        niche_id, campaign_id = dossier.niche_id, campaign_niche.campaign_id
+        background.add_task(
+            registry.execute, job, lambda: _run_research_more(niche_id, campaign_id)
+        )
+
+    await session.flush()
+    await session.commit()
+    return DossierDecisionResponse(
+        id=decision_row.id,
+        dossier_id=dossier.id,
+        creator_id=dossier.creator_id,
+        decision=decision_row.decision,
+        gate=decision_row.gate,
+        rationale=decision_row.rationale,
+        decided_at=decision_row.decided_at,
+        dossier_status=dossier.status,
+        job_id=job_id,
+    )

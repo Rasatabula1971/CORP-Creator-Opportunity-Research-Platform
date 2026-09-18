@@ -14,6 +14,7 @@ from corp.core.models.campaign import Campaign
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
 from corp.core.models.niche import Niche
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
+from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.intelligence.niche_discovery import (
     DiscoveryConfig,
@@ -499,3 +500,230 @@ async def test_campaign_not_found_raises(clean_db: AsyncSession):
     discovery = RecursiveNicheDiscovery(clean_db, provider, rules_path="unused", config=_config())
     with pytest.raises(ValueError, match="Campaign not found"):
         await discovery.discover("does-not-exist", "topic")
+
+
+# ---------- research_more (CORP1 Stage 5, T8) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_research_more_anchors_at_parent_candidate_depth_plus_one(
+    clean_db: AsyncSession, monkeypatch
+):
+    session = clean_db
+    campaign = await _make_campaign(session)
+
+    niche = Niche(canonical_name="Home Espresso", depth=0)
+    session.add(niche)
+    await session.flush()
+    promoted = NicheCandidate(
+        campaign_id=campaign.id,
+        research_run_id=(await _make_campaign_run(session, campaign.id)).id,
+        label="Home Espresso",
+        naming_method="llm",
+        evidence_count=1,
+        source_count=1,
+        author_count=1,
+        depth=1,
+        status=NicheCandidateStatus.PROMOTED,
+        niche_id=niche.id,
+    )
+    session.add(promoted)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about espresso machines")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider(
+        {
+            "Topic: Home Espresso": {
+                "niches": [_niche("Espresso Machine Buying Guide", ["espresso"], True)]
+            }
+        }
+    )
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    run = await discovery.research_more(niche.id, campaign.id)
+
+    assert run.niche_id == niche.id
+    assert run.campaign_id == campaign.id
+    result = await session.execute(
+        select(NicheCandidate).where(NicheCandidate.research_run_id == run.id)
+    )
+    children = result.scalars().all()
+    assert len(children) == 1
+    assert children[0].parent_candidate_id == promoted.id
+    assert children[0].depth == 2  # promoted.depth (1) + 1
+
+
+@pytest.mark.asyncio
+async def test_research_more_ignores_a_more_recent_merged_candidate(
+    clean_db: AsyncSession, monkeypatch
+):
+    """Stage 8 review finding: NicheCandidate.niche_id is set by BOTH the
+    PROMOTED branch of canonicalization (this candidate created the niche)
+    and the MERGED branch (some other candidate, possibly from an
+    unrelated campaign/drill run, was folded into this niche). A more
+    recent MERGED row for the same niche must never be picked as the
+    depth+1 anchor -- only the PROMOTED one reflects this niche's own
+    drill lineage."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    other_campaign = await _make_campaign(session)
+
+    niche = Niche(canonical_name="Home Espresso", depth=0)
+    session.add(niche)
+    await session.flush()
+
+    run_a = await _make_campaign_run(session, campaign.id)
+    promoted = NicheCandidate(
+        campaign_id=campaign.id,
+        research_run_id=run_a.id,
+        label="Home Espresso",
+        naming_method="llm",
+        evidence_count=1,
+        source_count=1,
+        author_count=1,
+        depth=1,
+        status=NicheCandidateStatus.PROMOTED,
+        niche_id=niche.id,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    session.add(promoted)
+    await session.flush()
+
+    # A later, unrelated candidate from a different campaign that merged
+    # into the same niche, at a completely different (deeper) depth.
+    run_b = await _make_campaign_run(session, other_campaign.id)
+    merged = NicheCandidate(
+        campaign_id=other_campaign.id,
+        research_run_id=run_b.id,
+        label="Espresso At Home",
+        naming_method="llm",
+        evidence_count=1,
+        source_count=1,
+        author_count=1,
+        depth=3,
+        status=NicheCandidateStatus.MERGED,
+        niche_id=niche.id,
+        created_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    session.add(merged)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about espresso machines")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider(
+        {
+            "Topic: Home Espresso": {
+                "niches": [_niche("Espresso Machine Buying Guide", ["espresso"], True)]
+            }
+        }
+    )
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    run = await discovery.research_more(niche.id, campaign.id)
+
+    result = await session.execute(
+        select(NicheCandidate).where(NicheCandidate.research_run_id == run.id)
+    )
+    children = result.scalars().all()
+    assert len(children) == 1
+    # Anchored on the PROMOTED candidate (depth 1 -> 2), never the more
+    # recent MERGED one (which would have wrongly given depth 4).
+    assert children[0].parent_candidate_id == promoted.id
+    assert children[0].depth == 2
+
+
+@pytest.mark.asyncio
+async def test_research_more_falls_back_to_niche_depth_with_no_candidate_lineage(
+    clean_db: AsyncSession, monkeypatch
+):
+    """A niche seeded with no traceable NicheCandidate (e.g. created outside
+    the discovery pipeline) still works: depth falls back to niche.depth + 1
+    with no parent anchor, rather than raising."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    niche = Niche(canonical_name="Sim Racing", depth=2)
+    session.add(niche)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about sim racing rigs")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider(
+        {"Topic: Sim Racing": {"niches": [_niche("Sim Racing Rigs", ["sim racing"], True)]}}
+    )
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    run = await discovery.research_more(niche.id, campaign.id)
+
+    result = await session.execute(
+        select(NicheCandidate).where(NicheCandidate.research_run_id == run.id)
+    )
+    children = result.scalars().all()
+    assert len(children) == 1
+    assert children[0].parent_candidate_id is None
+    assert children[0].depth == 3  # niche.depth (2) + 1
+
+
+@pytest.mark.asyncio
+async def test_research_more_bypasses_registry_freshness_check(
+    clean_db: AsyncSession, monkeypatch
+):
+    """A human explicitly asking to research this niche again right now
+    must not be silently no-op'd by the same-day registry freshness skip
+    that discover() applies during normal auto-recursion."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    niche = Niche(
+        canonical_name="Home Espresso",
+        depth=0,
+        last_researched_at=datetime.now(UTC),
+        next_recheck_at=datetime.now(UTC) + timedelta(days=10),
+    )
+    session.add(niche)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about espresso")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider(
+        {"Topic: Home Espresso": {"niches": [_niche("Espresso Gear", ["espresso"], True)]}}
+    )
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    await discovery.research_more(niche.id, campaign.id)
+
+    # discover() with the same fresh niche would have skipped entirely
+    # (see test_fresh_niche_skips_entirely) -- research_more must not.
+    assert fake.calls
+    assert provider.prompts
+
+
+@pytest.mark.asyncio
+async def test_research_more_niche_not_found_raises(clean_db: AsyncSession):
+    campaign = await _make_campaign(clean_db)
+    provider = ScriptedProvider({})
+    discovery = RecursiveNicheDiscovery(clean_db, provider, rules_path="unused", config=_config())
+    with pytest.raises(ValueError, match="Niche not found"):
+        await discovery.research_more("does-not-exist", campaign.id)
+
+
+@pytest.mark.asyncio
+async def test_research_more_campaign_not_found_raises(clean_db: AsyncSession):
+    session = clean_db
+    niche = Niche(canonical_name="Home Espresso", depth=0)
+    session.add(niche)
+    await session.flush()
+    provider = ScriptedProvider({})
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    with pytest.raises(ValueError, match="Campaign not found"):
+        await discovery.research_more(niche.id, "does-not-exist")
+
+
+async def _make_campaign_run(session: AsyncSession, campaign_id: str) -> ResearchRun:
+    run = ResearchRun(campaign_id=campaign_id, status="completed")
+    session.add(run)
+    await session.flush()
+    return run

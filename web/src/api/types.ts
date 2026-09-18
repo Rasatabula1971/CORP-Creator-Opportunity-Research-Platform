@@ -253,6 +253,28 @@ export interface DossierJson {
   generated_at: string;
 }
 
+// CORP1 Stage 5, T8 — the dossier-level four-state decision gate.
+// Distinct from Decision above (Gate A, creator-status-scoped).
+export type DossierDecisionType = "reject" | "research_more" | "watch" | "approve";
+
+export interface DossierDecisionInput {
+  decision: DossierDecisionType;
+  rationale?: string | null;
+  decided_by?: string | null;
+}
+
+export interface DossierDecisionResult {
+  id: string;
+  dossier_id: string;
+  creator_id: string;
+  decision: DossierDecisionType;
+  gate: string;
+  rationale: string | null;
+  decided_at: string;
+  dossier_status: string;
+  job_id: string | null;
+}
+
 // CORP1 Stage 5, T6 — the real, persisted Dossier row (not the
 // live-computed DossierJson above).
 export interface PersistedDossier {
