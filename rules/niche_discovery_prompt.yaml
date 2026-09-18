@@ -1,0 +1,63 @@
+version: "1.0.0"
+
+# CORP1 Stage 5, T3 — recursive niche discovery. Depth/breadth caps are
+# frozen in the CORP1 product spec (Stage 5, T3 acceptance criteria);
+# exclusion categories are frozen in Stage 3 ("Niche Exclusion Rules").
+# Config-driven per NichePolicyClass's own docstring ("classification rules
+# live outside this enum") — this file is that external config.
+
+recursion:
+  max_depth: 3
+  breadth_depth_0: 15
+  breadth_per_branch: 10
+  recheck_days: 90
+
+# Deterministic substring match (case-insensitive) against a keyword or a
+# synthesized candidate's name + description. Any hit excludes — never an
+# LLM judgment call. Keep terms lowercase and specific enough to avoid
+# false positives (e.g. "arms" would wrongly match "firearms" AND
+# "woodworking arms" alike — prefer multi-word phrases where a bare word
+# risks collateral matches).
+exclusions:
+  illegal:
+    - "buy drugs"
+    - "drug dealer"
+    - "counterfeit"
+    - "replica designer"
+    - "pirated software"
+    - "cracked software"
+    - "unlicensed firearm"
+    - "ghost gun"
+  adult_gambling_vice:
+    - "onlyfans"
+    - "adult content"
+    - "sports betting"
+    - "online casino"
+    - "gambling strategy"
+    - "vape juice"
+    - "e-liquid"
+    - "cigar review"
+  political_religious:
+    - "election campaign"
+    - "political party"
+    - "partisan"
+    - "religious conversion"
+    - "evangelism"
+    - "missionary"
+  regulated_advice:
+    - "medical diagnosis"
+    - "treatment plan"
+    - "prescription"
+    - "legal advice"
+    - "legal representation"
+    - "investment advice"
+    - "financial advisor"
+    - "tax advice"
+
+# LLM synthesis prompt (see synthesize_niches in niche_discovery.py). Kept
+# here, versioned, rather than inline in Python, matching this repo's
+# existing rules/*.yaml convention (scoring.yaml, niche_qualification.yaml).
+synthesis:
+  prompt_version: "niche_discovery_v1"
+  max_evidence_texts: 40
+  max_text_chars: 300
