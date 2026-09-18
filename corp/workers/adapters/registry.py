@@ -8,6 +8,7 @@ KNOWN_PLATFORMS = (
     "youtube", "reddit", "tiktok", "web", "stackexchange",
     "searchdemand", "amazon_reviews", "marketplace",
     "hackernews", "wikipedia", "googletrends", "appstore", "crowdfunding",
+    "patreon_substack",
 )
 
 
@@ -147,6 +148,11 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
         from corp.workers.adapters.crowdfunding import CrowdfundingAdapter
 
         return CrowdfundingAdapter(max_projects=cfg.crowdfunding_max_projects)
+
+    if name == "patreon_substack":
+        from corp.workers.adapters.patreon_substack import PatreonSubstackAdapter
+
+        return PatreonSubstackAdapter(max_creators=cfg.patreon_substack_max_creators)
 
     known = ", ".join(KNOWN_PLATFORMS)
     raise AdapterConfigError(f"Unknown platform {platform!r}; known: {known}")

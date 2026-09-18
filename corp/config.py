@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     # verified live; no official API, no key.
     crowdfunding_max_projects: int = 30
 
+    # Patreon + Substack adapter (niche-signal: creator monetisation --
+    # paid tiers, pricing, subscriber counts). Substack's internal search
+    # endpoint, verified live, no key. Patreon not yet implemented (its
+    # real public data was never verified -- see the adapter's docstring).
+    patreon_substack_max_creators: int = 30
+
     # Source health tracker — circuit breaker for tolerated adapters.
     # Consecutive failures before degrading a source.
     health_degrade_after: int = 3
