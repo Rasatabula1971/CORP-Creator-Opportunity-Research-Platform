@@ -16,6 +16,10 @@ class DecisionType(str, enum.Enum):
     APPROVE = "approve"
     REJECT = "reject"
     WATCH = "watch"
+    # CORP1 Stage 3/4: completes the four-state dossier decision gate. Not yet
+    # wired into corp.core.state.gates._DECISION_TO_STATUS — that mapping is
+    # creator-status-only and belongs to T8 (four-state decision gate).
+    RESEARCH_MORE = "research_more"
 
 
 class Gate(str, enum.Enum):
@@ -33,6 +37,7 @@ class HumanDecision(Base):
     __table_args__ = (
         Index("ix_decisions_creator_id", "creator_id"),
         Index("ix_decisions_gate", "gate"),
+        Index("ix_decisions_dossier_id", "dossier_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -40,6 +45,11 @@ class HumanDecision(Base):
     opportunity_score_id: Mapped[str | None] = mapped_column(
         ForeignKey("opportunity_scores.id")
     )
+    # CORP1 Stage 4: the gate decides on a Dossier, not a bare creator_id.
+    # Nullable for backward compatibility with pre-Dossier decisions;
+    # required going forward once T8 lands. creator_id stays NOT NULL
+    # unchanged — a decision always still names the creator it concerns.
+    dossier_id: Mapped[str | None] = mapped_column(ForeignKey("dossiers.id"))
     decision: Mapped[DecisionType] = mapped_column(Enum(DecisionType), nullable=False)
     gate: Mapped[Gate] = mapped_column(Enum(Gate), nullable=False)
     rationale: Mapped[str | None] = mapped_column(Text)

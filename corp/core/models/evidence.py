@@ -20,6 +20,21 @@ class ComplianceStatus(str, enum.Enum):
     VERIFY = "verify"
 
 
+class EvidenceType(str, enum.Enum):
+    """Which capability-provider interface (CORP1 Stage 4) produced this row.
+    Nullable at the DB level for backward compatibility with pre-Stage-4
+    rows; every row created by T3 onward must set it."""
+
+    PROBLEM = "problem"
+    SEARCH_INTENT = "search_intent"
+    TREND = "trend"
+    PLANNING_INTENT = "planning_intent"
+    TRANSACTION = "transaction"
+    SOLUTION = "solution"
+    MONETISATION = "monetisation"
+    DISSATISFACTION = "dissatisfaction"
+
+
 class Evidence(Base):
     """Append-only evidence store. No UPDATE or DELETE — ever."""
 
@@ -45,3 +60,4 @@ class Evidence(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))
+    evidence_type: Mapped[EvidenceType | None] = mapped_column(Enum(EvidenceType))

@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -44,12 +44,19 @@ class Niche(TimestampMixin, Base):
         Index("ix_niches_canonical_name_ci", text("lower(canonical_name)"), unique=True),
         Index("ix_niches_lifecycle_status", "lifecycle_status"),
         Index("ix_niches_policy_class", "policy_class"),
+        Index("ix_niches_parent_niche_id", "parent_niche_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     parent_domain: Mapped[str | None] = mapped_column(String(255))
+    # Recursive drill-down tree (CORP1 Stage 4). parent_domain above stays a
+    # display label only; parent_niche_id is the source of truth for the
+    # tree. depth 0 = a broad topic pulled straight from Trends; the drill
+    # engine (T3) hard-caps recursion at depth 3.
+    parent_niche_id: Mapped[str | None] = mapped_column(ForeignKey("niches.id"))
+    depth: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     policy_class: Mapped[NichePolicyClass] = mapped_column(
         Enum(NichePolicyClass), default=NichePolicyClass.STANDARD, nullable=False
     )
@@ -59,6 +66,9 @@ class Niche(TimestampMixin, Base):
     first_discovered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Doubles as the CORP1 Stage 3 research registry: a niche is eligible for
+    # re-scan once next_recheck_at has passed (frozen at 90 days from
+    # last_researched_at). No separate registry table — this is it.
     last_researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_recheck_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -69,6 +79,10 @@ class Niche(TimestampMixin, Base):
     # a campaign referencing it were ever removed (Core Research Invariant #5).
     campaign_niches: Mapped[list["CampaignNiche"]] = relationship(back_populates="niche")
     creator_niches: Mapped[list["CreatorNiche"]] = relationship(back_populates="niche")
+    parent_niche: Mapped["Niche | None"] = relationship(
+        remote_side="Niche.id", back_populates="child_niches"
+    )
+    child_niches: Mapped[list["Niche"]] = relationship(back_populates="parent_niche")
 
 
 class NicheAlias(TimestampMixin, Base):

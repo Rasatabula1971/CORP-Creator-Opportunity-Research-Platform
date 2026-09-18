@@ -45,6 +45,10 @@ if TYPE_CHECKING:
 
 class NicheCandidateStatus(str, enum.Enum):
     STAGED = "staged"  # produced by generation, awaiting canonicalization
+    DRILLING = "drilling"  # mid-recursion (CORP1 Stage 4): not yet specific
+    # enough for a concrete product; the drill engine (T3) is re-querying
+    # evidence at depth + 1. Distinguishes an in-progress drill from a
+    # finished STAGED candidate awaiting canonicalization.
     PROMOTED = "promoted"  # became (or was attached to) a canonical Niche — Slice 9
     MERGED = "merged"  # resolved as an alias of another candidate/niche — Slice 9
     REJECTED = "rejected"  # broad domain, policy, or human decision
@@ -58,6 +62,7 @@ class NicheCandidate(TimestampMixin, Base):
         Index("ix_niche_candidates_run_id", "research_run_id"),
         Index("ix_niche_candidates_status", "status"),
         Index("ix_niche_candidates_superseded_at", "superseded_at"),
+        Index("ix_niche_candidates_parent_candidate_id", "parent_candidate_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -65,6 +70,10 @@ class NicheCandidate(TimestampMixin, Base):
     # The generation run that produced this candidate (NICHE_DISCOVERY, pipeline
     # "niche_candidates"). Provenance: run → campaign, run config → parameters.
     research_run_id: Mapped[str] = mapped_column(ForeignKey("research_runs.id"), nullable=False)
+    # Recursive drill-down tree (CORP1 Stage 4) — the specific edge this
+    # candidate was drilled from. Mirrors Niche.parent_niche_id/depth.
+    parent_candidate_id: Mapped[str | None] = mapped_column(ForeignKey("niche_candidates.id"))
+    depth: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -100,6 +109,12 @@ class NicheCandidate(TimestampMixin, Base):
     niche: Mapped["Niche | None"] = relationship()
     members: Mapped[list["NicheCandidateEvidence"]] = relationship(
         back_populates="candidate", cascade="all, delete-orphan"
+    )
+    parent_candidate: Mapped["NicheCandidate | None"] = relationship(
+        remote_side="NicheCandidate.id", back_populates="child_candidates"
+    )
+    child_candidates: Mapped[list["NicheCandidate"]] = relationship(
+        back_populates="parent_candidate"
     )
 
 

@@ -5,7 +5,8 @@ from corp.core.models.competitive import Competitor, CompetitorStrength, Competi
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.dossier import Dossier, DossierEvidence, DossierStatus
+from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.metrics import MetricsSnapshot
@@ -40,6 +41,10 @@ __all__ = [
     "Evidence",
     "AccessMethod",
     "ComplianceStatus",
+    "EvidenceType",
+    "Dossier",
+    "DossierEvidence",
+    "DossierStatus",
     "ProblemObservation",
     "ProblemCluster",
     "ProblemClusterMember",
