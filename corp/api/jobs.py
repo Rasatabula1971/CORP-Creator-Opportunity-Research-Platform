@@ -265,20 +265,32 @@ async def run_campaign_pipeline(
     from corp.database import async_session
 
     if kind == "discover":
-        from corp.workers.acquisition.discovery import NicheDiscoveryCollector
-        from corp.workers.adapters.registry import build_adapter
+        # CORP1 Stage 5, T4: this stage now runs T3's recursive discovery
+        # engine end-to-end (capability fan-out -> LLM synthesis -> recurse
+        # to depth 3), which produces STAGED NicheCandidate rows directly.
+        # It replaces both the old single-platform NicheDiscoveryCollector
+        # and, functionally, the separate "candidates" clustering stage
+        # that used to run after it -- "candidates" remains callable below
+        # unchanged (other evidence-collection paths may still want it),
+        # it is simply no longer part of the default flow this stage feeds.
+        # `source` is accepted but unused: T3 fans out across every
+        # NICHE-family capability provider automatically, there is no
+        # single platform to choose. `query` is the broad topic.
+        from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
+        from corp.workers.providers.factory import build_provider
 
-        if not source or not query:
-            raise ValueError("discover requires source and query")
-        adapter = build_adapter(source)
+        if not query:
+            raise ValueError("discover requires query (the broad topic)")
+        provider = build_provider()
         try:
             async with async_session() as session:
-                run = await NicheDiscoveryCollector(
-                    adapter, session, settings.corp_data_path,
-                ).discover(campaign_id, query)
+                discovery = RecursiveNicheDiscovery(
+                    session, provider, "rules/niche_discovery_prompt.yaml"
+                )
+                run = await discovery.discover(campaign_id, query)
                 await session.commit()
         finally:
-            await _close(adapter)
+            await _close(provider)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "candidates":

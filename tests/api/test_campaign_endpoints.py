@@ -219,7 +219,10 @@ async def test_start_campaign_pipeline_not_found(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_start_discover_requires_source_and_query(clean_db: AsyncSession):
+async def test_start_discover_requires_query(clean_db: AsyncSession):
+    """CORP1 Stage 5, T4: discover no longer needs a platform -- the
+    recursive discovery engine fans out across every relevant source
+    automatically. Only the broad topic (query) is required now."""
     session = clean_db
     campaign = Campaign(name="Test")
     session.add(campaign)
@@ -230,7 +233,7 @@ async def test_start_discover_requires_source_and_query(clean_db: AsyncSession):
             f"/campaigns/{campaign.id}/discover", json={}
         )
     assert resp.status_code == 422
-    assert "source and query" in resp.json()["detail"]
+    assert "requires query" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio

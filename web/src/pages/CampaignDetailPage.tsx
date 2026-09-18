@@ -15,9 +15,14 @@ interface PipelineStage {
   readonly needsInput?: boolean;
 }
 
+// CORP1 Stage 5, T4: "Discover Niches" now runs the recursive discovery
+// engine (capability fan-out -> LLM synthesis -> recurse to depth 3),
+// which produces staged candidates directly -- the separate "Generate
+// Candidates" clustering stage that used to run after it is no longer
+// part of this flow (still callable via the API if ever needed for other
+// evidence-collection paths; just not shown here as a default step).
 const PIPELINE_STAGES: readonly PipelineStage[] = [
   { key: "discover", label: "Discover Niches", needsInput: true },
-  { key: "candidates", label: "Generate Candidates" },
   { key: "canonicalize", label: "Canonicalize" },
   { key: "verify", label: "Verify" },
   { key: "estimate-ecosystem", label: "Estimate Ecosystem" },
@@ -35,7 +40,6 @@ export function CampaignDetailPage() {
   const startPipeline = useStartCampaignPipeline();
   const [activeJobId, setActiveJobId] = useState<string | undefined>();
   const { data: job } = useJob(activeJobId, { pollUntilDone: true });
-  const [discoverSource, setDiscoverSource] = useState("youtube");
   const [discoverQuery, setDiscoverQuery] = useState("");
 
   if (isLoading) return <Spinner />;
@@ -44,12 +48,13 @@ export function CampaignDetailPage() {
 
   function runStage(stage: string) {
     if (!id) return;
-    const params: { campaignId: string; stage: string; source?: string; query?: string } = {
+    const params: { campaignId: string; stage: string; query?: string } = {
       campaignId: id,
       stage,
     };
     if (stage === "discover") {
-      params.source = discoverSource;
+      // No platform to choose -- discovery fans out across every relevant
+      // evidence source automatically. Just the broad topic.
       params.query = discoverQuery;
     }
     startPipeline.mutate(params, {
@@ -101,17 +106,8 @@ export function CampaignDetailPage() {
             <div key={stage.key} className="flex items-center gap-3">
               {stage.needsInput && (
                 <div className="flex flex-1 gap-2">
-                  <select
-                    value={discoverSource}
-                    onChange={(e) => setDiscoverSource(e.target.value)}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-950"
-                  >
-                    <option value="youtube">YouTube</option>
-                    <option value="reddit">Reddit</option>
-                    <option value="tiktok">TikTok</option>
-                  </select>
                   <input
-                    placeholder="Search query..."
+                    placeholder="Broad topic, e.g. &quot;small business&quot;..."
                     value={discoverQuery}
                     onChange={(e) => setDiscoverQuery(e.target.value)}
                     className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-950"

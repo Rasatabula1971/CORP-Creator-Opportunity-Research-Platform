@@ -327,8 +327,12 @@ async def start_campaign_pipeline(
         )
     source = body.source if body else None
     query = body.query if body else None
-    if stage == "discover" and not (source and query):
-        raise HTTPException(status_code=422, detail="discover requires source and query")
+    # CORP1 Stage 5, T4: discover no longer needs a platform -- the
+    # recursive discovery engine fans out across every relevant evidence
+    # source automatically. `source` stays accepted (and unused) for any
+    # caller still sending it.
+    if stage == "discover" and not query:
+        raise HTTPException(status_code=422, detail="discover requires query")
     job = registry.create(stage, campaign_id=campaign_id)
     work = lambda: run_campaign_pipeline(stage, campaign_id, source=source, query=query)  # noqa: E731
     background.add_task(registry.execute, job, work)
