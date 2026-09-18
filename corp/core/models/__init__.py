@@ -16,6 +16,12 @@ from corp.core.models.niche_candidate import (
     NicheCandidateEvidence,
     NicheCandidateStatus,
 )
+from corp.core.models.product_idea import (
+    ProductIdea,
+    ProductIdeaComplexity,
+    ProductIdeaEvidence,
+    ProductIdeaType,
+)
 from corp.core.models.research_query import ResearchQuery, ResearchQueryStatus
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun, RunType
@@ -66,6 +72,10 @@ __all__ = [
     "NicheCandidate",
     "NicheCandidateEvidence",
     "NicheCandidateStatus",
+    "ProductIdea",
+    "ProductIdeaComplexity",
+    "ProductIdeaEvidence",
+    "ProductIdeaType",
     "DecisionType",
     "Gate",
 ]

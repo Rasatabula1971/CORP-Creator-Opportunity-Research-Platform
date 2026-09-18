@@ -1,0 +1,14 @@
+version: "1.0.0"
+
+# CORP1 Stage 5, T5 — product idea generation. Config-driven per this
+# codebase's established convention (rules/niche_discovery_prompt.yaml,
+# rules/niche_qualification.yaml): counts and versioning live here, not
+# hardcoded in Python.
+
+generation:
+  min_ideas: 3
+  max_ideas: 5
+  max_evidence_texts: 40
+  max_text_chars: 300
+
+prompt_version: "product_ideation_v1"
