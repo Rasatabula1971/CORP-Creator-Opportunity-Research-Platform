@@ -6,11 +6,14 @@ import {
   useCreator,
   useDecisions,
   useDossier,
+  useGeneratePersistedDossier,
   useJob,
+  usePersistedDossier,
   useRecordDecision,
   useStartResearch,
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
+import { ApiError } from "../api/client";
 import type { ClusterDetail, Competitor } from "../api/types";
 
 export function CreatorDetailPage() {
@@ -101,6 +104,9 @@ export function CreatorDetailPage() {
       {id && creator.status !== "approved" && creator.status !== "rejected" && (
         <DecisionPanel creatorId={id} />
       )}
+
+      {/* Persisted Dossier (CORP1 Stage 5, T6) */}
+      {id && <PersistedDossierPanel creatorId={id} />}
 
       {/* Opportunities / Clusters */}
       <Card>
@@ -455,6 +461,113 @@ function SentimentPill({
       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
       : "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200";
   return <span className={`rounded px-1 py-0.5 font-medium ${cls}`}>{value}</span>;
+}
+
+function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
+  const { data: persisted, isLoading, error } = usePersistedDossier(creatorId);
+  const generate = useGeneratePersistedDossier();
+
+  // A 404 genuinely means "no dossier yet" -- anything else (500, network
+  // failure, auth) is a real error that must not be silently displayed as
+  // the same empty state.
+  const isNotFound = error instanceof ApiError && error.status === 404;
+  const isRealError = !!error && !isNotFound;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Persisted Dossier</h2>
+        <Button
+          variant="secondary"
+          onClick={() => generate.mutate(creatorId)}
+          disabled={generate.isPending}
+        >
+          {generate.isPending ? "Generating…" : persisted ? "Regenerate" : "Generate Dossier"}
+        </Button>
+      </div>
+
+      {generate.error && <ErrorBanner error={generate.error} />}
+      {isRealError && <ErrorBanner error={error} />}
+
+      {isLoading && !persisted ? null : isRealError ? null : !persisted ? (
+        <p className="mt-2 text-sm text-neutral-500">
+          No persisted dossier yet. Generate one once this creator has a scored opportunity.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <StatusBadge status={persisted.status} />
+            <span>Generated {new Date(persisted.generated_at).toLocaleString()}</span>
+          </div>
+
+          {persisted.content.niche_path?.length > 0 && (
+            <p className="text-xs text-neutral-500">
+              {persisted.content.niche_path.map((n) => n.canonical_name).join(" → ")}
+            </p>
+          )}
+
+          {persisted.content.recommendation && (
+            <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+              <div className="flex items-center gap-2">
+                <StatusBadge status={persisted.content.recommendation.suggested_action} />
+                <span className="text-xs text-neutral-500">
+                  {persisted.content.recommendation.confidence} confidence
+                </span>
+              </div>
+              <p className="mt-2 text-sm">{persisted.content.recommendation.rationale}</p>
+              {persisted.content.recommendation.risks.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-neutral-500">Risks</p>
+                  <ul className="mt-1 list-inside list-disc text-xs text-neutral-600 dark:text-neutral-400">
+                    {persisted.content.recommendation.risks.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {persisted.content.recommendation.next_steps.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-neutral-500">Next steps</p>
+                  <ul className="mt-1 list-inside list-disc text-xs text-neutral-600 dark:text-neutral-400">
+                    {persisted.content.recommendation.next_steps.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {persisted.content.product_ideas?.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium text-neutral-500">
+                Product Ideas ({persisted.content.product_ideas.length})
+              </p>
+              <div className="space-y-2">
+                {persisted.content.product_ideas.map((idea) => (
+                  <div
+                    key={idea.id}
+                    className="rounded bg-neutral-50 px-3 py-2 text-xs dark:bg-neutral-800/50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{idea.title}</span>
+                      <span className="text-neutral-400">
+                        {idea.idea_type.replace(/_/g, " ")} · {idea.complexity}
+                        {idea.price_min != null && idea.price_max != null
+                          ? ` · $${idea.price_min}–$${idea.price_max}`
+                          : ""}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-neutral-500">{idea.fit_rationale}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function DecisionPanel({ creatorId }: { creatorId: string }) {

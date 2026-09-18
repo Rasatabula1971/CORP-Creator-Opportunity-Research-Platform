@@ -1,5 +1,8 @@
 """Pydantic schemas for the structured JSON dossier endpoint."""
 
+from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 from corp.core.schemas.competitive import CompetitorResponse
@@ -68,3 +71,20 @@ class DossierResponse(BaseModel):
     signals: list[DossierSignalResponse] = []
     data_coverage: DataCoverageResponse = DataCoverageResponse()
     generated_at: str = ""
+
+
+class PersistedDossierResponse(BaseModel):
+    """CORP1 Stage 5, T6 -- the real, persisted Dossier row (not the
+    live-computed DossierResponse above). ``content`` is the same shape
+    DossierGenerator.generate_and_persist builds, plus product_ideas,
+    niche_path, and a deterministic recommendation the request-scoped
+    endpoint above does not compute."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    creator_id: str
+    niche_id: str
+    status: str
+    generated_at: datetime
+    content: dict[str, Any]

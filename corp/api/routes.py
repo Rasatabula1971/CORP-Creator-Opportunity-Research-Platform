@@ -11,6 +11,7 @@ from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
+from corp.core.models.dossier import Dossier
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemClusterMember,
@@ -35,6 +36,7 @@ from corp.core.schemas.dossier import (
     DossierResponse,
     DossierScoreResponse,
     DossierSignalResponse,
+    PersistedDossierResponse,
 )
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
@@ -253,6 +255,66 @@ async def get_dossier_json(
         ),
         generated_at=data.generated_at,
     )
+
+
+@router.post(
+    "/creators/{creator_id}/dossier/generate",
+    response_model=PersistedDossierResponse,
+    status_code=201,
+)
+async def generate_persisted_dossier(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> Dossier:
+    """CORP1 Stage 5, T6: build and persist a real Dossier row (not the
+    request-scoped view the two endpoints above compute). The niche is
+    the creator's most-recently-observed CreatorNiche -- a creator with
+    none has nothing to scope a dossier to."""
+    if await session.get(Creator, creator_id) is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    cn_result = await session.execute(
+        select(CreatorNiche)
+        .where(CreatorNiche.creator_id == creator_id)
+        .order_by(CreatorNiche.last_observed_at.desc())
+        .limit(1)
+    )
+    creator_niche = cn_result.scalar_one_or_none()
+    if creator_niche is None:
+        raise HTTPException(
+            status_code=422, detail="Creator has no associated niche to generate a dossier for"
+        )
+
+    gen = DossierGenerator(session, rules_path=settings.scoring_rules_path)
+    try:
+        dossier = await gen.generate_and_persist(creator_id, creator_niche.niche_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await session.commit()
+    return dossier
+
+
+@router.get(
+    "/creators/{creator_id}/dossier/persisted",
+    response_model=PersistedDossierResponse,
+)
+async def get_persisted_dossier(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> Dossier:
+    if await session.get(Creator, creator_id) is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    result = await session.execute(
+        select(Dossier)
+        .where(Dossier.creator_id == creator_id, Dossier.superseded_at.is_(None))
+        .order_by(Dossier.generated_at.desc())
+        .limit(1)
+    )
+    dossier = result.scalar_one_or_none()
+    if dossier is None:
+        raise HTTPException(status_code=404, detail="No persisted dossier for this creator yet")
+    return dossier
 
 
 # ── Evidence ─────────────────────────────────────────────────────────

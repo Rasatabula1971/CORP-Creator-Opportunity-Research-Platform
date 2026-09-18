@@ -253,4 +253,36 @@ export interface DossierJson {
   generated_at: string;
 }
 
+// CORP1 Stage 5, T6 — the real, persisted Dossier row (not the
+// live-computed DossierJson above).
+export interface PersistedDossier {
+  id: string;
+  creator_id: string;
+  niche_id: string;
+  status: string;
+  generated_at: string;
+  content: {
+    product_ideas: Array<{
+      id: string;
+      title: string;
+      description: string;
+      idea_type: string;
+      complexity: string;
+      price_min: number | null;
+      price_max: number | null;
+      fit_rationale: string;
+      evidence_terms: string[];
+    }>;
+    niche_path: Array<{ id: string; canonical_name: string; depth: number }>;
+    recommendation: {
+      suggested_action: string;
+      confidence: string;
+      rationale: string;
+      risks: string[];
+      next_steps: string[];
+    };
+    [key: string]: unknown;
+  };
+}
+
 

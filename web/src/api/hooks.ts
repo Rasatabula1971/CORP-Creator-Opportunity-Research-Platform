@@ -12,6 +12,7 @@ import type {
   Decision,
   DossierJson,
   Job,
+  PersistedDossier,
   ProblemObservation,
   ResearchRun,
 } from "./types";
@@ -65,6 +66,28 @@ export function useDossier(creatorId: string | undefined) {
     queryKey: ["creators", creatorId, "dossier"],
     queryFn: () => api.get<DossierJson>(`/creators/${creatorId}/dossier.json`),
     enabled: !!creatorId,
+  });
+}
+
+// CORP1 Stage 5, T6 — the real, persisted Dossier (not the live-computed
+// useDossier view above). 404 just means none has been generated yet.
+export function usePersistedDossier(creatorId: string | undefined) {
+  return useQuery({
+    queryKey: ["creators", creatorId, "dossier", "persisted"],
+    queryFn: () => api.get<PersistedDossier>(`/creators/${creatorId}/dossier/persisted`),
+    enabled: !!creatorId,
+    retry: false,
+  });
+}
+
+export function useGeneratePersistedDossier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (creatorId: string) =>
+      api.post<PersistedDossier>(`/creators/${creatorId}/dossier/generate`),
+    onSuccess: (_data, creatorId) => {
+      qc.invalidateQueries({ queryKey: ["creators", creatorId, "dossier", "persisted"] });
+    },
   });
 }
 

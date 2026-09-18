@@ -1,4 +1,17 @@
-"""Dossier generator — renders a decision-ready HTML report for one creator."""
+"""Dossier generator — renders a decision-ready HTML report for one creator,
+and (CORP1 Stage 5, T6) persists a decision-ready snapshot to the Dossier
+table T0 created.
+
+``generate`` / ``generate_data`` (pre-existing) compute a live,
+request-scoped view — nothing is written to the database. ``generate_and_
+persist`` (new) is a different operation: it builds the same underlying
+data, adds product ideas (T5) and the full niche drill-down path, derives
+a deterministic recommendation from the existing score bands (no new LLM
+dependency), and writes a real ``Dossier`` row plus its ``DossierEvidence``
+trail, superseding any prior active dossier for the same (creator, niche)
+pair. The two paths intentionally share ``_load_data`` rather than
+duplicating the aggregation logic.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func, select
@@ -13,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
+from corp.core.models.dossier import Dossier, DossierEvidence
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import (
     ProblemCluster,
@@ -20,13 +35,22 @@ from corp.core.models.intelligence import (
     ProblemObservation,
 )
 from corp.core.models.intent import CommercialSignal
+from corp.core.models.niche import Niche
+from corp.core.models.product_idea import ProductIdea, ProductIdeaEvidence
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.engine import get_score_band, load_scoring_rules
+from corp.workers.intelligence.runs import supersede
 
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+# Mirrors rules/scoring.yaml's score_bands keys, in the same priority
+# order get_score_band checks them -- used here to recover the band KEY
+# (not its display label) for the deterministic recommendation, since
+# get_score_band only returns the human-readable label string.
+_SCORE_BAND_KEYS = ("exceptional", "strong", "moderate", "weak")
 
 
 @dataclass
@@ -90,6 +114,117 @@ class DossierGenerator:
 
     async def generate_data(self, creator_id: str) -> DossierData:
         return await self._load_data(creator_id)
+
+    async def generate_and_persist(self, creator_id: str, niche_id: str) -> Dossier:
+        """Build the same aggregate view generate_data() does, enrich it
+        with product ideas (T5) and the niche drill-down path, derive a
+        deterministic recommendation, and persist a real Dossier row plus
+        its DossierEvidence trail -- CORP1 Stage 5, T6. Supersedes any
+        prior active dossier for this (creator, niche) pair; nothing is
+        ever deleted."""
+        data = await self._load_data(creator_id)
+        if not data.opportunities:
+            raise ValueError(
+                f"Creator {creator_id} has no active opportunity scores to build a dossier from"
+            )
+
+        niche = await self._session.get(Niche, niche_id)
+        if niche is None:
+            raise ValueError(f"Niche not found: {niche_id}")
+
+        product_ideas = await self._load_product_ideas(creator_id)
+        path = await self._niche_path(niche_id)
+        top = data.opportunities[0]  # already sorted by aggregate_score desc
+        recommendation = self._build_recommendation(data, top)
+
+        content: dict[str, Any] = {
+            "creator": {
+                "id": data.creator.id,
+                "name": data.creator.name,
+                "niche": data.creator.niche,
+                "status": data.creator.status.value,
+            },
+            "platform_accounts": [
+                {
+                    "platform": a.platform,
+                    "handle": a.handle,
+                    "subscriber_count": a.subscriber_count,
+                }
+                for a in data.platform_accounts
+            ],
+            "creator_score": (
+                {
+                    "aggregate_score": data.creator_score.aggregate_score,
+                    "confidence_band": data.creator_score.confidence_band.value,
+                }
+                if data.creator_score
+                else None
+            ),
+            "score_band": data.score_band,
+            "opportunities": [
+                {
+                    "cluster_label": o.cluster.label,
+                    "aggregate_score": o.score.aggregate_score,
+                    "confidence_band": o.score.confidence_band.value,
+                    "component_scores": o.score.component_scores,
+                    "signal_level": o.signal.signal_level.value if o.signal else None,
+                    "observation_count": len(o.observations),
+                    "competitor_count": len(o.competitors),
+                }
+                for o in data.opportunities
+            ],
+            "product_ideas": [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "description": p.description,
+                    "idea_type": p.idea_type.value,
+                    "complexity": p.complexity.value,
+                    "price_min": p.price_min,
+                    "price_max": p.price_max,
+                    "fit_rationale": p.fit_rationale,
+                    "evidence_terms": p.evidence_terms,
+                }
+                for p in product_ideas
+            ],
+            "data_coverage": {
+                "source_count": data.data_coverage.source_count,
+                "evidence_count": data.data_coverage.evidence_count,
+                "cluster_count": data.data_coverage.cluster_count,
+                "observation_count": data.data_coverage.observation_count,
+                "competitor_count": data.data_coverage.competitor_count,
+            },
+            "niche_path": path,
+            "recommendation": recommendation,
+            "generated_at": data.generated_at,
+        }
+
+        superseded = await supersede(
+            self._session,
+            Dossier,
+            Dossier.creator_id == creator_id,
+            Dossier.niche_id == niche_id,
+        )
+        logger.info(
+            "Superseded %d prior dossier(s) for creator %s / niche %s",
+            superseded, creator_id, niche_id,
+        )
+
+        dossier = Dossier(
+            creator_id=creator_id,
+            niche_id=niche_id,
+            opportunity_score_id=top.score.id,
+            research_run_id=top.score.research_run_id,
+            content=content,
+        )
+        self._session.add(dossier)
+        await self._session.flush()
+
+        for evidence_id in await self._collect_evidence_ids(data.opportunities, product_ideas):
+            self._session.add(DossierEvidence(dossier_id=dossier.id, evidence_id=evidence_id))
+        await self._session.flush()
+
+        return dossier
 
     async def _load_data(self, creator_id: str) -> DossierData:
         creator = await self._load_creator(creator_id)
@@ -269,3 +404,127 @@ class DossierGenerator:
             observation_count=obs_count,
             competitor_count=comp_count,
         )
+
+    # ── T6: persistence helpers ──────────────────────────────────────
+
+    async def _load_product_ideas(self, creator_id: str) -> list[ProductIdea]:
+        result = await self._session.execute(
+            select(ProductIdea)
+            .where(ProductIdea.creator_id == creator_id, ProductIdea.superseded_at.is_(None))
+            .order_by(ProductIdea.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def _niche_path(self, niche_id: str) -> list[dict[str, Any]]:
+        """Walk Niche.parent_niche_id from ``niche_id`` up to the root.
+        Returns root-to-leaf order. A cycle (should never happen, but the
+        column has no DB-level acyclicity guarantee) stops the walk rather
+        than looping forever."""
+        path: list[dict[str, Any]] = []
+        current_id: str | None = niche_id
+        seen: set[str] = set()
+        while current_id and current_id not in seen:
+            seen.add(current_id)
+            niche = await self._session.get(Niche, current_id)
+            if niche is None:
+                break
+            path.append(
+                {"id": niche.id, "canonical_name": niche.canonical_name, "depth": niche.depth}
+            )
+            current_id = niche.parent_niche_id
+        path.reverse()
+        return path
+
+    def _build_recommendation(
+        self, data: DossierData, top: OpportunityContext
+    ) -> dict[str, Any]:
+        """Deterministic, rule-based -- no new LLM dependency. Mirrors the
+        human decision gate's own vocabulary (Reject / Research More /
+        Watch / Approve) so the suggestion reads as a same-language nudge,
+        never a binding decision; the human gate remains the actual
+        decision-maker (Stage 3's Automation Matrix)."""
+        band_key = _score_band_key(top.score.aggregate_score, self._rules)
+        confidence = top.score.confidence_band.value
+
+        if confidence == "insufficient":
+            action = "research_more"
+        elif band_key in ("exceptional", "strong") and confidence in ("high", "medium"):
+            action = "approve"
+        elif band_key == "weak":
+            action = "reject"
+        else:
+            action = "watch"
+
+        risks: list[str] = []
+        if data.data_coverage.source_count < 2:
+            risks.append("Evidence comes from a single platform only.")
+        if data.data_coverage.competitor_count == 0:
+            risks.append("No competitive landscape data collected yet.")
+        if top.signal is None:
+            risks.append("No direct commercial-intent signal found for the top opportunity.")
+
+        next_steps: list[str] = []
+        if action == "research_more":
+            next_steps.append("Collect more evidence before deciding.")
+        elif action == "approve":
+            next_steps.append("Proceed to partnership outreach (CORP2).")
+        elif action == "watch":
+            next_steps.append("Re-score after the next research pass.")
+        else:
+            next_steps.append("Reject and move to the next candidate opportunity.")
+
+        return {
+            "suggested_action": action,
+            "confidence": confidence,
+            "rationale": (
+                f"{data.score_band}; top opportunity {top.cluster.label!r} scored "
+                f"{top.score.aggregate_score:.2f} ({confidence} confidence) from "
+                f"{data.data_coverage.observation_count} observations across "
+                f"{data.data_coverage.source_count} source(s)."
+            ),
+            "risks": risks,
+            "next_steps": next_steps,
+        }
+
+    async def _collect_evidence_ids(
+        self, opportunities: list[OpportunityContext], product_ideas: list[ProductIdea]
+    ) -> list[str]:
+        """Every evidence row backing the dossier's opportunities and
+        product ideas, filtered to rows traceable to a real ResearchRun
+        (Stage 4 acceptance test) -- a row with no research_run_id is
+        never linked into a persisted dossier's evidence trail."""
+        ids: set[str] = set()
+        for opp in opportunities:
+            for obs in opp.observations:
+                ids.add(obs.evidence_id)
+        for idea in product_ideas:
+            result = await self._session.execute(
+                select(ProductIdeaEvidence.evidence_id).where(
+                    ProductIdeaEvidence.product_idea_id == idea.id
+                )
+            )
+            ids.update(result.scalars().all())
+
+        if not ids:
+            return []
+        result = await self._session.execute(
+            select(Evidence.id).where(
+                Evidence.id.in_(ids), Evidence.research_run_id.isnot(None)
+            )
+        )
+        return list(result.scalars().all())
+
+
+def _score_band_key(aggregate: float, rules: dict[str, Any]) -> str:
+    """Same lookup as corp.core.scoring.engine.get_score_band, but returns
+    the band KEY ("exceptional") rather than its display label ("Exceptional
+    opportunity") -- the label is free-text from YAML and not safe to
+    branch logic on."""
+    bands = rules.get("score_bands", {})
+    for band_key in _SCORE_BAND_KEYS:
+        band = bands.get(band_key)
+        if not band or "min" not in band:
+            continue
+        if aggregate >= band["min"]:
+            return band_key
+    return "weak"
