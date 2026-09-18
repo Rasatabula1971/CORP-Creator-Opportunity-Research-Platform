@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -124,7 +125,7 @@ class IntelligencePipeline:
             .order_by(ContentItem.id, AudienceInteraction.id)
         )
 
-        grouped: dict[str, dict] = {}
+        grouped: dict[str, dict[str, Any]] = {}
         for interaction, ci_id, title, platform in result.all():
             entry = grouped.setdefault(
                 ci_id,
@@ -191,11 +192,11 @@ class IntelligencePipeline:
             except LLMCallError as exc:
                 stats.fail(exc)
                 return
-            new_obs = self._persist_observations(observations, anchor_evidence=evidence)
+            single_obs = self._persist_observations(observations, anchor_evidence=evidence)
             self._stamp(interaction)
             stats.ok()
             await self._session.flush()
-            await mirror_observations(new_obs)
+            await mirror_observations(single_obs)
             return
 
         payload = [
@@ -262,7 +263,7 @@ class IntelligencePipeline:
 
     def _persist_observations(
         self,
-        observations: list,
+        observations: list[Any],
         anchor_evidence: Evidence,
     ) -> list[ProblemObservation]:
         """Save single-comment observations against a specific evidence row."""
@@ -408,5 +409,9 @@ class IntelligencePipeline:
         if not topics:
             return
         for ci in content_items:
-            ci.topics = topics
+            kept = [
+                t for t in (ci.topics or [])
+                if isinstance(t, dict) and t.get("source") == "cluster"
+            ]
+            ci.topics = (kept + [{**t, "source": "llm"} for t in topics])[:15]
         await self._session.flush()

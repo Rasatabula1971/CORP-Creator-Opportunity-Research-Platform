@@ -167,7 +167,7 @@ async def provider_health() -> dict[str, Any]:
 async def create_creator(
     body: CreatorCreateRequest,
     session: AsyncSession = Depends(get_session),
-):
+) -> CreatorDetailResponse:
     creator = Creator(
         name=body.name,
         niche=body.niche,
@@ -202,7 +202,7 @@ async def add_account(
     creator_id: str,
     body: PlatformAccountCreate,
     session: AsyncSession = Depends(get_session),
-):
+) -> PlatformAccountResponse:
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
     existing = await session.execute(
@@ -228,7 +228,7 @@ async def start_research(
     background: BackgroundTasks,
     body: ResearchRequest | None = None,
     session: AsyncSession = Depends(get_session),
-):
+) -> JobResponse:
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
     if (active := registry.active_for(creator_id)) is not None:
@@ -247,7 +247,7 @@ async def start_pipeline(
     body: PipelineRunRequest,
     background: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
-):
+) -> JobResponse:
     if body.pipeline not in PIPELINES:
         raise HTTPException(
             status_code=422, detail=f"pipeline must be one of {', '.join(PIPELINES)}"
@@ -272,12 +272,14 @@ async def start_pipeline(
 
 
 @router.get("/jobs", response_model=list[JobResponse])
-async def list_jobs(creator_id: str | None = None, limit: int = Query(default=50, le=200)):
+async def list_jobs(
+    creator_id: str | None = None, limit: int = Query(default=50, le=200),
+) -> list[JobResponse]:
     return registry.list(creator_id=creator_id, limit=limit)
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-async def get_job(job_id: str):
+async def get_job(job_id: str) -> JobResponse:
     job = registry.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -291,7 +293,7 @@ async def get_job(job_id: str):
 async def create_campaign(
     body: CampaignCreate,
     session: AsyncSession = Depends(get_session),
-):
+) -> CampaignResponse:
     campaign = Campaign(**body.model_dump())
     session.add(campaign)
     await session.commit()
@@ -310,7 +312,7 @@ async def start_campaign_pipeline(
     background: BackgroundTasks,
     body: CampaignPipelineRequest | None = None,
     session: AsyncSession = Depends(get_session),
-):
+) -> JobResponse:
     if stage not in CAMPAIGN_PIPELINES:
         raise HTTPException(
             status_code=422,
@@ -337,7 +339,9 @@ async def start_campaign_pipeline(
 
 
 @router.get("/research-runs/{run_id}", response_model=ResearchRunResponse)
-async def get_research_run(run_id: str, session: AsyncSession = Depends(get_session)):
+async def get_research_run(
+    run_id: str, session: AsyncSession = Depends(get_session),
+) -> ResearchRunResponse:
     run = await session.get(ResearchRun, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Research run not found")
@@ -349,7 +353,7 @@ async def get_clusters(
     creator_id: str,
     response: Response,
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ClusterDetail]:
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
     clusters = await active_clusters_for_creator(session, creator_id)
@@ -383,15 +387,14 @@ async def get_clusters(
     ).scalars().all()
     score_by_cluster = {s.problem_cluster_id: s for s in scores}
 
-    counts = dict(
-        (
-            await session.execute(
-                select(ProblemClusterMember.cluster_id, func.count())
-                .where(ProblemClusterMember.cluster_id.in_(ids))
-                .group_by(ProblemClusterMember.cluster_id)
-            )
-        ).all()
-    )
+    count_rows = (
+        await session.execute(
+            select(ProblemClusterMember.cluster_id, func.count())
+            .where(ProblemClusterMember.cluster_id.in_(ids))
+            .group_by(ProblemClusterMember.cluster_id)
+        )
+    ).all()
+    counts: dict[str, int] = {row[0]: row[1] for row in count_rows}
 
     out: list[ClusterDetail] = []
     for c in clusters:
@@ -419,7 +422,7 @@ async def get_cluster_observations(
     limit: int = Query(default=50, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ProblemObservationResponse]:
     if await session.get(ProblemCluster, cluster_id) is None:
         raise HTTPException(status_code=404, detail="Cluster not found")
     base = (
@@ -438,7 +441,9 @@ async def get_cluster_observations(
 
 
 @router.get("/creators/{creator_id}/decisions", response_model=list[DecisionResponse])
-async def get_decisions(creator_id: str, session: AsyncSession = Depends(get_session)):
+async def get_decisions(
+    creator_id: str, session: AsyncSession = Depends(get_session),
+) -> list[DecisionResponse]:
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
     rows = (

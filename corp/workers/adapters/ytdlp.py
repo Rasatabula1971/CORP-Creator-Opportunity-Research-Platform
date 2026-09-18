@@ -40,7 +40,7 @@ ExtractorFactory = Callable[[dict[str, Any]], _Extractor]
 def _default_factory(opts: dict[str, Any]) -> _Extractor:
     import yt_dlp
 
-    return yt_dlp.YoutubeDL(opts)
+    return yt_dlp.YoutubeDL(opts)  # type: ignore[no-any-return]
 
 
 class YtDlpAdapter(SourceAdapter):

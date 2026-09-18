@@ -32,6 +32,7 @@ from tenacity import (
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.marketplace import _html_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -162,28 +163,44 @@ class StackExchangeAdapter(SourceAdapter):
     async def _fetch_answers(
         self, question_ids: list[str]
     ) -> list[NormalizedContent]:
-        results: list[NormalizedContent] = []
+        # Collect all answers, paginating through results, then keep only
+        # the top-voted answer per question so we don't flood with low-value
+        # duplicates.
+        best: dict[int, dict[str, Any]] = {}  # question_id -> best answer dict
         for i in range(0, len(question_ids), 100):
             batch = question_ids[i : i + 100]
             ids = ";".join(batch)
-            params: dict[str, str | int] = {
-                "site": self._site,
-                "sort": "votes",
-                "order": "desc",
-                "filter": "withbody",
-                "pagesize": 100,
-            }
-            if self._api_key:
-                params["key"] = self._api_key
+            page = 1
+            while True:
+                params: dict[str, str | int] = {
+                    "site": self._site,
+                    "sort": "votes",
+                    "order": "desc",
+                    "filter": "withbody",
+                    "pagesize": 100,
+                    "page": page,
+                }
+                if self._api_key:
+                    params["key"] = self._api_key
 
-            data = await self._get_json(f"/questions/{ids}/answers", params)
-            for a in data.get("items", []):
-                results.append(self._answer_to_content(a))
-        return results
+                data = await self._get_json(f"/questions/{ids}/answers", params)
+                for a in data.get("items", []):
+                    qid = a.get("question_id")
+                    if qid is None:
+                        continue
+                    prev = best.get(qid)
+                    if prev is None or a.get("score", 0) > prev.get("score", 0):
+                        best[qid] = a
+
+                if not data.get("has_more", False):
+                    break
+                page += 1
+
+        return [self._answer_to_content(a) for a in best.values()]
 
     def _question_to_content(self, q: dict[str, Any]) -> NormalizedContent:
         title = q.get("title", "")
-        body = q.get("body", "")
+        body = _html_to_text(q.get("body", ""))
         text = f"{title}\n\n{body}".strip() if body else title
         tags = q.get("tags", [])
         owner = q.get("owner", {})
@@ -215,7 +232,7 @@ class StackExchangeAdapter(SourceAdapter):
             source_platform="stackexchange",
             content_type="reply",
             external_id=str(a["answer_id"]),
-            text=a.get("body", ""),
+            text=_html_to_text(a.get("body", "")),
             author=owner.get("display_name"),
             timestamp=_ts(a.get("creation_date")),
             parent_id=str(a.get("question_id")),

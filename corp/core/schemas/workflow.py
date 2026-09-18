@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -30,7 +31,7 @@ class PipelineStepResponse(BaseModel):
     status: str
     started_at: str | None = None
     completed_at: str | None = None
-    detail: dict | None = None
+    detail: dict[str, Any] | None = None
 
 
 class ResearchRunResponse(BaseModel):
@@ -45,10 +46,10 @@ class ResearchRunResponse(BaseModel):
     status: str
     started_at: datetime | None
     completed_at: datetime | None
-    config_snapshot: dict | None
-    prompt_versions: dict | None
-    model_versions: dict | None
-    stats: dict | None = None
+    config_snapshot: dict[str, Any] | None
+    prompt_versions: dict[str, Any] | None
+    model_versions: dict[str, Any] | None
+    stats: dict[str, Any] | None = None
     error_message: str | None
     steps: list[PipelineStepResponse] | None = None
     created_at: datetime

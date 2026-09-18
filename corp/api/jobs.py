@@ -15,7 +15,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
 
 from pydantic import BaseModel
 
@@ -149,7 +152,7 @@ async def _close(obj: object) -> None:
         await close()
 
 
-def _embedder_factory():
+def _embedder_factory() -> "Callable[[], SentenceTransformerEmbedder]":
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
 
     return lambda: SentenceTransformerEmbedder(settings.embedding_model)
@@ -232,10 +235,14 @@ async def run_pipeline(
         try:
             async with async_session() as session:
                 if kind == "intelligence":
-                    run = await IntelligencePipeline(provider, session).run(creator_id)
+                    run = await IntelligencePipeline(
+                        provider, session,
+                        max_failure_rate=settings.pipeline_max_failure_rate,
+                    ).run(creator_id)
                 else:
                     run = await IntentPipeline(
-                        provider, session, rules_path=settings.intent_rules_path
+                        provider, session, rules_path=settings.intent_rules_path,
+                        max_failure_rate=settings.pipeline_max_failure_rate,
                     ).run(creator_id)
                 await session.commit()
         finally:
@@ -340,7 +347,7 @@ async def run_campaign_pipeline(
 
         async with async_session() as session:
             run = await NicheQualifier(
-                session, settings.scoring_rules_path.replace("scoring", "niche_qualification"),
+                session, settings.niche_qualification_rules_path,
             ).qualify_campaign(campaign_id)
             await session.commit()
         return {"run_id": run.id, "status": run.status, "stats": run.stats}

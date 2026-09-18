@@ -44,6 +44,4 @@ class Campaign(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    campaign_niches: Mapped[list["CampaignNiche"]] = relationship(
-        back_populates="campaign", cascade="all, delete-orphan"
-    )
+    campaign_niches: Mapped[list["CampaignNiche"]] = relationship(back_populates="campaign")

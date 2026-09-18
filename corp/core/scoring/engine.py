@@ -2,7 +2,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -20,7 +20,7 @@ def load_scoring_rules(rules_path: str) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Scoring rules not found: {path}")
     with open(path) as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 def compute_score(
@@ -53,7 +53,7 @@ def get_score_band(aggregate: float, rules: dict[str, Any]) -> str:
         if not band or "min" not in band:
             continue
         if aggregate >= band["min"]:
-            return band.get("label", band_key)
+            return str(band.get("label", band_key))
     return "Weak — insufficient signal"
 
 

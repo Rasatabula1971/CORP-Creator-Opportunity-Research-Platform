@@ -16,6 +16,7 @@ re-observed link just advances ``last_observed_at``.
 from __future__ import annotations
 
 import logging
+from typing import Any
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -93,7 +94,7 @@ class CreatorOnboarder:
             niches = await self._selected_niches(campaign_id)
 
             # Pass 1 — search every niche (yt-dlp; no reliable subscriber counts).
-            niche_channels: list[tuple[Niche, dict[str, dict]]] = [
+            niche_channels: list[tuple[Niche, dict[str, dict[str, Any]]]] = [
                 (niche, await self._search_niche_raw(niche)) for niche in niches
             ]
 
@@ -103,7 +104,7 @@ class CreatorOnboarder:
             # cheapest way to get real subscriber counts.
             counts = await self._enrich_all(niche_channels)
 
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             creators_created = 0
             creators_linked = 0
 
@@ -154,7 +155,7 @@ class CreatorOnboarder:
             )
             raise
 
-    async def _search_niche_raw(self, niche: Niche) -> dict[str, dict]:
+    async def _search_niche_raw(self, niche: Niche) -> dict[str, dict[str, Any]]:
         """Search a niche and return every unique channel (no band filter, no cap).
 
         Filtering and capping happen after enrichment, so we must not drop or
@@ -164,7 +165,7 @@ class CreatorOnboarder:
         query = f"ytsearch{self._cfg.search_count}:{niche.canonical_name}"
         items = await self._adapter.collect(query)
 
-        channels: dict[str, dict] = {}
+        channels: dict[str, dict[str, Any]] = {}
         for item in items:
             meta = getattr(item, "metadata", {}) or {}
             # Prefer yt-dlp's stable identifiers (UC channel_id, then @handle) over
@@ -186,7 +187,7 @@ class CreatorOnboarder:
         return channels
 
     async def _enrich_all(
-        self, niche_channels: list[tuple[Niche, dict[str, dict]]],
+        self, niche_channels: list[tuple[Niche, dict[str, dict[str, Any]]]],
     ) -> dict[str, int | None]:
         """One deduplicated, batched subscriber-count lookup for the whole run."""
         if self._enricher is None:
@@ -211,9 +212,9 @@ class CreatorOnboarder:
         return counts
 
     def _filter_and_cap(
-        self, raw: dict[str, dict], counts: dict[str, int | None],
-    ) -> dict[str, dict]:
-        channels: dict[str, dict] = {}
+        self, raw: dict[str, dict[str, Any]], counts: dict[str, int | None],
+    ) -> dict[str, dict[str, Any]]:
+        channels: dict[str, dict[str, Any]] = {}
         for channel_id, info in raw.items():
             if len(channels) >= self._cfg.max_creators_per_niche:
                 break
@@ -233,7 +234,7 @@ class CreatorOnboarder:
         return True
 
     async def _get_or_create_creator(
-        self, channel_id: str, info: dict, niche: Niche,
+        self, channel_id: str, info: dict[str, Any], niche: Niche,
     ) -> tuple[Creator, bool]:
         result = await self._session.execute(
             select(CreatorPlatformAccount)

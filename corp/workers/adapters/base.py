@@ -1,6 +1,7 @@
 import enum
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -35,7 +36,7 @@ class NormalizedContent(BaseModel):
     url: str | None = None
     access_method: AccessMethod
     compliance_status: ComplianceStatus
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SourceAdapter(ABC):

@@ -3,6 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator, CreatorStatus
+from corp.core.models.scoring import OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision
 from corp.core.state.machine import validate_transition
 
@@ -27,6 +28,11 @@ async def record_gate_a_decision(
     """
     target_status = _DECISION_TO_STATUS[decision]
     validate_transition(creator.status, target_status)
+
+    if opportunity_score_id is not None:
+        score = await session.get(OpportunityScore, opportunity_score_id)
+        if score is None or score.creator_id != creator.id:
+            raise ValueError("opportunity_score_id does not belong to this creator")
 
     record = HumanDecision(
         creator_id=creator.id,

@@ -208,7 +208,7 @@ class NicheCanonicalizer:
                 func.lower(NicheAlias.alias) == label.lower().strip()
             )
         )
-        alias = result.scalar_one_or_none()
+        alias = result.scalars().first()
         if alias is None:
             return None
         return await self._session.get(Niche, alias.niche_id)
@@ -259,4 +259,4 @@ def _cosine_batch(vec: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     vec_norm = np.linalg.norm(vec)
     denom = norms * vec_norm
     denom = np.where(denom == 0, 1.0, denom)
-    return np.clip(matrix @ vec / denom, 0.0, 1.0)
+    return np.clip(matrix @ vec / denom, 0.0, 1.0)  # type: ignore[no-any-return]

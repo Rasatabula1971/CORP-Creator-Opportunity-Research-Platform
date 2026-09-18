@@ -212,7 +212,7 @@ class HackerNewsAdapter(SourceAdapter):
         resp = await client.get(path, params=params)
         self.request_count += 1
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
 
 def _parse_ts(epoch: int | None) -> datetime | None:

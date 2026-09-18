@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +42,7 @@ class PipelineStats:
     failed: int = 0
     skipped: int = 0
     last_error: str | None = None
-    extra: dict = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def ok(self) -> None:
         self.attempted += 1
@@ -59,7 +60,7 @@ class PipelineStats:
     def failure_rate(self) -> float:
         return self.failed / self.attempted if self.attempted else 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["failure_rate"] = round(self.failure_rate, 4)
         return data
@@ -79,9 +80,9 @@ async def start_run(
     *,
     pipeline: str,
     creator_id: str | None,
-    config: dict | None = None,
-    prompt_versions: dict | None = None,
-    model_versions: dict | None = None,
+    config: dict[str, Any] | None = None,
+    prompt_versions: dict[str, Any] | None = None,
+    model_versions: dict[str, Any] | None = None,
     scope: RunScope | None = None,
     run_type: RunType | None = None,
     campaign_id: str | None = None,
@@ -191,7 +192,7 @@ async def stage(
             await advance(session, creator, done)
 
 
-def _clusters_for_creator_condition(creator_id: str):
+def _clusters_for_creator_condition(creator_id: str) -> Any:
     """Clusters tagged with the creator, or whose members' evidence came from their runs."""
     via_membership = (
         select(ProblemClusterMember.cluster_id)
@@ -216,7 +217,7 @@ async def active_clusters_for_creator(
     return list(result.scalars().all())
 
 
-async def supersede(session: AsyncSession, model, *conditions) -> int:
+async def supersede(session: AsyncSession, model: Any, *conditions: Any) -> int:
     """Mark every active row of ``model`` matching ``conditions`` as superseded."""
     now = datetime.now(UTC)
     result = await session.execute(

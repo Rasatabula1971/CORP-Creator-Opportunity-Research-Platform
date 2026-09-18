@@ -1,3 +1,5 @@
+from typing import Any
+
 from corp.core.models.scoring import ConfidenceBand
 
 
@@ -6,7 +8,7 @@ def compute_confidence_band(
     evidence_depth: int,
     days_since_newest: int,
     single_source: bool,
-    thresholds: dict | None = None,
+    thresholds: dict[str, Any] | None = None,
 ) -> ConfidenceBand:
     """Confidence banding driven by YAML thresholds when provided.
 

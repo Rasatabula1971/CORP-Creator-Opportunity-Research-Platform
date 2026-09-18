@@ -14,6 +14,7 @@ but the run continues with remaining sources. This is the user's
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,7 +105,7 @@ class MultiSourceDiscovery:
         )
 
         stats = PipelineStats()
-        per_source: dict[str, dict] = {}
+        per_source: dict[str, dict[str, Any]] = {}
         all_items: list[NormalizedContent] = []
 
         for platform in self._platforms:
@@ -156,7 +157,7 @@ class MultiSourceDiscovery:
         query: str,
         stats: PipelineStats,
         all_items: list[NormalizedContent],
-    ) -> dict:
+    ) -> dict[str, Any]:
         # PipelineStats counts SOURCES here, not items: one ok()/fail()/skip()
         # per source, so the run's failure_rate answers "how many sources
         # worked". Per-item new/duplicate/failure counts live in the returned
@@ -282,7 +283,7 @@ class MultiSourceDiscovery:
             return None
         return relative.as_posix()
 
-    def health_summary(self) -> dict:
+    def health_summary(self) -> dict[str, Any]:
         return self._health.summary()
 
 

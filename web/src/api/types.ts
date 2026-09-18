@@ -123,10 +123,6 @@ export interface SignalSummary {
   rationale: string | null;
 }
 
-export interface ScoreDiagnostics {
-  [key: string]: unknown;
-}
-
 export interface OpportunityScore {
   id: string;
   creator_id: string;
@@ -134,7 +130,7 @@ export interface OpportunityScore {
   component_scores: Record<string, number>;
   aggregate_score: number;
   confidence_band: string | null;
-  diagnostics: ScoreDiagnostics | null;
+  diagnostics: Record<string, unknown> | null;
 }
 
 export interface ClusterDetail {
@@ -257,7 +253,4 @@ export interface DossierJson {
   generated_at: string;
 }
 
-export interface Paged<T> {
-  items: T[];
-  totalCount: number;
-}
+

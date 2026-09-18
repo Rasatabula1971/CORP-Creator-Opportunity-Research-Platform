@@ -84,7 +84,7 @@ def _reduce_dimensions(embeddings: np.ndarray, cfg: ClusteringConfig) -> np.ndar
         random_state=cfg.umap_seed,
         metric="cosine",
     )
-    return reducer.fit_transform(embeddings)
+    return reducer.fit_transform(embeddings)  # type: ignore[no-any-return]
 
 
 def _run_hdbscan(reduced: np.ndarray, cfg: ClusteringConfig) -> np.ndarray:
@@ -96,7 +96,7 @@ def _run_hdbscan(reduced: np.ndarray, cfg: ClusteringConfig) -> np.ndarray:
         metric="euclidean",
     )
     clusterer.fit(reduced)
-    return clusterer.labels_
+    return clusterer.labels_  # type: ignore[no-any-return]
 
 
 def _build_clusters(
@@ -118,7 +118,9 @@ def _build_clusters(
 
         recency = 0.0
         if timestamps:
-            cluster_ts = [timestamps[i] for i in indices if timestamps[i] is not None]
+            cluster_ts: list[datetime] = [
+                t for t in (timestamps[i] for i in indices) if t is not None
+            ]
             if cluster_ts:
                 most_recent = max(cluster_ts)
                 days_ago = (now - most_recent).total_seconds() / 86400

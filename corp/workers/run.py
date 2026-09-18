@@ -94,7 +94,7 @@ async def _run_research(creator_id: str, skip_collect: bool) -> int:
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
     from corp.workers.orchestrator import ResearchOrchestrator
 
-    def embedder():
+    def embedder() -> SentenceTransformerEmbedder:
         return SentenceTransformerEmbedder(settings.embedding_model)
 
     try:
@@ -344,7 +344,7 @@ async def _run_research_campaign(
 
     provider = build_provider()
 
-    def embedder():
+    def embedder() -> SentenceTransformerEmbedder:
         return SentenceTransformerEmbedder(settings.embedding_model)
 
     try:

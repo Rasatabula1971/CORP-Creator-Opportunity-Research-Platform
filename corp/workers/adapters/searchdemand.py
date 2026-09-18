@@ -39,15 +39,15 @@ logger = logging.getLogger(__name__)
 
 AUTOCOMPLETE_URL = "https://suggestqueries.google.com/complete/search"
 
-INTENT_MODIFIERS = [
-    "best",
-    "how to",
-    "vs",
-    "review",
-    "alternative to",
-    "tutorial",
-    "course",
-    "tool for",
+INTENT_MODIFIERS: list[tuple[str, str]] = [
+    ("best", "prefix"),
+    ("how to", "prefix"),
+    ("alternative to", "prefix"),
+    ("tool for", "prefix"),
+    ("vs", "suffix"),
+    ("review", "suffix"),
+    ("tutorial", "suffix"),
+    ("course", "suffix"),
 ]
 
 
@@ -121,10 +121,13 @@ class SearchDemandAdapter(SourceAdapter):
                 seen.add(item.text.lower())
                 results.append(item)
 
-        for modifier in INTENT_MODIFIERS:
+        for modifier, position in INTENT_MODIFIERS:
             if len(results) >= self._max_suggestions:
                 break
-            modified_query = f"{modifier} {query}"
+            if position == "prefix":
+                modified_query = f"{modifier} {query}"
+            else:
+                modified_query = f"{query} {modifier}"
             suggestions = await self._fetch_suggestions(modified_query)
             for item in self._to_content(modified_query, suggestions):
                 if item.text.lower() not in seen and len(results) < self._max_suggestions:

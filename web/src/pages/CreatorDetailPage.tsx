@@ -47,7 +47,7 @@ export function CreatorDetailPage() {
               onSuccess: (j) => setActiveJobId(j.id),
             })
           }
-          disabled={startResearch.isPending || (job && job.status === "running")}
+          disabled={startResearch.isPending || job?.status === "queued" || job?.status === "running"}
         >
           {startResearch.isPending ? "Starting…" : "Start Research"}
         </Button>

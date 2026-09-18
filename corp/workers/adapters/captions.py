@@ -7,6 +7,7 @@ evidence storage) and structured segments (for timestamp-aware extraction).
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent
@@ -27,7 +28,7 @@ class TranscriptSegment:
 
 
 def _segment_snippets(
-    snippets: list[dict],
+    snippets: list[dict[str, Any]],
     pause_gap: float = PAUSE_GAP_SECONDS,
 ) -> list[TranscriptSegment]:
     """Group raw snippets into segments split at natural pauses.
@@ -102,10 +103,13 @@ def fetch_youtube_caption(
     """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-
+    except ImportError:
+        logger.error("youtube-transcript-api not installed; captions disabled")
+        return None
+    try:
         transcript = YouTubeTranscriptApi().fetch(video_id, languages=languages)
-    except Exception:
-        logger.debug("No captions for video %s", video_id)
+    except Exception as exc:
+        logger.debug("No captions for video %s: %s", video_id, exc)
         return None
 
     raw_data = transcript.to_raw_data()

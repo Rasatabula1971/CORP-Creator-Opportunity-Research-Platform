@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import insert, select, text
+from sqlalchemy import Table, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from corp.warmstore.schema import (
@@ -44,8 +44,10 @@ def _prep(row: dict[str, Any]) -> dict[str, Any]:
     for k, v in row.items():
         if k in _JSON_COLUMNS and v is not None and not isinstance(v, str):
             out[k] = json.dumps(v)
+        elif k in _DATETIME_COLUMNS and isinstance(v, datetime):
+            out[k] = v.isoformat()
         elif k in _DATETIME_COLUMNS and isinstance(v, str):
-            out[k] = datetime.fromisoformat(v)
+            out[k] = v  # already an ISO-8601 string
         elif hasattr(v, "value"):
             out[k] = v.value if isinstance(v.value, str) else str(v.value)
         else:
@@ -56,9 +58,13 @@ def _prep(row: dict[str, Any]) -> dict[str, Any]:
 class WarmStore:
     """Async SQLite store for bulk CORP data (evidence, embeddings, content)."""
 
+    _project_root = Path(__file__).resolve().parents[2]
+
     def __init__(self, db_path: str | Path) -> None:
-        self._path = Path(db_path)
+        p = Path(db_path)
+        self._path = p if p.is_absolute() else self._project_root / p
         self._engine: AsyncEngine | None = None
+        self._schema_ready = False
 
     @property
     def path(self) -> Path:
@@ -91,6 +97,8 @@ class WarmStore:
         module docstring), it's safe to widen it in place: add whatever
         columns the current schema has that the on-disk table doesn't.
         """
+        if self._schema_ready:
+            return
         engine = await self._get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
@@ -102,6 +110,7 @@ class WarmStore:
                         continue
                     ddl = f"ALTER TABLE [{table.name}] ADD COLUMN [{col.name}] {col.type}"
                     await conn.execute(text(ddl))
+        self._schema_ready = True
 
     async def close(self) -> None:
         if self._engine is not None:
@@ -112,7 +121,7 @@ class WarmStore:
     # Generic put — INSERT OR REPLACE for idempotent writes
     # ------------------------------------------------------------------
 
-    async def _put(self, table, rows: list[dict[str, Any]]) -> int:
+    async def _put(self, table: Table, rows: list[dict[str, Any]]) -> int:
         if not rows:
             return 0
         engine = await self._get_engine()

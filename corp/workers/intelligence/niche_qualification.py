@@ -12,6 +12,7 @@ No LLM, no API key, no cost. Weights are YAML-driven
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +64,7 @@ class NicheQualifier:
 
         try:
             niches = await self._verified_niches(campaign_id)
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
 
             for cn, niche in niches:
                 candidate = await self._promoted_candidate(

@@ -7,6 +7,7 @@ two or more points in time. Append-only.
 """
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -37,4 +38,4 @@ class MetricsSnapshot(Base):
     like_count: Mapped[int | None] = mapped_column(Integer)
     comment_count: Mapped[int | None] = mapped_column(Integer)
     share_count: Mapped[int | None] = mapped_column(Integer)
-    extra: Mapped[dict | None] = mapped_column(JSONB)
+    extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

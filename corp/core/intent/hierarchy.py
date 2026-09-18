@@ -1,18 +1,23 @@
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
 from corp.core.models.intent import SignalLevel
 
+# Resolve relative rules paths against the project root, not the process's CWD.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 def load_intent_rules(path: str | Path) -> dict[str, Any]:
     path = Path(path)
+    if not path.is_absolute():
+        path = _PROJECT_ROOT / path
     if not path.exists():
         raise FileNotFoundError(f"Intent rules not found: {path}")
     with open(path) as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 def _matches_keyword(text: str, keyword: str) -> bool:

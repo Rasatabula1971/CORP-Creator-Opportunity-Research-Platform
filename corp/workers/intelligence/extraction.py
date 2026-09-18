@@ -235,7 +235,7 @@ async def extract_observations(
 
 async def extract_observations_batch(
     provider: LLMProvider,
-    comments: list[dict],
+    comments: list[dict[str, Any]],
     content_title: str | None,
     platform: str = "youtube",
 ) -> list[ExtractedObservation]:

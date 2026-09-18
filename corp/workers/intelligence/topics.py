@@ -62,9 +62,9 @@ Rules:
 
 async def classify_topics(
     provider: LLMProvider,
-    content_items: list[dict],
+    content_items: list[dict[str, Any]],
     platform: str = "youtube",
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Classify a creator's content into topics.
 
     Args:
@@ -98,7 +98,7 @@ async def classify_topics(
     raw_topics = result.get("topics", []) if isinstance(result, dict) else []
     if not isinstance(raw_topics, list):
         raw_topics = []
-    topics: list[dict] = []
+    topics: list[dict[str, Any]] = []
     for t in raw_topics:
         if not isinstance(t, dict) or not t.get("name"):
             continue

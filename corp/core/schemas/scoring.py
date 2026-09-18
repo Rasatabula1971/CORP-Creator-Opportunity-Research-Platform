@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -45,7 +46,7 @@ class ScoreResponse(BaseModel):
     confidence_band: ConfidenceBand
     rule_version: str
     model_version: str
-    diagnostics: dict | None = None
+    diagnostics: dict[str, Any] | None = None
     created_at: datetime
 
 

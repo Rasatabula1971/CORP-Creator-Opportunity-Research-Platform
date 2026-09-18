@@ -171,7 +171,7 @@ class AppStoreAdapter(SourceAdapter):
         resp = await client.get(url, params=params)
         self.request_count += 1
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
 
 def _parse_review_feed(

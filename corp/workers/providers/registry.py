@@ -40,7 +40,7 @@ class LLMProvider(ABC):
     @abstractmethod
     async def generate_json(
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Return the model's JSON-object answer.
 
         ``schema`` is the JSON Schema of the answer the caller expects. Providers
@@ -118,7 +118,7 @@ class GeminiProvider(LLMProvider):
 
     async def generate_json(
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         del schema  # JSON mode only; the prompt describes the shape
         config = genai_types.GenerateContentConfig(
             system_instruction=system,
@@ -143,7 +143,7 @@ class GeminiProvider(LLMProvider):
             response_hash,
             len(prompt),
         )
-        return result
+        return result  # type: ignore[no-any-return]
 
 
 def _finish_reason(response: Any) -> str | None:
@@ -153,7 +153,7 @@ def _finish_reason(response: Any) -> str | None:
     return getattr(reason, "name", reason)  # enum -> its name; str/None as-is
 
 
-def _response_hash(data: dict) -> str:
+def _response_hash(data: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(data, sort_keys=True).encode()
     ).hexdigest()[:16]

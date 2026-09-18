@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -40,7 +40,7 @@ def load_rules(path: str) -> dict[str, Any]:
     if not resolved.is_absolute():
         resolved = _PROJECT_ROOT / resolved
     with open(resolved) as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 def _log_score(value: int, cap: int) -> float:
@@ -124,6 +124,7 @@ def compute_confidence(
     if (
         inp.evidence_count >= medium.get("min_evidence", 5)
         and inp.author_count >= medium.get("min_authors", 3)
+        and (not medium.get("requires_ecosystem", False) or has_ecosystem)
     ):
         return 0.6 if has_ecosystem else 0.5
 

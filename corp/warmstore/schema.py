@@ -6,7 +6,6 @@ JSONB → TEXT (JSON string), pgvector Vector(384) → BLOB, Enum → TEXT.
 
 from sqlalchemy import (
     Column,
-    DateTime,
     Float,
     Integer,
     LargeBinary,
@@ -30,7 +29,7 @@ evidence = Table(
     Column("source_url", String(500)),
     Column("access_method", String(50), nullable=False),
     Column("compliance_status", String(50), nullable=False),
-    Column("collected_at", DateTime, nullable=False),
+    Column("collected_at", String(40), nullable=False),
     Column("research_run_id", String(36)),
 )
 
@@ -49,8 +48,8 @@ problem_observations = Table(
     Column("sentiment", String(20)),
     Column("urgency", String(20)),
     Column("embedding", LargeBinary),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 content_items = Table(
@@ -63,7 +62,7 @@ content_items = Table(
     Column("title", Text),
     Column("description", Text),
     Column("content_type", String(50), nullable=False),
-    Column("published_at", DateTime),
+    Column("published_at", String(40)),
     Column("view_count", Integer),
     Column("like_count", Integer),
     Column("comment_count", Integer),
@@ -74,8 +73,8 @@ content_items = Table(
     Column("tags", Text),
     Column("language", String(10)),
     Column("is_short", Integer),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 audience_interactions = Table(
@@ -87,16 +86,16 @@ audience_interactions = Table(
     Column("text", Text, nullable=False),
     Column("author_handle", String(255)),
     Column("interaction_type", String(50), nullable=False),
-    Column("posted_at", DateTime),
+    Column("posted_at", String(40)),
     Column("like_count", Integer),
     Column("parent_id", String(255)),
     Column("author_channel_id", String(255)),
     # Extraction bookkeeping (see corp.core.models.content.AudienceInteraction).
-    Column("extracted_at", DateTime),
+    Column("extracted_at", String(40)),
     Column("extracted_prompt_version", String(50)),
     Column("extracted_model", String(100)),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 metrics_snapshots = Table(
@@ -106,7 +105,7 @@ metrics_snapshots = Table(
     Column("research_run_id", String(36)),
     Column("platform_account_id", String(36)),
     Column("content_item_id", String(36)),
-    Column("captured_at", DateTime, nullable=False),
+    Column("captured_at", String(40), nullable=False),
     Column("follower_count", Integer),
     Column("view_count", Integer),
     Column("like_count", Integer),
@@ -122,15 +121,15 @@ research_queries = Table(
     Column("research_run_id", String(36), nullable=False),
     Column("source", String(50), nullable=False),
     Column("query", Text, nullable=False),
-    Column("executed_at", DateTime, nullable=False),
+    Column("executed_at", String(40), nullable=False),
     Column("results_seen", Integer, nullable=False, default=0),
     Column("new_results", Integer, nullable=False, default=0),
     Column("duplicate_results", Integer, nullable=False, default=0),
     Column("archive_reference", Text),
     Column("status", String(50), nullable=False),
     Column("error", Text),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 creator_scores = Table(
@@ -145,10 +144,10 @@ creator_scores = Table(
     Column("rule_version", String(50), nullable=False),
     Column("model_version", String(100), nullable=False),
     Column("research_run_id", String(36)),
-    Column("superseded_at", DateTime),
+    Column("superseded_at", String(40)),
     Column("diagnostics", Text),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 opportunity_scores = Table(
@@ -164,10 +163,10 @@ opportunity_scores = Table(
     Column("rule_version", String(50), nullable=False),
     Column("model_version", String(100), nullable=False),
     Column("research_run_id", String(36)),
-    Column("superseded_at", DateTime),
+    Column("superseded_at", String(40)),
     Column("diagnostics", Text),
-    Column("created_at", DateTime),
-    Column("updated_at", DateTime),
+    Column("created_at", String(40)),
+    Column("updated_at", String(40)),
 )
 
 ALL_TABLES = [

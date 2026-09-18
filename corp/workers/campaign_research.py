@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -102,7 +102,7 @@ class CampaignResearchBatch:
             # MissingGreenlet and sink the batch.
             creators = [(c.id, c.name, c.status) for c in rows]
 
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             succeeded = incomplete = skipped = errored = 0
 
             for creator_id, name, status in creators:

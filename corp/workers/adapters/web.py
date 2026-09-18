@@ -16,6 +16,7 @@ import logging
 import re
 import socket
 from html.parser import HTMLParser
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -101,7 +102,7 @@ class _TextAndLinks(HTMLParser):
         return "\n".join(self._text)
 
 
-def parse_page(html: str, base_url: str) -> dict:
+def parse_page(html: str, base_url: str) -> dict[str, Any]:
     """Extract title, description, visible text, and classified outbound links."""
     parser = _TextAndLinks()
     parser.feed(html)
@@ -216,7 +217,7 @@ class WebPresenceAdapter(SourceAdapter):
             content_type="page",
             external_id=_normalize(final_url),
             text=text,
-            url=final_url,
+            url=final_url[:500],
             access_method=self.access_method,
             compliance_status=self.compliance_status,
             metadata={

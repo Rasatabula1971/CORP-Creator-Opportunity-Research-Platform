@@ -24,6 +24,7 @@ ComplianceStatus is COMPLIANT for the RSS feed, VERIFY for pytrends data.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from xml.etree import ElementTree
 
 import httpx
@@ -145,7 +146,7 @@ class GoogleTrendsAdapter(SourceAdapter):
             loop = asyncio.get_running_loop()
             pytrends = TrendReq(hl="en-US", tz=360)
 
-            def _build():
+            def _build() -> Any:
                 pytrends.build_payload([keyword], timeframe="today 3-m", geo=self._geo)
                 return pytrends.interest_over_time()
 
@@ -154,14 +155,14 @@ class GoogleTrendsAdapter(SourceAdapter):
             if df is None or df.empty:
                 return []
 
-            data_points = []
+            data_points: list[dict[str, Any]] = []
             for ts, row in df.iterrows():
                 data_points.append({
                     "date": str(ts.date()),
                     "interest": int(row.get(keyword, 0)),
                 })
 
-            avg_interest = sum(d["interest"] for d in data_points) / max(len(data_points), 1)
+            avg_interest = sum(int(d["interest"]) for d in data_points) / max(len(data_points), 1)
 
             return [
                 NormalizedContent(

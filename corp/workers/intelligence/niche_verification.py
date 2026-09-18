@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +87,7 @@ class NicheVerifier:
 
             verified = 0
             failed_verification = 0
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
 
             for cand in candidates:
                 niche = await self._session.get(Niche, cand.niche_id)
@@ -161,7 +162,9 @@ class NicheVerifier:
             select(NicheCandidate)
             .where(
                 NicheCandidate.campaign_id == campaign_id,
-                NicheCandidate.status == NicheCandidateStatus.PROMOTED,
+                NicheCandidate.status.in_(
+                    [NicheCandidateStatus.PROMOTED, NicheCandidateStatus.MERGED]
+                ),
                 NicheCandidate.niche_id.isnot(None),
                 NicheCandidate.superseded_at.is_(None),
             )

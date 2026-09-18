@@ -5,12 +5,14 @@ and ``error: {code, message}``. Domain exceptions map to fixed codes.
 """
 
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import HTTPException, RequestValidationError
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from corp.core.state.machine import InvalidTransitionError
 from corp.workers.adapters.registry import AdapterConfigError
@@ -29,7 +31,7 @@ _STATUS_CODES = {
 }
 
 
-def _body(status_code: int, message: str, code: str | None = None) -> dict:
+def _body(status_code: int, message: str, code: str | None = None) -> dict[str, Any]:
     return {
         "detail": message,
         "error": {"code": code or _STATUS_CODES.get(status_code, "error"), "message": message},
@@ -37,8 +39,8 @@ def _body(status_code: int, message: str, code: str | None = None) -> dict:
 
 
 def register_error_handlers(app: FastAPI) -> None:
-    @app.exception_handler(HTTPException)
-    async def _http(request: Request, exc: HTTPException) -> JSONResponse:
+    @app.exception_handler(StarletteHTTPException)
+    async def _http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content=_body(exc.status_code, str(exc.detail)),

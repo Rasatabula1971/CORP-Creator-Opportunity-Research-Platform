@@ -23,6 +23,7 @@ can't be pruned by collection age safely; left for a follow-up that adds one.
 
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +40,7 @@ class PruneReport:
     applied: bool
     metrics_snapshots: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 

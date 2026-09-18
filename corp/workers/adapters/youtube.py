@@ -6,6 +6,7 @@ import re
 import threading
 import time
 from datetime import datetime
+from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -46,7 +47,7 @@ def _parse_iso8601_duration(text: str) -> int | None:
     )
 
 
-def _extract_channel_id(snippet: dict) -> str | None:
+def _extract_channel_id(snippet: dict[str, Any]) -> str | None:
     """authorChannelId on a comment snippet is either {"value": "UCxx"} or absent."""
     channel = snippet.get("authorChannelId")
     if isinstance(channel, dict):
@@ -157,12 +158,12 @@ class YouTubeAdapter(SourceAdapter):
         wait=wait_exponential(multiplier=1, min=2, max=30),
         reraise=True,
     )
-    def _execute(self, request: object, quota_cost: int = 1) -> dict:
+    def _execute(self, request: object, quota_cost: int = 1) -> dict[str, Any]:
         self._check_quota(quota_cost)
         self._limiter.acquire()
-        result = request.execute()  # type: ignore[union-attr]
+        result = request.execute()  # type: ignore[attr-defined]
         self._quota_used += quota_cost
-        return result
+        return result  # type: ignore[no-any-return]
 
     # ---- public API (all async, sync work dispatched to thread) ----
 
@@ -174,12 +175,12 @@ class YouTubeAdapter(SourceAdapter):
             req = self._service.channels().list(part="id", forHandle=clean)
             resp = self._execute(req, quota_cost=1)
             if resp.get("items"):
-                return resp["items"][0]["id"]
+                return resp["items"][0]["id"]  # type: ignore[no-any-return]
 
             req = self._service.channels().list(part="id", forUsername=clean)
             resp = self._execute(req, quota_cost=1)
             if resp.get("items"):
-                return resp["items"][0]["id"]
+                return resp["items"][0]["id"]  # type: ignore[no-any-return]
 
             raise ValueError(f"Channel not found: {handle}")
 
@@ -202,12 +203,12 @@ class YouTubeAdapter(SourceAdapter):
             uploads_id = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
             video_ids: list[str] = []
-            snippets: dict[str, dict] = {}
+            snippets: dict[str, dict[str, Any]] = {}
             page_token: str | None = None
             remaining = limit
 
             while remaining > 0:
-                kwargs: dict = {
+                kwargs: dict[str, Any] = {
                     "part": "snippet",
                     "playlistId": uploads_id,
                     "maxResults": min(remaining, 50),
@@ -244,9 +245,9 @@ class YouTubeAdapter(SourceAdapter):
             # statistics in one batched call, so tags/language/duration/short
             # land on ContentItem without an extra fetch. Quota cost stays 1
             # per batch — parts don't multiply cost, only the id count does.
-            stats: dict[str, dict] = {}
-            details: dict[str, dict] = {}
-            enriched_snippets: dict[str, dict] = {}
+            stats: dict[str, dict[str, Any]] = {}
+            details: dict[str, dict[str, Any]] = {}
+            enriched_snippets: dict[str, dict[str, Any]] = {}
             for i in range(0, len(video_ids), 50):
                 batch = video_ids[i : i + 50]
                 resp = self._execute(
@@ -321,7 +322,7 @@ class YouTubeAdapter(SourceAdapter):
             remaining = limit
 
             while remaining > 0:
-                kwargs: dict = {
+                kwargs: dict[str, Any] = {
                     "part": "snippet,replies",
                     "videoId": video_id,
                     "maxResults": min(remaining, 100),
@@ -422,9 +423,9 @@ class YouTubeAdapter(SourceAdapter):
 
         return await asyncio.to_thread(_fetch)
 
-    def _fetch_all_replies(self, comment_id: str) -> list[dict]:
+    def _fetch_all_replies(self, comment_id: str) -> list[dict[str, Any]]:
         """Page through every reply for a top-level comment (main-lineage bugfix)."""
-        results: list[dict] = []
+        results: list[dict[str, Any]] = []
         page_token: str | None = None
         while True:
             kwargs = {"part": "snippet", "parentId": comment_id, "maxResults": 100}
@@ -435,6 +436,12 @@ class YouTubeAdapter(SourceAdapter):
                     self._service.comments().list(**kwargs), quota_cost=1
                 )
             except HttpError as e:
+                if e.resp.status == 403:
+                    reason = _http_error_reason(e)
+                    if reason in _QUOTA_REASONS:
+                        raise QuotaExceededError(
+                            f"YouTube quota/rate limit fetching replies ({reason})"
+                        ) from e
                 logger.warning("reply fetch for %s failed: %s", comment_id, e)
                 return results
             results.extend(resp.get("items", []))

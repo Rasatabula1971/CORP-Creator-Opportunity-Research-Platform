@@ -6,7 +6,6 @@ import type {
   CampaignCreateInput,
   CampaignNiche,
   ClusterDetail,
-  Competitor,
   Creator,
   CreatorCreateInput,
   CreatorDetail,
@@ -65,14 +64,6 @@ export function useDossier(creatorId: string | undefined) {
   return useQuery({
     queryKey: ["creators", creatorId, "dossier"],
     queryFn: () => api.get<DossierJson>(`/creators/${creatorId}/dossier.json`),
-    enabled: !!creatorId,
-  });
-}
-
-export function useCompetitors(creatorId: string | undefined) {
-  return useQuery({
-    queryKey: ["creators", creatorId, "competitors"],
-    queryFn: () => api.get<Competitor[]>(`/creators/${creatorId}/competitors`),
     enabled: !!creatorId,
   });
 }
@@ -144,26 +135,6 @@ export function useStartResearch() {
       api.post<Job>(`/creators/${creatorId}/research`, {}),
     onSuccess: (_data, creatorId) =>
       qc.invalidateQueries({ queryKey: ["jobs", creatorId] }),
-  });
-}
-
-export function useStartPipeline() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      creatorId,
-      pipeline,
-      platform,
-      identifier,
-    }: {
-      creatorId: string;
-      pipeline: string;
-      platform?: string;
-      identifier?: string;
-    }) =>
-      api.post<Job>(`/creators/${creatorId}/runs`, { pipeline, platform, identifier }),
-    onSuccess: (_data, vars) =>
-      qc.invalidateQueries({ queryKey: ["jobs", vars.creatorId] }),
   });
 }
 
@@ -239,13 +210,8 @@ export function useRecordDecision(creatorId: string) {
       decision: "approve" | "reject" | "watch";
       rationale?: string | null;
       decided_by?: string | null;
-      gate?: string;
     }) =>
-      api.post<Decision>(`/creators/${creatorId}/decisions`, {
-        creator_id: creatorId,
-        gate: "gate_a",
-        ...input,
-      }),
+      api.post<Decision>(`/creators/${creatorId}/decisions`, input),
     // The gate also transitions creator.status; the prefix key refreshes the
     // detail (header badge, DecisionPanel gate) and the decisions list together.
     onSuccess: () => qc.invalidateQueries({ queryKey: ["creators", creatorId] }),

@@ -132,7 +132,7 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
     free providers (Mistral, Cloudflare, OpenRouter, NVIDIA, ...) live.
     """
     try:
-        from fair.embedded.module import FAIR  # type: ignore[import-not-found]
+        from fair.embedded.module import FAIR
     except ImportError as exc:
         raise FairUnavailableError(
             "the fair package is not installed; pip install -e <path to FAIR repo>"

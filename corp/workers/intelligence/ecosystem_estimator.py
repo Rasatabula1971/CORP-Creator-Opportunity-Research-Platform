@@ -56,7 +56,7 @@ def _as_int_or_none(value: Any) -> int | None:
 class SearchAdapter(Protocol):
     """Minimal interface: run a yt-dlp search and return items."""
 
-    async def collect(self, identifier: str) -> list: ...
+    async def collect(self, identifier: str) -> list[Any]: ...
 
 
 class ChannelEnricher(Protocol):
@@ -129,7 +129,7 @@ class NicheEcoResult:
     niche_name: str
     total_creators: int = 0
     target_band_creators: int = 0
-    channels: list[dict] = field(default_factory=list)
+    channels: list[dict[str, Any]] = field(default_factory=list)
 
 
 class EcosystemEstimator:
@@ -165,7 +165,7 @@ class EcosystemEstimator:
 
         try:
             niches = await self._verified_niches(campaign_id)
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
 
             for cn, niche in niches:
                 result = await self._estimate_niche(niche)
@@ -204,7 +204,7 @@ class EcosystemEstimator:
         query = f"ytsearch{self._cfg.search_count}:{niche.canonical_name}"
         items = await self._adapter.collect(query)
 
-        seen_channels: dict[str, dict] = {}
+        seen_channels: dict[str, dict[str, Any]] = {}
         for item in items:
             meta = getattr(item, "metadata", {}) or {}
             # Prefer yt-dlp's stable identifiers (UC channel_id, then @handle) over
@@ -230,7 +230,7 @@ class EcosystemEstimator:
 
         total = len(seen_channels)
         in_band = 0
-        channels_out: list[dict] = []
+        channels_out: list[dict[str, Any]] = []
         for info in seen_channels.values():
             fc = info.get("follower_count")
             in_target = (
@@ -250,7 +250,7 @@ class EcosystemEstimator:
         )
 
     async def _enrich_subscriber_counts(
-        self, channels: dict[str, dict],
+        self, channels: dict[str, dict[str, Any]],
     ) -> None:
         ids = [
             cid for cid in channels

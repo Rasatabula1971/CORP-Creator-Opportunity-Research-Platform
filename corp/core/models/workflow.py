@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -117,17 +117,17 @@ class ResearchRun(TimestampMixin, Base):
         String(20), default=RunScope.CREATOR.value, server_default="creator", nullable=False
     )
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
-    stats: Mapped[dict | None] = mapped_column(JSONB)
+    stats: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    config_snapshot: Mapped[dict | None] = mapped_column(JSONB)
-    prompt_versions: Mapped[dict | None] = mapped_column(JSONB)
-    model_versions: Mapped[dict | None] = mapped_column(JSONB)
+    config_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    prompt_versions: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    model_versions: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     error_message: Mapped[str | None] = mapped_column(Text)
     # Per-stage progress log. Optional — populated by call sites that want
     # fine-grained step tracking; the niche-discovery pipeline instead uses
     # `stats` for its own run-lifecycle bookkeeping. Not yet unified.
-    steps: Mapped[list | None] = mapped_column(JSONB, default=list)
+    steps: Mapped[list[Any] | None] = mapped_column(JSONB, default=list)
 
     # No delete cascade: query history is research memory (§13) and must
     # outlive the run that produced it — same reasoning as Slices 3–4.
@@ -139,7 +139,7 @@ class ResearchRun(TimestampMixin, Base):
         self,
         name: str,
         status: str,
-        detail: dict | None = None,
+        detail: dict[str, Any] | None = None,
     ) -> None:
         # Copy-on-write: mutating the JSONB list/dicts in place never fires
         # SQLAlchemy's change tracking, so updates after the first flush would
@@ -155,7 +155,7 @@ class ResearchRun(TimestampMixin, Base):
                     step["detail"] = detail
                 self.steps = steps
                 return
-        entry: dict = {"name": name, "status": status, "started_at": now}
+        entry: dict[str, Any] = {"name": name, "status": status, "started_at": now}
         if detail:
             entry["detail"] = detail
         steps.append(entry)

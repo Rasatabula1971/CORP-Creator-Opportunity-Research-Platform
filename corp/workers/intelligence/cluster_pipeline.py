@@ -1,6 +1,8 @@
 """Clustering pipeline — embed observations, cluster, persist to DB, unify topics."""
 
 import logging
+from datetime import datetime
+from typing import Any
 
 import numpy as np
 from sqlalchemy import select
@@ -80,7 +82,7 @@ class ClusterPipeline:
                     embeddings = await embed_texts_async(texts, self._embedder)
                     await self._store_embeddings(observations, embeddings)
 
-                    timestamps = [o.created_at for o in observations]
+                    timestamps: list[datetime | None] = [o.created_at for o in observations]
                     clusters = cluster_observations(texts, embeddings, timestamps, self._config)
 
                     await supersede(
@@ -195,7 +197,7 @@ class ClusterPipeline:
         if not content_items:
             return
 
-        cluster_topics = [
+        cluster_topics: list[dict[str, Any]] = [
             {
                 "name": cr.label,
                 "confidence": round(cr.evidence_strength, 2),
@@ -204,10 +206,10 @@ class ClusterPipeline:
             }
             for cr in clusters
         ]
-        cluster_topics.sort(key=lambda t: t["evidence_count"], reverse=True)
+        cluster_topics.sort(key=lambda t: int(t.get("evidence_count", 0)), reverse=True)
 
         existing_topics = content_items[0].topics or []
-        cluster_names_lower = {t["name"].lower() for t in cluster_topics}
+        cluster_names_lower = {str(t.get("name", "")).lower() for t in cluster_topics}
         unified = list(cluster_topics)
         for et in existing_topics:
             if not isinstance(et, dict):

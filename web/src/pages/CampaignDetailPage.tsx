@@ -123,7 +123,7 @@ export function CampaignDetailPage() {
                 onClick={() => runStage(stage.key)}
                 disabled={
                   startPipeline.isPending ||
-                  (job !== undefined && job.status === "running") ||
+                  (job?.status === "queued" || job?.status === "running") ||
                   (stage.key === "discover" && !discoverQuery.trim())
                 }
               >

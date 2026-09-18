@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -45,12 +46,12 @@ class ContentItem(TimestampMixin, Base):
     like_count: Mapped[int | None] = mapped_column(Integer)
     comment_count: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String(500))
-    topics: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    topics: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     # Adapter metadata worth keeping: commerce_signals, link kinds, tags, music, domain.
-    extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     # Typed video enrichment, cheaper to query than pulling them out of `extra`.
     duration: Mapped[int | None] = mapped_column(Integer)
-    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    tags: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     language: Mapped[str | None] = mapped_column(String(10))
     is_short: Mapped[bool | None] = mapped_column()
 

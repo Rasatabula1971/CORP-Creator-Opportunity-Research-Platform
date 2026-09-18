@@ -192,7 +192,7 @@ class MarketplaceAdapter(SourceAdapter):
         data = await self._get_json(
             "https://openapi.etsy.com/v3/application/listings/active",
             params={"keywords": query, "limit": min(limit, 25)},
-            headers={"x-api-key": self._etsy_api_key},
+            headers={"x-api-key": self._etsy_api_key or ""},
         )
         return _parse_etsy_api_response(data, query)[:limit]
 
@@ -265,7 +265,7 @@ class MarketplaceAdapter(SourceAdapter):
         if resp.status_code == 429:
             logger.warning("Marketplace rate limit hit on %s", url)
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]
 
 
 def _parse_gumroad_listings(html: str, query: str) -> list[NormalizedContent]:
@@ -367,7 +367,7 @@ def _parse_etsy_listings(html: str, query: str) -> list[NormalizedContent]:
         if not title:
             continue
 
-        price = float(price_match.group(1).replace(",", "")) if price_match else None
+        price = _extract_price(price_match.group(1)) if price_match else None
         shop = _html_to_text(shop_match.group(1)) if shop_match else None
         rating = float(rating_match.group(1)) if rating_match else None
         review_count = (

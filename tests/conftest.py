@@ -1,4 +1,5 @@
 import os
+import threading
 
 # Tests must always hit an isolated corp_test database, never whatever DATABASE_URL
 # a different project's shell profile happens to export. CORP_TEST_DATABASE_URL(_SYNC)
@@ -49,3 +50,16 @@ async def clean_db():
     async with async_test_session() as session:
         yield session
         await session.rollback()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Force-exit after pytest completes.
+
+    torch / numba / LLVM spin up non-daemon threads that keep the interpreter
+    alive after the test runner is done. A background timer gives pytest enough
+    time to print its summary and write artifacts, then terminates the process.
+    """
+    def _force_exit():
+        os._exit(exitstatus)
+
+    threading.Timer(3.0, _force_exit).start()

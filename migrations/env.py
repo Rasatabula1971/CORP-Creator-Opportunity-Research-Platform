@@ -22,7 +22,7 @@ if not db_url:
     except Exception:
         db_url = None
 if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+    config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
 from corp.core.models.base import Base
 import corp.core.models  # noqa: F401 — registers all models with Base.metadata

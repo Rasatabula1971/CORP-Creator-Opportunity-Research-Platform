@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from corp.config import settings
 from corp.core.models.campaign import Campaign
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.competitive import Competitor
@@ -57,7 +58,7 @@ async def list_campaigns(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CampaignResponse]:
     total = (await session.execute(select(func.count()).select_from(Campaign))).scalar()
     response.headers["X-Total-Count"] = str(total or 0)
     result = await session.execute(
@@ -70,7 +71,7 @@ async def list_campaigns(
 async def get_campaign(
     campaign_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> CampaignResponse:
     campaign = await session.get(Campaign, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -85,7 +86,7 @@ async def list_campaign_niches(
     campaign_id: str,
     status: CampaignNicheStatus | None = None,
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CampaignNicheDetailResponse]:
     if await session.get(Campaign, campaign_id) is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -108,7 +109,7 @@ async def list_campaign_creators(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CreatorResponse]:
     if await session.get(Campaign, campaign_id) is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -140,7 +141,7 @@ async def list_creators(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CreatorResponse]:
     query = select(Creator)
 
     if status is not None:
@@ -168,7 +169,7 @@ async def list_creators(
 async def get_creator(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> CreatorDetailResponse:
     result = await session.execute(
         select(Creator)
         .options(selectinload(Creator.platform_accounts))
@@ -191,12 +192,13 @@ async def get_creator(
 async def get_dossier(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> Response:
     # Only a missing creator is a 404; other failures (e.g. a rules/YAML parse
     # error inside the generator) must not be masked as "Creator not found".
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
-    html = await DossierGenerator(session).generate(creator_id)
+    gen = DossierGenerator(session, rules_path=settings.scoring_rules_path)
+    html = await gen.generate(creator_id)
     return Response(content=html, media_type="text/html")
 
 
@@ -204,12 +206,13 @@ async def get_dossier(
 async def get_dossier_json(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> DossierResponse:
     # Same 404-only-on-missing-creator semantics as the HTML endpoint above.
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    data = await DossierGenerator(session).generate_data(creator_id)
+    gen = DossierGenerator(session, rules_path=settings.scoring_rules_path)
+    data = await gen.generate_data(creator_id)
 
     opportunities = [
         DossierOpportunityResponse(
@@ -260,7 +263,7 @@ async def get_evidence(
     creator_id: str,
     limit: int = Query(default=50, le=200),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[EvidenceResponse]:
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -285,7 +288,7 @@ async def get_evidence(
 async def get_opportunities(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> list[OpportunityScoreResponse]:
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -311,7 +314,7 @@ async def get_opportunities(
 async def get_competitors(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CompetitorResponse]:
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -338,7 +341,7 @@ async def create_decision(
     creator_id: str,
     body: DecisionCreate,
     session: AsyncSession = Depends(get_session),
-):
+) -> DecisionResponse:
     # The URL alone scopes the decision: DecisionCreate carries no creator_id
     # or gate field, so the body cannot disagree with the endpoint.
     creator = await session.get(Creator, creator_id)
@@ -376,7 +379,7 @@ async def get_observations(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ProblemObservationResponse]:
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -410,7 +413,7 @@ async def get_observations(
 async def get_signals(
     creator_id: str,
     session: AsyncSession = Depends(get_session),
-):
+) -> list[CommercialSignalResponse]:
     creator = await session.get(Creator, creator_id)
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -443,7 +446,7 @@ async def list_research_runs(
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-):
+) -> list[ResearchRunResponse]:
     query = select(ResearchRun)
     if creator_id:
         query = query.where(ResearchRun.creator_id == creator_id)

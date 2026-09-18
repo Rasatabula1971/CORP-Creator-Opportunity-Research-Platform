@@ -32,13 +32,13 @@ def _get_store() -> WarmStore | None:
         return None
 
 
-def model_to_dict(instance: object) -> dict[str, Any]:
+def model_to_dict(instance: Any) -> dict[str, Any]:
     """Extract column values from a SQLAlchemy ORM instance as a plain dict."""
     table = instance.__class__.__table__
     result: dict[str, Any] = {}
     for col in table.columns:
         val = getattr(instance, col.key, None)
-        if hasattr(val, "value"):
+        if val is not None and hasattr(val, "value"):
             val = val.value
         result[col.key] = val
     return result
@@ -57,7 +57,10 @@ def embedding_to_bytes(emb: Any) -> bytes | None:
     return np.asarray(emb, dtype="<f4").tobytes()
 
 
-async def mirror_evidence(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_evidence(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -68,7 +71,10 @@ async def mirror_evidence(rows: list) -> None:
         logger.warning("warm mirror failed: evidence (%d rows)", len(rows), exc_info=True)
 
 
-async def mirror_observations(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_observations(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -84,7 +90,10 @@ async def mirror_observations(rows: list) -> None:
         logger.warning("warm mirror failed: observations (%d rows)", len(rows), exc_info=True)
 
 
-async def mirror_content_items(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_content_items(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -95,7 +104,10 @@ async def mirror_content_items(rows: list) -> None:
         logger.warning("warm mirror failed: content_items (%d rows)", len(rows), exc_info=True)
 
 
-async def mirror_interactions(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_interactions(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -106,7 +118,10 @@ async def mirror_interactions(rows: list) -> None:
         logger.warning("warm mirror failed: interactions (%d rows)", len(rows), exc_info=True)
 
 
-async def mirror_metrics(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_metrics(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -117,7 +132,10 @@ async def mirror_metrics(rows: list) -> None:
         logger.warning("warm mirror failed: metrics (%d rows)", len(rows), exc_info=True)
 
 
-async def mirror_research_queries(rows: list) -> None:
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
+async def mirror_research_queries(rows: list[Any]) -> None:
     store = _get_store()
     if store is None:
         return
@@ -128,9 +146,12 @@ async def mirror_research_queries(rows: list) -> None:
         logger.warning("warm mirror failed: research_queries (%d rows)", len(rows), exc_info=True)
 
 
+# NOTE: Callers should ideally invoke this after session.commit(), not after
+# flush(), to avoid mirroring rows that Postgres may roll back. The warm store
+# is a disposable cache so stale rows are tolerable but not ideal.
 async def mirror_scores(
-    creator_scores: list | None = None,
-    opportunity_scores: list | None = None,
+    creator_scores: list[Any] | None = None,
+    opportunity_scores: list[Any] | None = None,
 ) -> None:
     store = _get_store()
     if store is None:

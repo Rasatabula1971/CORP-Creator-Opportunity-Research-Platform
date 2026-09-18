@@ -226,6 +226,7 @@ class DossierGenerator:
                 ProblemClusterMember.observation_id == ProblemObservation.id,
             )
             .where(ProblemClusterMember.cluster_id == cluster_id)
+            .order_by(ProblemObservation.confidence.desc().nullslast(), ProblemObservation.id)
             .limit(10)
         )
         return list(result.scalars().all())

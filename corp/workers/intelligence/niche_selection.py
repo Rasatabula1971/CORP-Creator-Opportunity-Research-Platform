@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +81,7 @@ class NicheSelector:
                 ),
             )
 
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             selected_count = 0
             for rank, (cn, niche) in enumerate(ranked, start=1):
                 score = cn.qualification_score or 0.0

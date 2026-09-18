@@ -1,6 +1,7 @@
 """Acquisition orchestrator — adapter output → DB rows with evidence chain."""
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +50,7 @@ _INTERACTION_TYPE_MAP = {
 _EXTRA_KEYS = ("commerce_signals", "tags", "music", "domain", "duration", "flair", "subreddit")
 
 
-def _content_extra(meta: dict) -> dict | None:
+def _content_extra(meta: dict[str, Any]) -> dict[str, Any] | None:
     """Whitelist adapter metadata that scoring or the dossier can use later."""
     extra = {k: meta[k] for k in _EXTRA_KEYS if meta.get(k) not in (None, "", [], {})}
     links = meta.get("links")
@@ -143,10 +144,10 @@ class AcquisitionCollector:
             await self._snapshot_content(ci, item, research_run_id)
 
         for item in comments:
-            ci = await self._find_content_item_for_interaction(
+            parent_ci: ContentItem | None = await self._find_content_item_for_interaction(
                 item, content_map
             )
-            if ci is None:
+            if parent_ci is None:
                 logger.warning(
                     "No ContentItem for interaction %s (parent=%s), skipping",
                     item.external_id,
@@ -155,7 +156,7 @@ class AcquisitionCollector:
                 orphaned += 1
                 continue
 
-            await self._upsert_interaction(item, ci.id)
+            await self._upsert_interaction(item, parent_ci.id)
             await self._create_evidence(item, research_run_id)
 
         for item in captions:
@@ -190,7 +191,7 @@ class AcquisitionCollector:
             )
         else:
             if followers is not None:
-                account.subscriber_count = int(followers)
+                account.subscriber_count = _int_or_none(followers)
             if meta.get("handle") and not account.external_id:
                 account.external_id = str(meta["handle"])[:255]
             # Populate main-lineage typed channel enrichment columns from adapter
@@ -205,7 +206,7 @@ class AcquisitionCollector:
                 value = meta.get(key)
                 if value is not None:
                     if field in ("total_view_count", "video_count"):
-                        setattr(account, field, int(value))
+                        setattr(account, field, _int_or_none(value))
                     else:
                         # description / country are strings; truncate country to fit.
                         as_str = str(value)
@@ -219,7 +220,7 @@ class AcquisitionCollector:
         snapshot = MetricsSnapshot(
             research_run_id=research_run_id,
             platform_account_id=account.id if account else None,
-            follower_count=int(followers) if followers is not None else None,
+            follower_count=_int_or_none(followers),
             extra={
                 "platform": item.source_platform,
                 "display_name": meta.get("display_name"),

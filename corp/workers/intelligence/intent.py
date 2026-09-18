@@ -110,7 +110,7 @@ def _rules_classify(
 ) -> SignalLevel:
     """Classify using the YAML rules table as a baseline."""
     if rules_path is None:
-        rules_path = Path("rules/intent.yaml")
+        rules_path = Path(__file__).resolve().parents[3] / "rules" / "intent.yaml"
     try:
         rules = load_intent_rules(rules_path)
     except FileNotFoundError:
@@ -128,7 +128,7 @@ _LEVEL_ORDER = {
 }
 
 
-def _as_list(value: object) -> list:
+def _as_list(value: object) -> list[Any]:
     """Model output is untrusted: only a real list is iterated as indicators."""
     return value if isinstance(value, list) else []
 

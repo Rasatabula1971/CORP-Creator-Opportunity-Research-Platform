@@ -35,7 +35,7 @@ from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceA
 
 logger = logging.getLogger(__name__)
 
-WIKI_API = "https://en.wikipedia.org/w/api.php"
+WIKI_API_TEMPLATE = "https://{language}.wikipedia.org/w/api.php"
 PAGEVIEWS_API = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article"
 DEFAULT_USER_AGENT = "CORP-research/0.1 (creator opportunity research; https://github.com)"
 
@@ -70,6 +70,10 @@ class WikipediaAdapter(SourceAdapter):
         self._client = client
         self._last_request_at: float | None = None
         self.request_count = 0
+
+    @property
+    def _wiki_api(self) -> str:
+        return WIKI_API_TEMPLATE.format(language=self._language)
 
     @property
     def platform(self) -> str:
@@ -116,7 +120,7 @@ class WikipediaAdapter(SourceAdapter):
             "srlimit": self._max_articles,
             "format": "json",
         }
-        data = await self._get_json(WIKI_API, params)
+        data = await self._get_json(self._wiki_api, params)
         return [
             r["title"]
             for r in data.get("query", {}).get("search", [])
@@ -126,10 +130,9 @@ class WikipediaAdapter(SourceAdapter):
         snippet = await self._get_extract(title)
         pageviews = await self._get_pageviews(title)
 
-        if not snippet and not pageviews:
-            return None
-
         daily = pageviews.get("daily", [])
+        if not snippet and not daily:
+            return None
         total = sum(d.get("views", 0) for d in daily)
         avg = total / max(len(daily), 1)
 
@@ -165,10 +168,10 @@ class WikipediaAdapter(SourceAdapter):
             "exsentences": "3",
             "format": "json",
         }
-        data = await self._get_json(WIKI_API, params)
+        data = await self._get_json(self._wiki_api, params)
         pages = data.get("query", {}).get("pages", {})
         for page in pages.values():
-            return page.get("extract", "")
+            return page.get("extract", "")  # type: ignore[no-any-return]
         return None
 
     async def _get_pageviews(self, title: str) -> dict[str, Any]:
@@ -226,4 +229,4 @@ class WikipediaAdapter(SourceAdapter):
         resp = await client.get(url, params=params)
         self.request_count += 1
         resp.raise_for_status()
-        return resp.json()
+        return resp.json()  # type: ignore[no-any-return]

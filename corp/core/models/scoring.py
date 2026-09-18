@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -24,7 +25,7 @@ class CreatorScore(TimestampMixin, Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     creator_id: Mapped[str] = mapped_column(ForeignKey("creators.id"), nullable=False)
-    component_scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    component_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     aggregate_score: Mapped[float] = mapped_column(Float, nullable=False)
     computed_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     confidence_band: Mapped[ConfidenceBand] = mapped_column(
@@ -36,7 +37,7 @@ class CreatorScore(TimestampMixin, Base):
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.
-    diagnostics: Mapped[dict | None] = mapped_column(JSONB)
+    diagnostics: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class OpportunityScore(TimestampMixin, Base):
@@ -52,7 +53,7 @@ class OpportunityScore(TimestampMixin, Base):
     problem_cluster_id: Mapped[str] = mapped_column(
         ForeignKey("problem_clusters.id"), nullable=False
     )
-    component_scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    component_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     aggregate_score: Mapped[float] = mapped_column(Float, nullable=False)
     computed_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     confidence_band: Mapped[ConfidenceBand] = mapped_column(
@@ -64,4 +65,4 @@ class OpportunityScore(TimestampMixin, Base):
     # Set when a newer scoring run replaces this row. Active rows have NULL here.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Unweighted context explaining the score (engagement, source mix, growth). Not hashed.
-    diagnostics: Mapped[dict | None] = mapped_column(JSONB)
+    diagnostics: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

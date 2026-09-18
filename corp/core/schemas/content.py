@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -34,7 +35,7 @@ class ContentItemResponse(BaseModel):
     like_count: int | None
     comment_count: int | None
     url: str | None
-    topics: list | None = None
+    topics: list[Any] | None = None
     created_at: datetime
 
 

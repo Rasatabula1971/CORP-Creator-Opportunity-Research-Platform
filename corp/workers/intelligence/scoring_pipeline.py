@@ -8,10 +8,12 @@ the score but never hashed.
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.competitive import Competitor
 from corp.core.models.content import AudienceInteraction, ContentItem
 from corp.core.models.creator import CreatorPlatformAccount, CreatorStatus
 from corp.core.models.evidence import ComplianceStatus, Evidence
@@ -25,7 +27,6 @@ from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.confidence import compute_confidence_band
-from corp.core.models.competitive import Competitor
 from corp.core.scoring.engine import (
     compute_hash,
     compute_score,
@@ -99,7 +100,9 @@ class ScoringPipeline:
         self._session = session
         self._rules = load_scoring_rules(rules_path)
         self._weights: dict[str, float] = self._rules.get("weights", {})
-        self._confidence_thresholds: dict | None = self._rules.get("confidence_thresholds")
+        self._confidence_thresholds: dict[str, Any] | None = self._rules.get(
+            "confidence_thresholds",
+        )
 
     async def run(self, creator_id: str) -> ResearchRun:
         run = await start_run(
@@ -229,7 +232,7 @@ class ScoringPipeline:
                 rates[platform] = round(((likes or 0) + (comments or 0)) / views, 4)
         return rates
 
-    async def _follower_growth(self, accounts) -> float | None:
+    async def _follower_growth(self, accounts: Any) -> float | None:
         growths: list[float] = []
         for account in accounts:
             rows = (
@@ -347,7 +350,7 @@ class ScoringPipeline:
         )
         return result.scalars().first()
 
-    async def _get_competitor_strengths(self, cluster_id: str) -> list:
+    async def _get_competitor_strengths(self, cluster_id: str) -> list[Any]:
         """Load the strength of every Competitor row known for this cluster.
 
         Independent from the commerce-overlap signal above: this reads the
