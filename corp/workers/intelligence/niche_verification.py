@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -104,7 +104,9 @@ class NicheVerifier:
 
                 if result.passed:
                     niche.lifecycle_status = NicheLifecycleStatus.ACTIVE
-                    niche.last_researched_at = datetime.now(UTC)
+                    now = datetime.now(UTC)
+                    niche.last_researched_at = now
+                    niche.next_recheck_at = now + timedelta(days=90)
                     await self._update_campaign_niche(
                         campaign_id, niche.id, CampaignNicheStatus.VERIFIED
                     )

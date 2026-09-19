@@ -32,6 +32,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -63,6 +64,14 @@ class NicheCandidate(TimestampMixin, Base):
         Index("ix_niche_candidates_status", "status"),
         Index("ix_niche_candidates_superseded_at", "superseded_at"),
         Index("ix_niche_candidates_parent_candidate_id", "parent_candidate_id"),
+        Index(
+            "uq_niche_candidates_active_parent_depth_label",
+            "parent_candidate_id",
+            "depth",
+            text("lower(label)"),
+            unique=True,
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
