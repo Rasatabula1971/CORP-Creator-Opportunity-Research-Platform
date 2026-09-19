@@ -41,6 +41,7 @@ from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObserv
 from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
 from corp.database import get_session
+from corp.workers.handoff.corp2_export import build_handoff_package
 from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.factory import ProviderConfigError, build_provider
 from corp.workers.providers.fair import FairProvider
@@ -572,9 +573,6 @@ async def record_dossier_decision(
         dossier.status = DossierStatus.WATCHING
     elif body.decision == DecisionType.APPROVE:
         dossier.status = DossierStatus.APPROVED
-        # T9 (CORP2 handoff export, not yet built) reacts to this status --
-        # CORP1 never reaches into CORP2 directly, it only produces a
-        # package CORP2 pulls once T9 exists. No call out from here.
     elif body.decision == DecisionType.RESEARCH_MORE:
         assert campaign_niche is not None  # validated above
         dossier.status = DossierStatus.RESEARCH_MORE_IN_PROGRESS
@@ -598,3 +596,19 @@ async def record_dossier_decision(
         dossier_status=dossier.status,
         job_id=job_id,
     )
+
+
+@router.get("/dossiers/{dossier_id}/handoff")
+async def get_handoff_package(
+    dossier_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Return the CORP2 handoff package for an approved dossier."""
+    dossier = await session.get(Dossier, dossier_id)
+    if dossier is None:
+        raise HTTPException(status_code=404, detail="Dossier not found")
+    try:
+        package = await build_handoff_package(session, dossier_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return package.to_dict()
