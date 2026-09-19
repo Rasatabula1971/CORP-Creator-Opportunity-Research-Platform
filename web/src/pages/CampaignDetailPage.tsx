@@ -9,7 +9,7 @@ import {
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
 
-const PIPELINE_STAGES = [
+const PIPELINE_STAGES: Array<{ key: string; label: string; needsInput?: boolean }> = [
   { key: "discover", label: "Discover Niches", needsInput: true },
   { key: "candidates", label: "Generate Candidates" },
   { key: "canonicalize", label: "Canonicalize" },
@@ -19,7 +19,7 @@ const PIPELINE_STAGES = [
   { key: "select", label: "Select" },
   { key: "onboard", label: "Onboard Creators" },
   { key: "research-campaign", label: "Research Campaign" },
-] as const;
+];
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();

@@ -54,11 +54,12 @@ def get_score_band(aggregate: float, rules: dict[str, Any]) -> str:
 # ── Component score calculators ──────────────────────────────────────
 
 
+# Mirrors the `weight` field of each level in rules/intent.yaml.
 _LEVEL_NUMERIC = {
-    SignalLevel.WEAK: 0.15,
-    SignalLevel.MODERATE: 0.45,
+    SignalLevel.WEAK: 0.25,
+    SignalLevel.MODERATE: 0.50,
     SignalLevel.STRONG: 0.75,
-    SignalLevel.VALIDATION: 0.95,
+    SignalLevel.VALIDATION: 1.0,
 }
 
 
@@ -73,7 +74,7 @@ def score_recency_trend(recency_score: float) -> float:
 
 
 def score_commercial_intent(level: SignalLevel, confidence: float) -> float:
-    base = _LEVEL_NUMERIC.get(level, 0.15)
+    base = _LEVEL_NUMERIC.get(level, 0.25)
     return base * max(0.0, min(1.0, confidence))
 
 
