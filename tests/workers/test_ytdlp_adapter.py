@@ -147,6 +147,35 @@ def test_profile_url(platform, ident, expected):
     assert a.profile_url(ident) == expected
 
 
+@pytest.mark.parametrize(
+    "platform, url",
+    [
+        ("youtube", "http://169.254.169.254/latest/meta-data/"),
+        ("youtube", "https://internal.example/admin"),
+        ("youtube", "https://tiktok.com/@dancer"),  # right shape, wrong platform
+        ("tiktok", "https://www.youtube.com/@maker/videos"),
+        ("tiktok", "http://localhost:8080/"),
+    ],
+)
+def test_profile_url_rejects_urls_outside_platform_domain(platform, url):
+    a = YtDlpAdapter(platform=platform, extractor_factory=lambda o: None)
+    with pytest.raises(ValueError):
+        a.profile_url(url)
+
+
+@pytest.mark.parametrize(
+    "platform, url",
+    [
+        ("youtube", "https://youtu.be/abc123"),
+        ("youtube", "https://m.youtube.com/@maker"),
+        ("tiktok", "https://vm.tiktok.com/@dancer"),
+    ],
+)
+def test_profile_url_allows_platform_subdomains_and_short_domains(platform, url):
+    a = YtDlpAdapter(platform=platform, extractor_factory=lambda o: None)
+    assert a.profile_url(url) == url
+
+
 async def test_collect_profile_videos_and_flat_then_full_opts():
     calls = []
     a = _adapter({CHANNEL: LISTING, VID1: INFO1, VID2: INFO2}, calls)
