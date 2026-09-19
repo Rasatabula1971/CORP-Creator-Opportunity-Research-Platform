@@ -176,6 +176,61 @@ async def test_collect_creates_evidence_chain(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_collect_matches_question_and_review_interactions_by_parent_id(
+    clean_db: AsyncSession,
+):
+    """_INTERACTION_TYPE_MAP declares "question" and "review" as supported
+    interaction types alongside "comment" — a top-level one with a matching
+    parent_id must resolve to its ContentItem, not be silently orphaned."""
+    session = clean_db
+    creator = await _create_creator(session)
+    ts = datetime(2026, 1, 15, 10, 0, tzinfo=UTC)
+    items = [
+        NormalizedContent(
+            source_platform="youtube",
+            content_type="video",
+            external_id="vid_001",
+            text="Test Video Title",
+            author="TestChannel",
+            timestamp=ts,
+            access_method=AccessMethod.OFFICIAL,
+            compliance_status=ComplianceStatus.COMPLIANT,
+            metadata={},
+        ),
+        NormalizedContent(
+            source_platform="youtube",
+            content_type="question",
+            external_id="q_001",
+            text="What mic do you use?",
+            timestamp=ts,
+            parent_id="vid_001",
+            access_method=AccessMethod.OFFICIAL,
+            compliance_status=ComplianceStatus.COMPLIANT,
+        ),
+        NormalizedContent(
+            source_platform="youtube",
+            content_type="review",
+            external_id="rv_001",
+            text="Solid product, five stars",
+            timestamp=ts,
+            parent_id="vid_001",
+            access_method=AccessMethod.OFFICIAL,
+            compliance_status=ComplianceStatus.COMPLIANT,
+        ),
+    ]
+    collector = AcquisitionCollector(FakeAdapter(items), session)
+
+    run = await collector.collect_creator_data("@test", creator.id)
+
+    assert run.stats["extra"]["orphaned_interactions"] == 0
+    assert run.stats["extra"]["interactions"] == 2
+
+    result = await session.execute(select(AudienceInteraction))
+    interactions = {i.external_id: i for i in result.scalars().all()}
+    assert set(interactions) == {"q_001", "rv_001"}
+
+
+@pytest.mark.asyncio
 async def test_collect_idempotent(clean_db: AsyncSession):
     """Running collection twice should not create duplicate ContentItems."""
     session = clean_db
