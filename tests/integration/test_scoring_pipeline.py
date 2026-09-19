@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.creator_niche import CreatorNiche
+from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -269,6 +270,89 @@ async def test_scoring_pipeline_competition_saturation_reflects_competitors(
     # `competitor_saturation` (not `competition_saturation`, which reads
     # commerce-overlap from creator-web pages instead).
     assert opp.component_scores["competitor_saturation"] < 0.5
+
+
+@pytest.mark.asyncio
+async def test_t21_evidence_type_counts_flow_from_niche_runs(clean_db: AsyncSession):
+    """T21: niche-discovery evidence with evidence_type feeds the four new components."""
+    session = clean_db
+    from corp.core.models.niche import Niche
+
+    niche = Niche(canonical_name="test-niche-scoring")
+    session.add(niche)
+    await session.flush()
+
+    creator, cluster = await _seed(session)
+
+    cn = CreatorNiche(creator_id=creator.id, niche_id=niche.id)
+    session.add(cn)
+    await session.flush()
+
+    niche_run = ResearchRun(
+        niche_id=niche.id,
+        status="completed",
+        run_type="niche_discovery",
+        config_snapshot={},
+        prompt_versions={},
+        model_versions={},
+    )
+    session.add(niche_run)
+    await session.flush()
+
+    for et, count in [
+        (EvidenceType.TREND, 5),
+        (EvidenceType.SEARCH_INTENT, 3),
+        (EvidenceType.TRANSACTION, 4),
+        (EvidenceType.DISSATISFACTION, 6),
+        (EvidenceType.SOLUTION, 2),
+    ]:
+        for i in range(count):
+            ev = Evidence(
+                source_type="adapter",
+                source_id=f"{et.value}_{i}",
+                source_platform="test",
+                raw_text=f"{et.value} evidence #{i}",
+                access_method=AccessMethod.OPEN,
+                compliance_status=ComplianceStatus.COMPLIANT,
+                research_run_id=niche_run.id,
+                evidence_type=et,
+            )
+            session.add(ev)
+    await session.flush()
+
+    pipeline = ScoringPipeline(session)
+    await pipeline.run(creator.id)
+
+    result = await session.execute(
+        select(OpportunityScore).where(OpportunityScore.problem_cluster_id == cluster.id)
+    )
+    opp = result.scalar_one()
+
+    assert len(opp.component_scores) == 14
+    assert opp.component_scores["external_demand_strength"] > 0.0
+    assert opp.component_scores["purchase_intent"] > 0.0
+    assert opp.component_scores["audience_dissatisfaction"] > 0.0
+    assert opp.component_scores["solution_saturation"] != 0.5
+
+
+@pytest.mark.asyncio
+async def test_t21_no_niche_evidence_gives_neutral_components(clean_db: AsyncSession):
+    """Without niche-discovery evidence, the four T7 components return neutral/zero."""
+    session = clean_db
+    creator, cluster = await _seed(session)
+    pipeline = ScoringPipeline(session)
+
+    await pipeline.run(creator.id)
+
+    result = await session.execute(
+        select(OpportunityScore).where(OpportunityScore.problem_cluster_id == cluster.id)
+    )
+    opp = result.scalar_one()
+
+    assert opp.component_scores["external_demand_strength"] == 0.0
+    assert opp.component_scores["solution_saturation"] == 0.5
+    assert opp.component_scores["purchase_intent"] == 0.0
+    assert opp.component_scores["audience_dissatisfaction"] == 0.0
 
 
 @pytest.mark.asyncio

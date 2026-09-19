@@ -1,4 +1,4 @@
-version: "2.2.0"
+version: "2.3.0"
 
 # scoring_v2 — fourteen components, weights sum to 1.0.
 # Frequency and commercial intent stay the largest levers. The three
@@ -8,14 +8,11 @@ version: "2.2.0"
 # (marketplace/app-store/Product-Hunt listings) respectively. Whichever
 # wasn't researched returns a neutral 0.5.
 #
-# CORP1 Stage 5, T7 added the last four (external_demand_strength,
-# solution_saturation, purchase_intent, audience_dissatisfaction) —
-# capability-type-driven components (corp.core.scoring.engine, T1's
-# EvidenceType), not yet wired into the live scoring pipeline (planned
-# for Phase 3.6, once every adapter in the CORP1 spec's capability table
-# exists to feed them). Until then a component_scores dict that only
-# supplies the original ten still normalizes correctly — compute_score
-# divides by the weight actually present, not the full weights dict.
+# T7 added the last four (external_demand_strength, solution_saturation,
+# purchase_intent, audience_dissatisfaction) as pure functions. T21 wired
+# them into the live pipeline by querying Evidence.evidence_type counts
+# from the creator's niche-discovery runs. All fourteen components are
+# now computed and weighted on every scoring pass.
 #
 # The original ten weights were scaled by 0.76 (uniformly, preserving
 # their relative proportions exactly) to make room for the new 0.24 —

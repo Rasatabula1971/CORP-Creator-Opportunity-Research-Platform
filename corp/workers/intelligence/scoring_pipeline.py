@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from corp.core.models.competitive import Competitor
 from corp.core.models.content import AudienceInteraction, ContentItem
 from corp.core.models.creator import CreatorPlatformAccount, CreatorStatus
-from corp.core.models.evidence import ComplianceStatus, Evidence
+from corp.core.models.creator_niche import CreatorNiche
+from corp.core.models.evidence import ComplianceStatus, Evidence, EvidenceType
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -32,6 +33,7 @@ from corp.core.scoring.engine import (
     compute_score,
     growth_ratio,
     load_scoring_rules,
+    score_audience_dissatisfaction,
     score_audience_problem_frequency,
     score_commercial_intent,
     score_competition_saturation,
@@ -41,7 +43,10 @@ from corp.core.scoring.engine import (
     score_cross_platform_consistency,
     score_engagement_velocity,
     score_evidence_depth,
+    score_external_demand_strength,
+    score_purchase_intent,
     score_recency_trend,
+    score_solution_saturation,
     weighted_evidence_count,
 )
 from corp.core.scoring.text import containment, jaccard, tokens
@@ -75,6 +80,7 @@ class CreatorContext:
     monetisation: dict[str, int]
     engagement_rate_by_platform: dict[str, float]
     follower_growth: float | None
+    evidence_type_counts: dict[str, int]
 
 
 @dataclass
@@ -202,6 +208,24 @@ class ScoringPipeline:
             ).all()
             commerce_tokens = [tokens(raw) for _, raw in texts]
 
+        niche_ids = select(CreatorNiche.niche_id).where(
+            CreatorNiche.creator_id == creator_id,
+        )
+        niche_runs = select(ResearchRun.id).where(
+            ResearchRun.niche_id.in_(niche_ids),
+        )
+        type_rows = (
+            await self._session.execute(
+                select(Evidence.evidence_type, func.count())
+                .where(
+                    Evidence.research_run_id.in_(niche_runs),
+                    Evidence.evidence_type.isnot(None),
+                )
+                .group_by(Evidence.evidence_type)
+            )
+        ).all()
+        evidence_type_counts = {et.value: count for et, count in type_rows}
+
         return CreatorContext(
             subscriber_count=subscriber_count,
             audience_platforms=audience_platforms,
@@ -211,6 +235,7 @@ class ScoringPipeline:
             monetisation=dict(monetisation),
             engagement_rate_by_platform=await self._engagement_rates(creator_id),
             follower_growth=await self._follower_growth(accounts),
+            evidence_type_counts=evidence_type_counts,
         )
 
     async def _engagement_rates(self, creator_id: str) -> dict[str, float]:
@@ -422,6 +447,19 @@ class ScoringPipeline:
             "creator_content_alignment": score_creator_content_alignment(matching_creator),
             "cross_platform_consistency": score_cross_platform_consistency(
                 platforms_with, len(creator.audience_platforms)
+            ),
+            "external_demand_strength": score_external_demand_strength(
+                creator.evidence_type_counts.get(EvidenceType.TREND.value, 0),
+                creator.evidence_type_counts.get(EvidenceType.SEARCH_INTENT.value, 0),
+            ),
+            "solution_saturation": score_solution_saturation(
+                creator.evidence_type_counts.get(EvidenceType.SOLUTION.value, 0),
+            ),
+            "purchase_intent": score_purchase_intent(
+                creator.evidence_type_counts.get(EvidenceType.TRANSACTION.value, 0),
+            ),
+            "audience_dissatisfaction": score_audience_dissatisfaction(
+                creator.evidence_type_counts.get(EvidenceType.DISSATISFACTION.value, 0),
             ),
         }
         components = {k: round(v, 6) for k, v in components.items()}
