@@ -218,6 +218,7 @@ class DossierGenerator:
                 ProblemClusterMember.observation_id == ProblemObservation.id,
             )
             .where(ProblemClusterMember.cluster_id == cluster_id)
+            .order_by(ProblemClusterMember.similarity_score.desc())
             .limit(10)
         )
         return list(result.scalars().all())

@@ -219,3 +219,79 @@ async def test_dossier_invalid_creator(clean_db: AsyncSession):
 
     with pytest.raises(ValueError, match="Creator not found"):
         await gen.generate("nonexistent-id")
+
+
+@pytest.mark.asyncio
+async def test_load_observations_orders_by_similarity_score(clean_db: AsyncSession):
+    """_load_observations caps at 10 rows with no ORDER BY was undefined which
+    10 of N came back — the "representative" observations shown in a
+    decision-ready dossier could change between identical calls purely from
+    physical row order. Must return the top 10 by similarity_score."""
+    session = clean_db
+    creator = Creator(name="OrderingTest", niche="test", discovery_source="manual")
+    session.add(creator)
+    await session.flush()
+
+    run = ResearchRun(
+        creator_id=creator.id,
+        status="completed",
+        config_snapshot={},
+        prompt_versions={},
+        model_versions={},
+    )
+    session.add(run)
+    await session.flush()
+
+    cluster = ProblemCluster(
+        label="Ordering Cluster",
+        frequency=15,
+        recency_score=0.5,
+        evidence_strength=0.5,
+        model_version="test",
+    )
+    session.add(cluster)
+    await session.flush()
+
+    # 15 observations with distinct, shuffled similarity scores — the
+    # returned 10 must be exactly the 10 highest, highest first.
+    scores = [0.3, 0.91, 0.5, 0.99, 0.1, 0.6, 0.75, 0.2, 0.95, 0.4, 0.65, 0.8, 0.55, 0.05, 0.85]
+    for i, score in enumerate(scores):
+        ev = Evidence(
+            source_type="comment",
+            source_id=f"order_cmt_{i}",
+            source_platform="youtube",
+            raw_text=f"observation {i}",
+            access_method=AccessMethod.OFFICIAL,
+            compliance_status=ComplianceStatus.COMPLIANT,
+            research_run_id=run.id,
+        )
+        session.add(ev)
+        await session.flush()
+
+        obs = ProblemObservation(
+            evidence_id=ev.id,
+            text=f"observation {i}",
+            category="question",
+            is_inferred=False,
+            extraction_prompt_version="extract_v1",
+            model_version="test",
+            confidence=0.5,
+        )
+        session.add(obs)
+        await session.flush()
+
+        session.add(ProblemClusterMember(
+            cluster_id=cluster.id, observation_id=obs.id, similarity_score=score,
+        ))
+    await session.flush()
+
+    gen = DossierGenerator(session)
+    observations = await gen._load_observations(cluster.id)
+
+    assert len(observations) == 10
+    top_10_expected_texts = {
+        f"observation {i}" for i, _ in sorted(
+            enumerate(scores), key=lambda pair: pair[1], reverse=True
+        )[:10]
+    }
+    assert {o.text for o in observations} == top_10_expected_texts
