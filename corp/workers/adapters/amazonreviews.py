@@ -46,6 +46,11 @@ DEFAULT_USER_AGENT = (
 
 STAR_FILTER = "1,2,3"
 
+# Amazon caps how far its review pagination actually goes for anonymous
+# access; past that it has been observed to repeat the last valid page
+# instead of returning empty, which would otherwise loop forever below.
+MAX_REVIEW_PAGES = 10
+
 
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
@@ -157,7 +162,7 @@ class AmazonReviewAdapter(SourceAdapter):
         results: list[NormalizedContent] = []
         page = 1
 
-        while len(results) < limit:
+        while len(results) < limit and page <= MAX_REVIEW_PAGES:
             html = await self._get_page(
                 f"/product-reviews/{asin}",
                 params={
