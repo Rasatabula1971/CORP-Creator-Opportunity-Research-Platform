@@ -1,11 +1,11 @@
 """Defensive coercion of untrusted LLM JSON values.
 
-Model output is not shape-guaranteed for providers that only see the prompt:
-Gemini and Groq drop the JSON schema (registry.py / groq.py `del schema`), so a
-field declared a number can come back a string ("high"), null, or missing, and a
-boolean can come back the string "false" (which is truthy). These helpers never
-raise — a bad value falls back to the given default — so one malformed field in
-one comment can't abort a whole pipeline run.
+Model output is not shape-guaranteed for providers that rely on JSON mode
+without native schema enforcement: Gemini and Groq validate post-hoc but a
+field declared a number can still come back a string ("high"), null, or
+missing, and a boolean can come back the string "false" (which is truthy).
+These helpers never raise — a bad value falls back to the given default — so
+one malformed field in one comment can't abort a whole pipeline run.
 """
 
 from typing import Any

@@ -31,11 +31,16 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    AdapterFamily,
+    NormalizedContent,
+    SourceAdapter,
+    check_response_size,
+    wait_with_retry_after,
+)
 from corp.workers.adapters.ids import stable_id
 from corp.workers.providers.capabilities import SolutionProvider, TransactionProvider
 
@@ -251,7 +256,7 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=3, min=3, max=30),
+        wait=wait_with_retry_after(multiplier=3, minimum=3, maximum=30),
         reraise=True,
     )
     async def _get_page(self, url: str, params: dict[str, str] | None = None) -> str:
@@ -267,7 +272,7 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=3, min=3, max=30),
+        wait=wait_with_retry_after(multiplier=3, minimum=3, maximum=30),
         reraise=True,
     )
     async def _get_json(
@@ -283,6 +288,7 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
         if resp.status_code == 429:
             logger.warning("Marketplace rate limit hit on %s", url)
         resp.raise_for_status()
+        check_response_size(resp, "marketplace")
         return resp.json()  # type: ignore[no-any-return]
 
 

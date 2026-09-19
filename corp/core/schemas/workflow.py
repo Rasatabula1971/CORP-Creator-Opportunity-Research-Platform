@@ -7,6 +7,8 @@ from corp.core.models.workflow import DecisionType, Gate
 
 
 class DecisionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     opportunity_score_id: str | None = None
     decision: DecisionType
     rationale: str | None = None

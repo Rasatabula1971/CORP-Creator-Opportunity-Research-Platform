@@ -13,10 +13,7 @@ from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.dossier import Dossier
 from corp.core.models.evidence import Evidence
-from corp.core.models.intelligence import (
-    ProblemClusterMember,
-    ProblemObservation,
-)
+from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
@@ -86,6 +83,8 @@ async def get_campaign(
 async def list_campaign_niches(
     campaign_id: str,
     status: CampaignNicheStatus | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CampaignNicheDetailResponse]:
     if await session.get(Campaign, campaign_id) is None:
@@ -99,7 +98,7 @@ async def list_campaign_niches(
     if status is not None:
         query = query.where(CampaignNiche.status == status)
     query = query.order_by(CampaignNiche.qualification_score.desc().nulls_last())
-    result = await session.execute(query)
+    result = await session.execute(query.offset(offset).limit(limit))
     return [CampaignNicheDetailResponse.model_validate(cn) for cn in result.scalars().all()]
 
 
@@ -377,6 +376,8 @@ async def get_opportunities(
 )
 async def get_competitors(
     creator_id: str,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CompetitorResponse]:
     creator = await session.get(Creator, creator_id)
@@ -388,7 +389,10 @@ async def get_competitors(
         OpportunityScore.superseded_at.is_(None),
     )
     result = await session.execute(
-        select(Competitor).where(Competitor.problem_cluster_id.in_(cluster_ids))
+        select(Competitor)
+        .where(Competitor.problem_cluster_id.in_(cluster_ids))
+        .offset(offset)
+        .limit(limit)
     )
     return [CompetitorResponse.model_validate(c) for c in result.scalars().all()]
 
@@ -412,10 +416,6 @@ async def create_decision(
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    # InvalidTransitionError is left to propagate: the app-level handler
-    # registered in errors.py returns 409 with the dedicated "invalid_transition"
-    # code, which callers branch on — catching it here and re-raising a plain
-    # HTTPException would fall back to the generic "conflict" code instead.
     decision = await record_gate_a_decision(
         session=session,
         creator=creator,
@@ -483,13 +483,9 @@ async def get_signals(
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    cluster_ids_subq = (
-        select(ProblemClusterMember.cluster_id)
-        .join(ProblemObservation, ProblemClusterMember.observation_id == ProblemObservation.id)
-        .join(Evidence, ProblemObservation.evidence_id == Evidence.id)
-        .join(ResearchRun, Evidence.research_run_id == ResearchRun.id)
-        .where(ResearchRun.creator_id == creator_id)
-        .distinct()
+    cluster_ids_subq = select(OpportunityScore.problem_cluster_id).where(
+        OpportunityScore.creator_id == creator_id,
+        OpportunityScore.superseded_at.is_(None),
     )
     result = await session.execute(
         select(CommercialSignal)

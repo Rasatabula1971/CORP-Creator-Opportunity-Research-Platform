@@ -25,11 +25,15 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    NormalizedContent,
+    SourceAdapter,
+    check_response_size,
+    wait_with_retry_after,
+)
 from corp.workers.providers.capabilities import DissatisfactionProvider, ProblemProvider
 
 logger = logging.getLogger(__name__)
@@ -252,7 +256,7 @@ class RedditAdapter(SourceAdapter, ProblemProvider, DissatisfactionProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(4),
-        wait=wait_exponential(multiplier=5, min=5, max=60),
+        wait=wait_with_retry_after(multiplier=5, minimum=5, maximum=60),
         reraise=True,
     )
     async def _get_json(
@@ -266,6 +270,7 @@ class RedditAdapter(SourceAdapter, ProblemProvider, DissatisfactionProvider):
             retry_after = resp.headers.get("Retry-After")
             logger.warning("Reddit rate limit hit on %s (Retry-After=%s)", path, retry_after)
         resp.raise_for_status()
+        check_response_size(resp, "reddit")
         body: dict[str, Any] | list[Any] = resp.json()
         return body
 

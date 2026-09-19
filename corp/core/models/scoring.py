@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,12 @@ class CreatorScore(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_creator_scores_creator_id", "creator_id"),
         Index("ix_creator_scores_active", "superseded_at"),
+        Index(
+            "uq_creator_scores_active_creator",
+            "creator_id",
+            unique=True,
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -46,6 +52,13 @@ class OpportunityScore(TimestampMixin, Base):
         Index("ix_opp_scores_creator_id", "creator_id"),
         Index("ix_opp_scores_cluster_id", "problem_cluster_id"),
         Index("ix_opportunity_scores_active", "superseded_at"),
+        Index(
+            "uq_opp_scores_active_creator_cluster",
+            "creator_id",
+            "problem_cluster_id",
+            unique=True,
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)

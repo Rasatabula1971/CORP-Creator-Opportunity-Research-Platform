@@ -6,6 +6,8 @@ from corp.core.models.creator import CreatorStatus
 
 
 class CreatorCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     niche: str | None = None
     discovery_source: str | None = None
@@ -13,6 +15,8 @@ class CreatorCreate(BaseModel):
 
 
 class PlatformAccountCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     platform: str
     handle: str
     external_id: str | None = None

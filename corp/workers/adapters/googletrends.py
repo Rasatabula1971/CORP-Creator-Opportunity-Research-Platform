@@ -32,11 +32,15 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    AdapterFamily,
+    NormalizedContent,
+    SourceAdapter,
+    wait_with_retry_after,
+)
 from corp.workers.adapters.ids import stable_id
 from corp.workers.providers.capabilities import TrendProvider
 
@@ -220,7 +224,7 @@ class GoogleTrendsAdapter(SourceAdapter, TrendProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        wait=wait_with_retry_after(multiplier=2, minimum=2, maximum=30),
         reraise=True,
     )
     async def _get_page(

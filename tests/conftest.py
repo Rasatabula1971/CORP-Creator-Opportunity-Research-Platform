@@ -19,6 +19,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from corp.core.models.base import Base
+
 TEST_DB_URL = os.environ["DATABASE_URL"]
 
 engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
@@ -35,17 +37,11 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 async def clean_db():
     """Truncate all tables before a test, then yield a fresh session."""
+    import corp.core.models  # noqa: F401 — ensure all tables are registered
+
+    table_names = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
     async with engine.begin() as conn:
-        await conn.execute(text(
-            "TRUNCATE TABLE niche_candidate_evidence, niche_candidates, "
-            "research_queries, creator_niches, campaign_niches, campaigns, "
-            "niche_aliases, niches, "
-            "problem_cluster_members, commercial_signals, "
-            "human_decisions, opportunity_scores, creator_scores, "
-            "problem_observations, research_runs, audience_interactions, "
-            "content_items, creator_platform_accounts, problem_clusters, "
-            "competitors, evidence, creators CASCADE"
-        ))
+        await conn.execute(text(f"TRUNCATE TABLE {table_names} CASCADE"))
 
     async with async_test_session() as session:
         yield session
@@ -62,4 +58,4 @@ def pytest_sessionfinish(session, exitstatus):
     def _force_exit():
         os._exit(exitstatus)
 
-    threading.Timer(3.0, _force_exit).start()
+    threading.Timer(5.0, _force_exit).start()

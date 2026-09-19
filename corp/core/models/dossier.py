@@ -14,7 +14,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +45,13 @@ class Dossier(TimestampMixin, Base):
         Index("ix_dossiers_niche_id", "niche_id"),
         Index("ix_dossiers_status", "status"),
         Index("ix_dossiers_superseded_at", "superseded_at"),
+        Index(
+            "uq_dossiers_active_creator_niche",
+            "creator_id",
+            "niche_id",
+            unique=True,
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)

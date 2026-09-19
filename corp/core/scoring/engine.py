@@ -26,7 +26,7 @@ def load_scoring_rules(rules_path: str) -> dict[str, Any]:
 def compute_score(
     component_scores: dict[str, float], weights: dict[str, float]
 ) -> float:
-    total_weight = sum(weights.get(k, 0.0) for k in component_scores)
+    total_weight = sum(weights.values())
     if total_weight == 0:
         return 0.0
     return sum(
@@ -91,9 +91,11 @@ def score_evidence_depth(observation_count: int, cap: int = 50) -> float:
 
 
 def score_creator_reach(subscriber_count: int | None) -> float:
-    if not subscriber_count or subscriber_count <= 0:
+    if subscriber_count is None:
         return 0.0
-    return min(1.0, math.log10(max(1, subscriber_count)) / 7.0)
+    if subscriber_count <= 0:
+        return 0.0
+    return min(1.0, math.log10(subscriber_count) / 7.0)
 
 
 # ── v2 components (scoring_v2) ───────────────────────────────────────
@@ -139,7 +141,8 @@ def score_competition_saturation(
     if commerce_overlap is None:
         return 0.5
     overlap = max(0.0, min(1.0, commerce_overlap))
-    penalty = 0.7 * overlap + 0.05 * max(0, commerce_signal_count)
+    signal_penalty = math.log1p(max(0, commerce_signal_count)) / math.log1p(40)
+    penalty = 0.7 * overlap + 0.3 * signal_penalty
     return max(0.0, min(1.0, 1.0 - penalty))
 
 
@@ -233,7 +236,7 @@ def score_solution_saturation(solution_evidence_count: int, cap: int = 20) -> fl
     evidence of an open market."""
     if solution_evidence_count <= 0:
         return 0.5
-    saturation = min(1.0, solution_evidence_count / cap)
+    saturation = min(1.0, math.log1p(solution_evidence_count) / math.log1p(cap))
     return round(1.0 - saturation, 4)
 
 

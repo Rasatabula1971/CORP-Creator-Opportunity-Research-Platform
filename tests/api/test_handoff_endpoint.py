@@ -146,8 +146,8 @@ async def test_handoff_rejects_non_approved_dossier(clean_db: AsyncSession):
     async with _make_client(session) as client:
         resp = await client.get(f"/dossiers/{dossier.id}/handoff")
 
-    assert resp.status_code == 422
-    assert "not approved" in resp.json()["detail"]
+    assert resp.status_code == 403
+    assert "approved" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

@@ -59,9 +59,7 @@ def test_invalid_decision_value_is_422():
     assert resp.status_code == 422
 
 
-def test_extra_body_fields_ignored():
-    # Old clients may still send creator_id/gate; they're ignored, not a 400.
-    # With them ignored, the route proceeds to the creator lookup (404 here).
+def test_extra_body_fields_rejected():
     session = MagicMock()
     session.get = AsyncMock(return_value=None)
     client = _client(session)
@@ -69,7 +67,7 @@ def test_extra_body_fields_ignored():
         "/creators/abc/decisions",
         json={"creator_id": "different", "gate": "gate_b", "decision": "approve"},
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 422
 
 
 def test_invalid_transition_returns_dedicated_error_code():
@@ -98,7 +96,7 @@ def test_invalid_transition_returns_dedicated_error_code():
     ):
         resp = client.post(
             "/creators/abc/decisions",
-            json={"creator_id": "abc", "gate": "gate_a", "decision": "approve"},
+            json={"decision": "approve"},
         )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "invalid_transition"

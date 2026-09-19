@@ -23,11 +23,16 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    AdapterFamily,
+    NormalizedContent,
+    SourceAdapter,
+    check_response_size,
+    wait_with_retry_after,
+)
 from corp.workers.providers.capabilities import ProblemProvider
 
 logger = logging.getLogger(__name__)
@@ -213,7 +218,7 @@ class HackerNewsAdapter(SourceAdapter, ProblemProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(4),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        wait=wait_with_retry_after(multiplier=2, minimum=2, maximum=30),
         reraise=True,
     )
     async def _get_json(
@@ -224,6 +229,7 @@ class HackerNewsAdapter(SourceAdapter, ProblemProvider):
         resp = await client.get(path, params=params)
         self.request_count += 1
         resp.raise_for_status()
+        check_response_size(resp, "hackernews")
         return resp.json()  # type: ignore[no-any-return]
 
 

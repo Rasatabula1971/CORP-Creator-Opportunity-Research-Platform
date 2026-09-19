@@ -249,7 +249,7 @@ async def test_solution_saturation_no_evidence_is_neutral():
 
 async def test_solution_saturation_few_solutions_high_score():
     s = score_solution_saturation(1, cap=20)
-    assert 0.9 < s < 1.0
+    assert 0.7 < s < 0.85
 
 
 async def test_solution_saturation_at_cap_fully_saturated():

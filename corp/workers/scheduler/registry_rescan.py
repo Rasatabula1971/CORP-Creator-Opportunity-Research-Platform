@@ -96,6 +96,14 @@ async def rescan_watched_dossiers(
     due = await find_due_watched_dossiers(session, now=now)
     generator = DossierGenerator(session, rules_path=scoring_rules_path)
 
+    # Advance next_recheck_at optimistically so a concurrent tick does not
+    # pick up the same dossiers while this one is still processing.
+    for dossier in due:
+        niche = await session.get(Niche, dossier.niche_id)
+        if niche is not None:
+            niche.next_recheck_at = now + timedelta(days=recheck_days)
+    await session.flush()
+
     rescored = 0
     failed = 0
     for dossier in due:
@@ -104,7 +112,6 @@ async def rescan_watched_dossiers(
             niche = await session.get(Niche, dossier.niche_id)
             if niche is not None:
                 niche.last_researched_at = now
-                niche.next_recheck_at = now + timedelta(days=recheck_days)
         except Exception as exc:  # noqa: BLE001 -- one bad dossier must not block the rest
             logger.warning("Registry re-scan failed for dossier %s: %s", dossier.id, exc)
             failed += 1
@@ -122,6 +129,8 @@ class RegistryRescanScheduler:
     committing. Call start() once (e.g. from application startup, when
     something wires that in) and stop() on shutdown."""
 
+    MAX_CONSECUTIVE_FAILURES = 5
+
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
@@ -138,6 +147,7 @@ class RegistryRescanScheduler:
         self._recheck_days = DiscoveryConfig.from_rules(niche_rules_path).recheck_days
         self._interval_seconds = interval_seconds
         self._task: asyncio.Task[None] | None = None
+        self._consecutive_failures = 0
 
     def start(self) -> None:
         if self._task is not None:
@@ -155,9 +165,15 @@ class RegistryRescanScheduler:
         self._task = None
 
     async def _run_forever(self) -> None:
-        while True:
+        while self._consecutive_failures < self.MAX_CONSECUTIVE_FAILURES:
             await self._tick()
-            await asyncio.sleep(self._interval_seconds)
+            delay = self._interval_seconds
+            if self._consecutive_failures > 0:
+                delay = min(
+                    self._interval_seconds * (2 ** self._consecutive_failures),
+                    self._interval_seconds * 32,
+                )
+            await asyncio.sleep(delay)
 
     async def _tick(self) -> None:
         try:
@@ -173,5 +189,16 @@ class RegistryRescanScheduler:
                         stats.rescored,
                         stats.failed,
                     )
+            self._consecutive_failures = 0
         except Exception:  # noqa: BLE001 -- a failed tick must not kill the loop
-            logger.exception("Registry re-scan tick failed")
+            self._consecutive_failures += 1
+            logger.exception(
+                "Registry re-scan tick failed (consecutive=%d/%d)",
+                self._consecutive_failures,
+                self.MAX_CONSECUTIVE_FAILURES,
+            )
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                logger.error(
+                    "Registry re-scan halted after %d consecutive failures",
+                    self._consecutive_failures,
+                )

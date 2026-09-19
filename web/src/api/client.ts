@@ -4,7 +4,7 @@ const API_BASE_KEY = "corp.apiBase";
 const API_KEY_KEY = "corp.apiKey";
 
 export function getApiBase(): string {
-  return (localStorage.getItem(API_BASE_KEY) || "http://localhost:8000").replace(/\/+$/, "");
+  return (localStorage.getItem(API_BASE_KEY) || "http://localhost:8010").replace(/\/+$/, "");
 }
 
 export function setApiBase(value: string): void {
@@ -12,11 +12,11 @@ export function setApiBase(value: string): void {
 }
 
 export function getApiKey(): string {
-  return localStorage.getItem(API_KEY_KEY) || "";
+  return sessionStorage.getItem(API_KEY_KEY) || "";
 }
 
 export function setApiKey(value: string): void {
-  localStorage.setItem(API_KEY_KEY, value);
+  sessionStorage.setItem(API_KEY_KEY, value);
 }
 
 export class ApiError extends Error {

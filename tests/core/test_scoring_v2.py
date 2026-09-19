@@ -59,8 +59,8 @@ def test_competition_saturation():
     assert score_competition_saturation(None, 5) == 0.5
     assert score_competition_saturation(0.0, 0) == 1.0  # web evidence, nothing overlapping
     assert score_competition_saturation(1.0, 0) == pytest.approx(0.3)
-    assert score_competition_saturation(0.5, 4) == pytest.approx(1 - (0.35 + 0.2))
-    assert score_competition_saturation(1.0, 20) == 0.0
+    assert score_competition_saturation(0.5, 4) == pytest.approx(0.52, abs=0.01)
+    assert score_competition_saturation(1.0, 20) == pytest.approx(0.054, abs=0.01)
     assert score_competition_saturation(0.0, 4) < score_competition_saturation(0.0, 0)
 
 

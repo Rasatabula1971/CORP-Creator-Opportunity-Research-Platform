@@ -286,13 +286,6 @@ class ProductIdeationGenerator:
         stats = PipelineStats()
 
         try:
-            superseded = await supersede(
-                self._session,
-                ProductIdea,
-                ProductIdea.creator_id == creator_id,
-            )
-            stats.extra["superseded"] = superseded
-
             clusters = await active_clusters_for_creator(self._session, creator_id)
             stats.extra["clusters"] = len(clusters)
             ideas_created = 0
@@ -348,6 +341,15 @@ class ProductIdeationGenerator:
                     stats.ok()
 
             stats.extra["ideas_created"] = ideas_created
+
+            superseded = await supersede(
+                self._session,
+                ProductIdea,
+                ProductIdea.creator_id == creator_id,
+                ProductIdea.research_run_id != run.id,
+            )
+            stats.extra["superseded"] = superseded
+
             used = getattr(self._provider, "models_used", None)
             run.model_versions = {
                 **(run.model_versions or {}),

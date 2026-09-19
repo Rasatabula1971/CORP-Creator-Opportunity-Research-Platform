@@ -28,11 +28,16 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    AdapterFamily,
+    NormalizedContent,
+    SourceAdapter,
+    check_response_size,
+    wait_with_retry_after,
+)
 from corp.workers.adapters.ids import stable_id
 from corp.workers.providers.capabilities import SearchIntentProvider
 
@@ -208,7 +213,7 @@ class SearchDemandAdapter(SourceAdapter, SearchIntentProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(4),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        wait=wait_with_retry_after(multiplier=2, minimum=2, maximum=30),
         reraise=True,
     )
     async def _get_json(self, params: dict[str, str]) -> Any:
@@ -219,4 +224,5 @@ class SearchDemandAdapter(SourceAdapter, SearchIntentProvider):
         if resp.status_code == 429:
             logger.warning("Google autocomplete rate limit hit")
         resp.raise_for_status()
+        check_response_size(resp, "google-autocomplete")
         return resp.json()

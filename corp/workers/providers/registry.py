@@ -7,6 +7,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+import jsonschema
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
@@ -119,7 +120,6 @@ class GeminiProvider(LLMProvider):
     async def generate_json(
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        del schema  # JSON mode only; the prompt describes the shape
         config = genai_types.GenerateContentConfig(
             system_instruction=system,
             response_mime_type="application/json",
@@ -135,6 +135,7 @@ class GeminiProvider(LLMProvider):
                 self._model_id, f"empty completion (finish_reason={_finish_reason(response)})"
             )
         result = json.loads(raw)
+        _warn_schema_violations(self._model_id, result, schema)
 
         response_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
         logger.info(
@@ -157,3 +158,20 @@ def _response_hash(data: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(data, sort_keys=True).encode()
     ).hexdigest()[:16]
+
+
+def _warn_schema_violations(
+    model: str, result: dict[str, Any], schema: dict[str, Any] | None
+) -> None:
+    """Log schema mismatches so they are no longer silent."""
+    if schema is None:
+        return
+    errors = list(jsonschema.Draft7Validator(schema).iter_errors(result))
+    if errors:
+        messages = "; ".join(e.message for e in errors[:5])
+        logger.warning(
+            "schema validation: model=%s violations=%d first=%s",
+            model,
+            len(errors),
+            messages,
+        )

@@ -11,6 +11,7 @@ export interface PlatformAccount {
   platform: string;
   handle: string;
   external_id: string | null;
+  subscriber_count: number | null;
   verified: boolean;
 }
 
@@ -21,6 +22,8 @@ export interface Creator {
   discovery_source: string | null;
   status: CreatorStatus;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreatorDetail extends Creator {

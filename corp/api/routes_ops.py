@@ -1,10 +1,11 @@
 """Write endpoints, background jobs, and the reads the review console needs."""
 
+import logging
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -45,6 +46,8 @@ from corp.workers.handoff.corp2_export import build_handoff_package
 from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.factory import ProviderConfigError, build_provider
 from corp.workers.providers.fair import FairProvider
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -92,6 +95,8 @@ class ClusterDetail(ProblemClusterResponse):
 # DecisionResponse there are the existing, still-unchanged Gate A
 # (creator-status) contract this task must not disturb -- see ADR-0038.
 class DossierDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     decision: DecisionType
     rationale: str | None = None
     decided_by: str | None = None
@@ -139,12 +144,13 @@ async def provider_health() -> dict[str, Any]:
     except ProviderConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Provider construction failed")
         return {
             "provider": None,
             "kind": None,
             "error": {
                 "code": "construction_failed",
-                "detail": f"{type(exc).__name__}: {exc}",
+                "detail": type(exc).__name__,
             },
         }
 
@@ -472,7 +478,10 @@ async def get_cluster_observations(
 
 @router.get("/creators/{creator_id}/decisions", response_model=list[DecisionResponse])
 async def get_decisions(
-    creator_id: str, session: AsyncSession = Depends(get_session),
+    creator_id: str,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
 ) -> list[DecisionResponse]:
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
@@ -481,6 +490,8 @@ async def get_decisions(
             select(HumanDecision)
             .where(HumanDecision.creator_id == creator_id)
             .order_by(HumanDecision.decided_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     ).scalars().all()
     return [DecisionResponse.model_validate(d) for d in rows]
@@ -535,6 +546,16 @@ async def record_dossier_decision(
     dossier = await session.get(Dossier, dossier_id)
     if dossier is None:
         raise HTTPException(status_code=404, detail="Dossier not found")
+    if dossier.superseded_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Dossier has been superseded by a newer version",
+        )
+    if dossier.status not in (DossierStatus.PENDING_REVIEW, DossierStatus.WATCHING):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Dossier already decided (status={dossier.status.value})",
+        )
 
     campaign_niche: CampaignNiche | None = None
     if body.decision == DecisionType.RESEARCH_MORE:
@@ -607,6 +628,16 @@ async def get_handoff_package(
     dossier = await session.get(Dossier, dossier_id)
     if dossier is None:
         raise HTTPException(status_code=404, detail="Dossier not found")
+    if dossier.superseded_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Dossier has been superseded — use the current version",
+        )
+    if dossier.status != DossierStatus.APPROVED:
+        raise HTTPException(
+            status_code=403,
+            detail="Handoff only available for approved dossiers",
+        )
     try:
         package = await build_handoff_package(session, dossier_id)
     except ValueError as exc:

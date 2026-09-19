@@ -43,15 +43,19 @@ class ClusterPipeline:
     Cross-creator runs (``creator_id=None``) supersede previous cross runs only.
     """
 
+    DEFAULT_OBSERVATION_CAP = 3000
+
     def __init__(
         self,
         embedder: Embedder,
         session: AsyncSession,
         config: ClusteringConfig | None = None,
+        observation_cap: int = DEFAULT_OBSERVATION_CAP,
     ) -> None:
         self._embedder = embedder
         self._session = session
         self._config = config or ClusteringConfig()
+        self._observation_cap = observation_cap
 
     async def run(self, creator_id: str | None = None) -> ResearchRun:
         model_name = getattr(self._embedder, "model_name", "unknown")
@@ -115,7 +119,6 @@ class ClusterPipeline:
         return run
 
     async def _load_observations(self, creator_id: str | None) -> list[ProblemObservation]:
-        # Audience observations only; creator-side ones feed alignment scoring instead.
         stmt = select(ProblemObservation).where(ProblemObservation.source_side == "audience")
         if creator_id:
             stmt = (
@@ -123,8 +126,16 @@ class ClusterPipeline:
                 .join(ResearchRun, ResearchRun.id == Evidence.research_run_id)
                 .where(ResearchRun.creator_id == creator_id)
             )
-        result = await self._session.execute(stmt.order_by(ProblemObservation.created_at))
-        return list(result.scalars().all())
+        stmt = stmt.order_by(ProblemObservation.created_at.desc()).limit(self._observation_cap)
+        result = await self._session.execute(stmt)
+        rows = list(result.scalars().all())
+        rows.reverse()
+        if len(rows) == self._observation_cap:
+            logger.warning(
+                "Observation cap hit (%d); oldest observations excluded from clustering",
+                self._observation_cap,
+            )
+        return rows
 
     async def _store_embeddings(
         self,

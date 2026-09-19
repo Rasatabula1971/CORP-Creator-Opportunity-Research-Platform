@@ -3,9 +3,11 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import update
 
 from corp.api.auth import require_api_key
 from corp.api.errors import register_error_handlers
@@ -13,14 +15,39 @@ from corp.api.routes import router
 from corp.api.routes_ops import health
 from corp.api.routes_ops import router as ops_router
 from corp.config import settings
+from corp.core.models.workflow import ResearchRun, RunStatus
 from corp.database import async_session
 from corp.workers.scheduler.registry_rescan import RegistryRescanScheduler
 
 logger = logging.getLogger(__name__)
 
 
+async def _mark_orphaned_runs() -> None:
+    """Mark ResearchRun rows stuck in 'running' as 'failed' on startup."""
+    now = datetime.now(UTC)
+    async with async_session() as session:
+        result = await session.execute(
+            update(ResearchRun)
+            .where(ResearchRun.status == RunStatus.RUNNING.value)
+            .values(
+                status=RunStatus.FAILED.value,
+                error_message="orphaned by process restart",
+                completed_at=now,
+            )
+        )
+        count = int(getattr(result, "rowcount", 0) or 0)
+        await session.commit()
+    if count:
+        logger.warning("Marked %d orphaned research runs as failed", count)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    try:
+        await _mark_orphaned_runs()
+    except Exception:
+        logger.exception("Failed to sweep orphaned research runs")
+
     scheduler: RegistryRescanScheduler | None = None
     try:
         scheduler = RegistryRescanScheduler(
@@ -36,16 +63,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        from corp.api.jobs import registry
+
+        stopped = registry.mark_running_as_failed()
+        if stopped:
+            logger.warning("Marked %d in-flight jobs as failed at shutdown", stopped)
         if scheduler is not None:
             await scheduler.stop()
             logger.info("Registry re-scan scheduler stopped")
 
 
 def create_app() -> FastAPI:
-    # When an API key is configured, the auto-generated docs/schema routes
-    # must be protected too — they aren't covered by the router-level
-    # `dependencies=protected` below, since FastAPI serves them directly off
-    # the app instance and would otherwise leak every route/param/model.
+    if not settings.api_key:
+        if settings.app_env != "development":
+            raise RuntimeError(
+                "API_KEY must be set in non-development environments. "
+                "Set API_KEY in .env or as an environment variable.",
+            )
+        logger.warning("API_KEY is not set — all endpoints are unauthenticated")
+
     protect_docs = bool(settings.api_key)
     app = FastAPI(
         title="CORP",
@@ -60,8 +96,8 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-Api-Key"],
         expose_headers=["X-Total-Count"],
     )
     register_error_handlers(app)

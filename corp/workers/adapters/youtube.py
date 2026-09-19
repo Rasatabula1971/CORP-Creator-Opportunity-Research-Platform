@@ -14,11 +14,10 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import NormalizedContent, SourceAdapter, wait_with_retry_after
 from corp.workers.adapters.captions import fetch_youtube_caption
 from corp.workers.providers.capabilities import ProblemProvider
 
@@ -156,7 +155,7 @@ class YouTubeAdapter(SourceAdapter, ProblemProvider):
     @retry(
         retry=retry_if_exception(_is_retryable_http_error),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
+        wait=wait_with_retry_after(multiplier=1, minimum=2, maximum=30),
         reraise=True,
     )
     def _execute(self, request: object, quota_cost: int = 1) -> dict[str, Any]:

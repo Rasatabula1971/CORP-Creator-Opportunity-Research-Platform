@@ -36,7 +36,7 @@ from corp.workers.providers.errors import (
     ProviderUnavailableError,
 )
 from corp.workers.providers.fair import _strip_code_fence
-from corp.workers.providers.registry import LLMProvider
+from corp.workers.providers.registry import LLMProvider, _warn_schema_violations
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,6 @@ class GroqProvider(LLMProvider):
     async def generate_json(
         self, prompt: str, system: str | None = None, *, schema: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        del schema  # json_object mode only; the prompt describes the shape
         system_text = system or DEFAULT_SYSTEM
         if "json" not in system_text.lower() and "json" not in prompt.lower():
             system_text += "\nRespond with valid JSON only."
@@ -113,6 +112,7 @@ class GroqProvider(LLMProvider):
             raise ProviderError(
                 self.model_name, f"completion is not a JSON object ({type(result).__name__})"
             )
+        _warn_schema_violations(self.model_name, result, schema)
         usage = data.get("usage") or {}
         logger.info(
             "LLM call: model=%s hash=%s prompt_len=%d completion_tokens=%s",

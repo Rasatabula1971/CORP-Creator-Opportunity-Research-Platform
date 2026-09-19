@@ -132,9 +132,13 @@ class ScoringPipeline:
                 clusters = await active_clusters_for_creator(self._session, creator_id)
 
                 await supersede(
-                    self._session, OpportunityScore, OpportunityScore.creator_id == creator_id
+                    self._session, OpportunityScore,
+                    OpportunityScore.creator_id == creator_id,
                 )
-                await supersede(self._session, CreatorScore, CreatorScore.creator_id == creator_id)
+                await supersede(
+                    self._session, CreatorScore,
+                    CreatorScore.creator_id == creator_id,
+                )
 
                 opp_scores: list[OpportunityScore] = []
                 for cluster in clusters:
@@ -520,8 +524,13 @@ class ScoringPipeline:
         if not opp_scores:
             components = {k: 0.0 for k in self._weights}
         else:
+            agg_weights = [o.aggregate_score for o in opp_scores]
+            total_agg = sum(agg_weights) or 1.0
             components = {
-                dim: max(o.component_scores.get(dim, 0.0) for o in opp_scores)
+                dim: sum(
+                    o.component_scores.get(dim, 0.0) * w
+                    for o, w in zip(opp_scores, agg_weights)
+                ) / total_agg
                 for dim in self._weights
             }
 

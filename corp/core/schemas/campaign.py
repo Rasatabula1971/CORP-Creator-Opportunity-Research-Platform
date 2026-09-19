@@ -6,6 +6,8 @@ from corp.core.models.campaign import CampaignStatus
 
 
 class CampaignCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     research_profile_version: str | None = None
     target_niche_count: int = 10

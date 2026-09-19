@@ -1,11 +1,55 @@
 import enum
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, Field
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
+
+logger = logging.getLogger(__name__)
+
+MAX_RESPONSE_BYTES = 10_000_000  # 10 MB
+
+
+def check_response_size(resp: httpx.Response, label: str = "") -> None:
+    """Raise if the response body exceeds the safety limit."""
+    size = len(resp.content)
+    if size > MAX_RESPONSE_BYTES:
+        raise ValueError(
+            f"Response from {label or resp.url.host} is {size:,} bytes, "
+            f"exceeding {MAX_RESPONSE_BYTES:,} byte limit"
+        )
+
+
+def wait_with_retry_after(
+    multiplier: float = 2,
+    minimum: float = 2,
+    maximum: float = 30,
+) -> Any:
+    """Wait strategy: Retry-After header on 429s, exponential backoff otherwise."""
+    from tenacity import wait_exponential
+
+    fallback = wait_exponential(multiplier=multiplier, min=minimum, max=maximum)
+
+    def _wait(retry_state: Any) -> float:
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+            header = exc.response.headers.get("Retry-After")
+            if header is not None:
+                try:
+                    val = float(header)
+                    if val != val:  # NaN check
+                        pass
+                    else:
+                        return max(0.0, min(val, 120.0))
+                except ValueError:
+                    pass
+        return fallback(retry_state=retry_state)
+
+    return _wait
 
 
 class AdapterFamily(str, enum.Enum):

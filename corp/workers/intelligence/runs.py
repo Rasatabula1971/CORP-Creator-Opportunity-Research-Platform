@@ -223,7 +223,7 @@ async def supersede(session: AsyncSession, model: Any, *conditions: Any) -> int:
     result = await session.execute(
         update(model)
         .where(model.superseded_at.is_(None), *conditions)
-        .values(superseded_at=now)
+        .values(superseded_at=now, updated_at=now)
     )
     return int(getattr(result, "rowcount", 0) or 0)
 

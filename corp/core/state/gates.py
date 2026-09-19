@@ -26,7 +26,13 @@ async def record_gate_a_decision(
 
     Raises InvalidTransitionError if the creator is not in HUMAN_REVIEW state.
     """
-    target_status = _DECISION_TO_STATUS[decision]
+    target_status = _DECISION_TO_STATUS.get(decision)
+    if target_status is None:
+        valid = ", ".join(d.value for d in _DECISION_TO_STATUS)
+        raise ValueError(
+            f"Decision {decision.value!r} is not valid for Gate A "
+            f"(expected one of {valid})"
+        )
     validate_transition(creator.status, target_status)
 
     if opportunity_score_id is not None:

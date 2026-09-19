@@ -27,11 +27,16 @@ from tenacity import (
     retry,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential,
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import (
+    AdapterFamily,
+    NormalizedContent,
+    SourceAdapter,
+    check_response_size,
+    wait_with_retry_after,
+)
 from corp.workers.providers.capabilities import TrendProvider
 
 logger = logging.getLogger(__name__)
@@ -188,7 +193,9 @@ class WikipediaAdapter(SourceAdapter, TrendProvider):
     async def _get_pageviews(self, title: str) -> dict[str, Any]:
         end = datetime.now(tz=UTC)
         start = end - timedelta(days=self._pageview_days)
-        article = title.replace(" ", "_")
+        from urllib.parse import quote
+
+        article = quote(title.replace(" ", "_"), safe="")
         project = f"{self._language}.wikipedia"
 
         path = (
@@ -233,7 +240,7 @@ class WikipediaAdapter(SourceAdapter, TrendProvider):
     @retry(
         retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        wait=wait_with_retry_after(multiplier=2, minimum=2, maximum=30),
         reraise=True,
     )
     async def _get_json(
@@ -244,4 +251,5 @@ class WikipediaAdapter(SourceAdapter, TrendProvider):
         resp = await client.get(url, params=params)
         self.request_count += 1
         resp.raise_for_status()
+        check_response_size(resp, "wikipedia")
         return resp.json()  # type: ignore[no-any-return]

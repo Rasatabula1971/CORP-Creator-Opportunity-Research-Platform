@@ -9,6 +9,7 @@ shared across workers and does not survive a restart. ResearchRun rows are
 the durable record; a job is only the handle while work is in flight.
 """
 
+import functools
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -133,9 +134,21 @@ class JobRegistry:
         except Exception as exc:  # the job is the error boundary
             logger.exception("Job %s (%s) failed", job.id, job.kind)
             job.status = JobStatus.FAILED
-            job.error = str(exc)[:2000]
+            job.error = type(exc).__name__
         finally:
             job.finished_at = datetime.now(UTC)
+
+    def mark_running_as_failed(self) -> int:
+        """Mark any still-running jobs as failed (called at shutdown)."""
+        count = 0
+        now = datetime.now(UTC)
+        for job in self._jobs.values():
+            if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+                job.status = JobStatus.FAILED
+                job.error = "interrupted by shutdown"
+                job.finished_at = now
+                count += 1
+        return count
 
 
 registry = JobRegistry()
@@ -147,13 +160,35 @@ registry = JobRegistry()
 async def _close(obj: object) -> None:
     close = getattr(obj, "close", None)
     if close is not None:
-        await close()
+        try:
+            await close()
+        except Exception:
+            logger.exception("cleanup close() failed for %s", type(obj).__name__)
 
 
+async def _commit_or_rollback(session: Any) -> None:
+    """Persist whatever a crashing pipeline flushed (e.g. a failed ResearchRun).
+
+    If the session is poisoned (a DB error aborted the transaction), commit
+    is impossible, so roll back instead — the run record is lost, but the
+    original exception propagates cleanly.
+    """
+    try:
+        await session.commit()
+    except Exception:
+        logger.exception("could not persist failed run; rolling back")
+        await session.rollback()
+
+
+@functools.lru_cache(maxsize=1)
 def _embedder_factory() -> "Callable[[], SentenceTransformerEmbedder]":
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
 
-    return lambda: SentenceTransformerEmbedder(settings.embedding_model)
+    @functools.lru_cache(maxsize=1)
+    def _singleton() -> SentenceTransformerEmbedder:
+        return SentenceTransformerEmbedder(settings.embedding_model)
+
+    return _singleton
 
 
 async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str, Any]:
@@ -200,10 +235,14 @@ async def run_pipeline(
         adapter = build_adapter(platform)
         try:
             async with async_session() as session:
-                run = await AcquisitionCollector(adapter, session).collect_creator_data(
-                    identifier, creator_id
-                )
-                await session.commit()
+                try:
+                    run = await AcquisitionCollector(adapter, session).collect_creator_data(
+                        identifier, creator_id
+                    )
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(adapter)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -212,16 +251,24 @@ async def run_pipeline(
         from corp.workers.intelligence.cluster_pipeline import ClusterPipeline
 
         async with async_session() as session:
-            run = await ClusterPipeline(_embedder_factory()(), session).run(creator_id)
-            await session.commit()
+            try:
+                run = await ClusterPipeline(_embedder_factory()(), session).run(creator_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "scoring":
         from corp.workers.intelligence.scoring_pipeline import ScoringPipeline
 
         async with async_session() as session:
-            run = await ScoringPipeline(session, settings.scoring_rules_path).run(creator_id)
-            await session.commit()
+            try:
+                run = await ScoringPipeline(session, settings.scoring_rules_path).run(creator_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind in ("intelligence", "intent"):
@@ -232,17 +279,21 @@ async def run_pipeline(
         provider = build_provider()
         try:
             async with async_session() as session:
-                if kind == "intelligence":
-                    run = await IntelligencePipeline(
-                        provider, session,
-                        max_failure_rate=settings.pipeline_max_failure_rate,
-                    ).run(creator_id)
-                else:
-                    run = await IntentPipeline(
-                        provider, session, rules_path=settings.intent_rules_path,
-                        max_failure_rate=settings.pipeline_max_failure_rate,
-                    ).run(creator_id)
-                await session.commit()
+                try:
+                    if kind == "intelligence":
+                        run = await IntelligencePipeline(
+                            provider, session,
+                            max_failure_rate=settings.pipeline_max_failure_rate,
+                        ).run(creator_id)
+                    else:
+                        run = await IntentPipeline(
+                            provider, session, rules_path=settings.intent_rules_path,
+                            max_failure_rate=settings.pipeline_max_failure_rate,
+                        ).run(creator_id)
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(provider)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -263,17 +314,6 @@ async def run_campaign_pipeline(
     from corp.database import async_session
 
     if kind == "discover":
-        # CORP1 Stage 5, T4: this stage now runs T3's recursive discovery
-        # engine end-to-end (capability fan-out -> LLM synthesis -> recurse
-        # to depth 3), which produces STAGED NicheCandidate rows directly.
-        # It replaces both the old single-platform NicheDiscoveryCollector
-        # and, functionally, the separate "candidates" clustering stage
-        # that used to run after it -- "candidates" remains callable below
-        # unchanged (other evidence-collection paths may still want it),
-        # it is simply no longer part of the default flow this stage feeds.
-        # `source` is accepted but unused: T3 fans out across every
-        # NICHE-family capability provider automatically, there is no
-        # single platform to choose. `query` is the broad topic.
         from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
         from corp.workers.providers.factory import build_provider
 
@@ -282,11 +322,15 @@ async def run_campaign_pipeline(
         provider = build_provider()
         try:
             async with async_session() as session:
-                discovery = RecursiveNicheDiscovery(
-                    session, provider, "rules/niche_discovery_prompt.yaml"
-                )
-                run = await discovery.discover(campaign_id, query)
-                await session.commit()
+                try:
+                    discovery = RecursiveNicheDiscovery(
+                        session, provider, "rules/niche_discovery_prompt.yaml"
+                    )
+                    run = await discovery.discover(campaign_id, query)
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(provider)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -299,13 +343,17 @@ async def run_campaign_pipeline(
         provider = build_provider()
         try:
             async with async_session() as session:
-                gen = NicheCandidateGenerator(
-                    SentenceTransformerEmbedder(settings.embedding_model),
-                    provider,
-                    session,
-                )
-                run = await gen.generate(campaign_id)
-                await session.commit()
+                try:
+                    gen = NicheCandidateGenerator(
+                        SentenceTransformerEmbedder(settings.embedding_model),
+                        provider,
+                        session,
+                    )
+                    run = await gen.generate(campaign_id)
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(provider)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -315,20 +363,28 @@ async def run_campaign_pipeline(
         from corp.workers.intelligence.niche_canonicalization import NicheCanonicalizer
 
         async with async_session() as session:
-            canon = NicheCanonicalizer(
-                SentenceTransformerEmbedder(settings.embedding_model),
-                session,
-            )
-            run = await canon.canonicalize(campaign_id)
-            await session.commit()
+            try:
+                canon = NicheCanonicalizer(
+                    SentenceTransformerEmbedder(settings.embedding_model),
+                    session,
+                )
+                run = await canon.canonicalize(campaign_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "verify":
         from corp.workers.intelligence.niche_verification import NicheVerifier
 
         async with async_session() as session:
-            run = await NicheVerifier(session).verify(campaign_id)
-            await session.commit()
+            try:
+                run = await NicheVerifier(session).verify(campaign_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "estimate-ecosystem":
@@ -344,10 +400,14 @@ async def run_campaign_pipeline(
         )
         try:
             async with async_session() as session:
-                run = await EcosystemEstimator(adapter, session, enricher=enricher).estimate(
-                    campaign_id,
-                )
-                await session.commit()
+                try:
+                    run = await EcosystemEstimator(adapter, session, enricher=enricher).estimate(
+                        campaign_id,
+                    )
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(adapter)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -356,18 +416,26 @@ async def run_campaign_pipeline(
         from corp.workers.intelligence.niche_qualification import NicheQualifier
 
         async with async_session() as session:
-            run = await NicheQualifier(
-                session, settings.niche_qualification_rules_path,
-            ).qualify_campaign(campaign_id)
-            await session.commit()
+            try:
+                run = await NicheQualifier(
+                    session, settings.niche_qualification_rules_path,
+                ).qualify_campaign(campaign_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "select":
         from corp.workers.intelligence.niche_selection import NicheSelector
 
         async with async_session() as session:
-            run = await NicheSelector(session).select(campaign_id)
-            await session.commit()
+            try:
+                run = await NicheSelector(session).select(campaign_id)
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "onboard":
@@ -381,10 +449,14 @@ async def run_campaign_pipeline(
         )
         try:
             async with async_session() as session:
-                run = await CreatorOnboarder(
-                    adapter, session, enricher=enricher
-                ).onboard(campaign_id)
-                await session.commit()
+                try:
+                    run = await CreatorOnboarder(
+                        adapter, session, enricher=enricher
+                    ).onboard(campaign_id)
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(adapter)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
@@ -397,10 +469,14 @@ async def run_campaign_pipeline(
         provider = build_provider()
         try:
             async with async_session() as session:
-                orchestrator = ResearchOrchestrator(session, provider, _embedder_factory())
-                batch = CampaignResearchBatch(orchestrator, session)
-                run = await batch.run_campaign(campaign_id)
-                await session.commit()
+                try:
+                    orchestrator = ResearchOrchestrator(session, provider, _embedder_factory())
+                    batch = CampaignResearchBatch(orchestrator, session)
+                    run = await batch.run_campaign(campaign_id)
+                    await session.commit()
+                except Exception:
+                    await _commit_or_rollback(session)
+                    raise
         finally:
             await _close(provider)
         return {"run_id": run.id, "status": run.status, "stats": run.stats}

@@ -136,6 +136,12 @@ class DossierGenerator:
         path = await self._niche_path(niche_id)
 
         niche_opps = await self._filter_niche_opportunities(data.opportunities, niche_id)
+        if not niche_opps:
+            logger.warning(
+                "No niche-specific opportunities for niche %s / creator %s; using global top",
+                niche_id,
+                creator_id,
+            )
         top = niche_opps[0] if niche_opps else data.opportunities[0]
         recommendation = self._build_recommendation(data, top)
 
@@ -237,17 +243,23 @@ class DossierGenerator:
         creator_score = await self._load_creator_score(creator_id)
         opp_scores = await self._load_opportunity_scores(creator_id)
 
+        cluster_ids = [s.problem_cluster_id for s in opp_scores]
+        clusters_by_id = await self._load_clusters_batch(cluster_ids)
+        signals_by_cluster = await self._load_signals_batch(cluster_ids)
+        observations_by_cluster = await self._load_observations_batch(cluster_ids)
+        competitors_by_cluster = await self._load_competitors_batch(cluster_ids)
+
         opportunities: list[OpportunityContext] = []
         signals: list[SignalContext] = []
 
         for opp_score in opp_scores:
-            cluster = await self._load_cluster(opp_score.problem_cluster_id)
+            cluster = clusters_by_id.get(opp_score.problem_cluster_id)
             if cluster is None:
                 continue
 
-            signal = await self._load_signal(cluster.id)
-            observations = await self._load_observations(cluster.id)
-            competitors = await self._load_competitors(cluster.id)
+            signal = signals_by_cluster.get(cluster.id)
+            observations = observations_by_cluster.get(cluster.id, [])
+            competitors = competitors_by_cluster.get(cluster.id, [])
 
             opportunities.append(OpportunityContext(
                 cluster=cluster,
@@ -280,7 +292,7 @@ class DossierGenerator:
             opportunities=opportunities,
             signals=signals,
             data_coverage=coverage,
-            generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     def _render(self, data: DossierData) -> str:
@@ -337,44 +349,75 @@ class DossierGenerator:
         )
         return list(result.scalars().all())
 
-    async def _load_cluster(self, cluster_id: str) -> ProblemCluster | None:
+    async def _load_clusters_batch(
+        self, cluster_ids: list[str],
+    ) -> dict[str, ProblemCluster]:
+        if not cluster_ids:
+            return {}
         result = await self._session.execute(
-            select(ProblemCluster).where(ProblemCluster.id == cluster_id)
+            select(ProblemCluster).where(ProblemCluster.id.in_(cluster_ids))
         )
-        return result.scalar_one_or_none()
+        return {c.id: c for c in result.scalars().all()}
 
-    async def _load_signal(self, cluster_id: str) -> CommercialSignal | None:
+    async def _load_signals_batch(
+        self, cluster_ids: list[str],
+    ) -> dict[str, CommercialSignal]:
+        if not cluster_ids:
+            return {}
         result = await self._session.execute(
             select(CommercialSignal)
             .where(
-                CommercialSignal.problem_cluster_id == cluster_id,
+                CommercialSignal.problem_cluster_id.in_(cluster_ids),
                 CommercialSignal.superseded_at.is_(None),
             )
             .order_by(CommercialSignal.created_at.desc())
-            .limit(1)
         )
-        return result.scalars().first()
+        lookup: dict[str, CommercialSignal] = {}
+        for sig in result.scalars().all():
+            lookup.setdefault(sig.problem_cluster_id, sig)
+        return lookup
 
-    async def _load_observations(self, cluster_id: str) -> list[ProblemObservation]:
+    async def _load_observations_batch(
+        self, cluster_ids: list[str],
+    ) -> dict[str, list[ProblemObservation]]:
+        if not cluster_ids:
+            return {}
         result = await self._session.execute(
-            select(ProblemObservation)
+            select(ProblemObservation, ProblemClusterMember.cluster_id)
             .join(
                 ProblemClusterMember,
                 ProblemClusterMember.observation_id == ProblemObservation.id,
             )
-            .where(ProblemClusterMember.cluster_id == cluster_id)
-            .order_by(ProblemObservation.confidence.desc().nullslast(), ProblemObservation.id)
-            .limit(10)
+            .where(ProblemClusterMember.cluster_id.in_(cluster_ids))
+            .order_by(
+                ProblemClusterMember.cluster_id,
+                ProblemObservation.confidence.desc().nullslast(),
+                ProblemObservation.id,
+            )
         )
-        return list(result.scalars().all())
+        lookup: dict[str, list[ProblemObservation]] = {}
+        for obs, cid in result.all():
+            bucket = lookup.setdefault(cid, [])
+            if len(bucket) < 10:
+                bucket.append(obs)
+        return lookup
 
-    async def _load_competitors(self, cluster_id: str) -> list[Competitor]:
+    async def _load_competitors_batch(
+        self, cluster_ids: list[str],
+    ) -> dict[str, list[Competitor]]:
+        if not cluster_ids:
+            return {}
         result = await self._session.execute(
             select(Competitor)
-            .where(Competitor.problem_cluster_id == cluster_id)
+            .where(Competitor.problem_cluster_id.in_(cluster_ids))
             .order_by(Competitor.created_at.desc())
         )
-        return list(result.scalars().all())
+        lookup: dict[str, list[Competitor]] = {}
+        for comp in result.scalars().all():
+            bucket = lookup.setdefault(comp.problem_cluster_id, [])
+            if len(bucket) < 20:
+                bucket.append(comp)
+        return lookup
 
     async def _compute_coverage(
         self,

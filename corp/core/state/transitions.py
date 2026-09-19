@@ -51,5 +51,12 @@ async def advance(
 async def restore(session: AsyncSession, creator: Creator, previous: CreatorStatus) -> None:
     """Put a creator back to ``previous`` after a failed stage, bypassing validation."""
     if creator.status != previous:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "restore: %s status %s -> %s (bypassing state machine)",
+            creator.id,
+            creator.status.value,
+            previous.value,
+        )
         creator.status = previous
         await session.flush()

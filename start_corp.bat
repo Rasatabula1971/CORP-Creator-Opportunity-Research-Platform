@@ -24,8 +24,25 @@ REM ─────────────────────────�
 
 cd /d "%~dp0"
 
-set "DATABASE_URL=postgresql+asyncpg://corp:corp@localhost:5433/corp"
-set "DATABASE_URL_SYNC=postgresql://corp:corp@localhost:5433/corp"
+REM -- Read DATABASE_URL and DATABASE_URL_SYNC from .env -------------------
+set "DATABASE_URL="
+set "DATABASE_URL_SYNC="
+if exist .env (
+  for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="DATABASE_URL" set "DATABASE_URL=%%B"
+    if /i "%%A"=="DATABASE_URL_SYNC" set "DATABASE_URL_SYNC=%%B"
+  )
+)
+if not defined DATABASE_URL (
+  echo [corp] DATABASE_URL is not set in .env. Cannot start without it.
+  pause
+  exit /b 1
+)
+if not defined DATABASE_URL_SYNC (
+  echo [corp] DATABASE_URL_SYNC is not set in .env. Cannot start without it.
+  pause
+  exit /b 1
+)
 set "FAIR_ENV_FILE=fair.env"
 
 set "PG_BIN=C:\Program Files\PostgreSQL\16\bin"
@@ -54,9 +71,7 @@ if errorlevel 1 (
       pause
       exit /b 1
     )
-    echo [corp] Falling back to Postgres on 5432. Overriding DATABASE_URL for this run.
-    set "DATABASE_URL=postgresql+asyncpg://corp:corp@localhost:5432/corp"
-    set "DATABASE_URL_SYNC=postgresql://corp:corp@localhost:5432/corp"
+    echo [corp] Falling back to Postgres on 5432. Update DATABASE_URL in .env if needed.
   )
 )
 echo [corp] Postgres is up.
@@ -76,7 +91,7 @@ if exist fair.env (
 )
 
 REM -- Pick the API port: API_PORT from .env, else 8000 --------------
-set "API_PORT=8000"
+set "API_PORT=8010"
 if exist .env (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="API_PORT" set "API_PORT=%%B"
@@ -104,10 +119,25 @@ if defined PORT_PID (
 
 echo.
 echo [corp] Starting API on http://127.0.0.1:!API_PORT!
-echo [corp] Ctrl+C to stop.
 echo.
-python -m uvicorn corp.api.app:app --host 127.0.0.1 --port !API_PORT!
 
-REM Keep the window open after uvicorn exits so any traceback stays visible.
-pause
+REM -- Launch uvicorn in the background so the script can continue ----------
+start "CORP API" cmd /k python -m uvicorn corp.api.app:app --host 127.0.0.1 --port !API_PORT!
+
+REM -- Start the React dashboard -------------------------------------------
+if exist web\package.json (
+  echo [corp] Starting React dashboard on http://localhost:5173 ...
+  start "CORP Dashboard" cmd /k "cd /d "%~dp0web" && npm run dev"
+)
+
+REM -- Wait a moment for the servers to initialise, then open the browser ---
+ping -n 3 127.0.0.1 >nul
+echo [corp] Opening browser ...
+start "" "http://localhost:5173"
+
+echo.
+echo [corp] API:       http://127.0.0.1:!API_PORT!
+echo [corp] Dashboard: http://localhost:5173
+echo [corp] Close the "CORP API" and "CORP Dashboard" windows to stop.
+echo.
 endlocal

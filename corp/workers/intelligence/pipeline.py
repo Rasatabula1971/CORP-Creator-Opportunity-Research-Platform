@@ -126,23 +126,26 @@ class IntelligencePipeline:
         )
 
         grouped: dict[str, dict[str, Any]] = {}
-        for interaction, ci_id, title, platform in result.all():
+        all_rows = result.all()
+        for interaction, ci_id, title, platform in all_rows:
             entry = grouped.setdefault(
                 ci_id,
                 {"title": title, "platform": platform, "interactions": []},
             )
             entry["interactions"].append(interaction)
 
+        all_ext_ids = [i.external_id for i, *_ in all_rows]
+        evidence_by_ext = await self._find_evidence_batch(all_ext_ids)
+        extracted_ext_ids = await self._already_extracted_batch(all_ext_ids)
+
         for ci_id, group in grouped.items():
             interactions: list[AudienceInteraction] = group["interactions"]
             title = group["title"]
             platform = group["platform"] or "unknown"
 
-            # Resolve evidence + skip-if-already-extracted per interaction up front,
-            # so a whole batch can share the pre-flight work.
             pending: list[tuple[AudienceInteraction, Evidence]] = []
             for interaction in interactions:
-                evidence = await self._find_evidence(interaction.external_id)
+                evidence = evidence_by_ext.get(interaction.external_id)
                 if evidence is None:
                     logger.warning(
                         "No evidence for interaction %s, skipping extraction",
@@ -150,14 +153,10 @@ class IntelligencePipeline:
                     )
                     stats.skip()
                     continue
-                # Primary idempotency check: the per-interaction stamp set after
-                # a successful chunk covers every comment in the chunk, anchored
-                # or not. The observation-existence check remains as a fallback
-                # for rows extracted before the stamp columns existed.
                 if self._stamp_matches(interaction):
                     stats.skip()
                     continue
-                if await self._already_extracted(interaction.external_id):
+                if interaction.external_id in extracted_ext_ids:
                     self._stamp(interaction)
                     stats.skip()
                     continue
@@ -294,6 +293,45 @@ class IntelligencePipeline:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def _find_evidence_batch(
+        self, external_ids: list[str],
+    ) -> dict[str, Evidence]:
+        """Newest evidence row per source_id, batch-loaded."""
+        if not external_ids:
+            return {}
+        result = await self._session.execute(
+            select(Evidence)
+            .where(Evidence.source_id.in_(external_ids))
+            .order_by(Evidence.collected_at.desc())
+        )
+        lookup: dict[str, Evidence] = {}
+        for ev in result.scalars().all():
+            lookup.setdefault(ev.source_id, ev)
+        return lookup
+
+    async def _already_extracted_batch(
+        self,
+        external_ids: list[str],
+        prompt_version: str = EXTRACTION_PROMPT_VERSION,
+        source_side: str = "audience",
+    ) -> set[str]:
+        """Set of external_ids that already have extracted observations."""
+        if not external_ids:
+            return set()
+        result = await self._session.execute(
+            select(Evidence.source_id)
+            .select_from(ProblemObservation)
+            .join(Evidence, Evidence.id == ProblemObservation.evidence_id)
+            .where(
+                Evidence.source_id.in_(external_ids),
+                ProblemObservation.extraction_prompt_version == prompt_version,
+                ProblemObservation.model_version.in_(self._model_family()),
+                ProblemObservation.source_side == source_side,
+            )
+            .distinct()
+        )
+        return set(result.scalars().all())
 
     def _model_family(self) -> list[str]:
         """Model names that count as "already done" for idempotency.

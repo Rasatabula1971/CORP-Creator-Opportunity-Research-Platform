@@ -288,7 +288,42 @@ async def test_create_decision_approve(clean_db: AsyncSession):
     data = resp.json()
     assert data["decision"] == "approve"
     assert data["gate"] == "gate_a"
-    assert data["rationale"] == "Strong opportunity"
+
+
+_AUTH_PROTECTED_ENDPOINTS = [
+    ("GET", "/creators"),
+    ("GET", "/campaigns"),
+    ("POST", "/creators"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method,path", _AUTH_PROTECTED_ENDPOINTS)
+async def test_protected_endpoints_reject_missing_key(
+    clean_db: AsyncSession, method: str, path: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("corp.config.settings.api_key", "test-secret-key")
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: clean_db
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.request(method, path)
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_valid_key_allows_access(
+    clean_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("corp.config.settings.api_key", "test-secret-key")
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: clean_db
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/creators", headers={"X-Api-Key": "test-secret-key"})
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio

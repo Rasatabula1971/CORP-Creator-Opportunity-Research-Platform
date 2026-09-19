@@ -5,8 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    database_url: str = "postgresql+asyncpg://corp:corp@localhost:5433/corp"
-    database_url_sync: str = "postgresql://corp:corp@localhost:5433/corp"
+    database_url: str = ""
+    database_url_sync: str = ""
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: int = 30
 
     youtube_api_key: str = ""
     youtube_daily_quota_units: int = 10000
@@ -147,6 +150,7 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
 
     app_env: str = "development"
+    db_echo: bool = False
     log_level: str = "INFO"
 
     api_host: str = "0.0.0.0"

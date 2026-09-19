@@ -19,6 +19,7 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
+import httpcore
 import httpx
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
@@ -266,9 +267,14 @@ class WebPresenceAdapter(SourceAdapter):
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
+            transport = httpx.AsyncHTTPTransport()
+            transport._pool = httpcore.AsyncConnectionPool(
+                network_backend=_SSRFSafeBackend(),
+            )
             self._client = httpx.AsyncClient(
                 headers={"User-Agent": self._user_agent},
                 timeout=20.0,
+                transport=transport,
             )
         return self._client
 
@@ -277,6 +283,74 @@ async def _resolve_host(host: str) -> list[str]:
     """All addresses ``host`` resolves to. Module-level so tests can stub it."""
     infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
     return [str(info[4][0]) for info in infos]
+
+
+class _SSRFSafeBackend(httpcore.AsyncNetworkBackend):
+    """Network backend that validates DNS at connection time.
+
+    The pre-flight ``is_public_url`` check catches obviously bad URLs
+    early, but between that check and the actual TCP connection a hostile
+    DNS server can rotate the A record (DNS rebinding).  This backend
+    resolves once, validates every IP, and connects to the validated
+    address — closing the TOCTOU gap.
+    """
+
+    def __init__(self) -> None:
+        self._inner = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        if host == "localhost" or host.endswith(".localhost"):
+            raise httpcore.ConnectError(
+                f"Refusing connection to localhost ({host})"
+            )
+        try:
+            ip = ipaddress.ip_address(host)
+            if not ip.is_global:
+                raise httpcore.ConnectError(
+                    f"Refusing connection to non-public IP {host}"
+                )
+            return await self._inner.connect_tcp(
+                host, port, timeout, local_address, socket_options
+            )
+        except ValueError:
+            pass
+        try:
+            addrs = await _resolve_host(host)
+        except (socket.gaierror, OSError) as exc:
+            raise httpcore.ConnectError(
+                f"Cannot resolve {host}: {exc}"
+            ) from exc
+        if not addrs:
+            raise httpcore.ConnectError(f"No addresses for {host}")
+        for addr in addrs:
+            ip_obj = ipaddress.ip_address(addr.split("%", 1)[0])
+            if not ip_obj.is_global:
+                raise httpcore.ConnectError(
+                    f"{host} resolves to non-public address {ip_obj}"
+                )
+        # Connect to the first validated IP instead of the hostname.
+        # httpcore handles TLS/SNI with the original hostname separately.
+        return await self._inner.connect_tcp(
+            addrs[0], port, timeout, local_address, socket_options
+        )
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        raise httpcore.ConnectError("Unix sockets are not allowed")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
 
 
 async def is_public_url(url: str) -> bool:

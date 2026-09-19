@@ -37,13 +37,13 @@ _CONTENT_TYPE_MAP = {
     "story": ContentType.STORY,
     "thread": ContentType.THREAD,
     "page": ContentType.PAGE,
+    "question": ContentType.THREAD,
+    "review": ContentType.ARTICLE,
 }
 
 _INTERACTION_TYPE_MAP = {
     "comment": InteractionType.COMMENT,
     "reply": InteractionType.REPLY,
-    "question": InteractionType.QUESTION,
-    "review": InteractionType.REVIEW,
 }
 
 
@@ -148,11 +148,10 @@ class AcquisitionCollector:
                 item, content_map
             )
             if parent_ci is None:
-                logger.warning(
-                    "No ContentItem for interaction %s (parent=%s), skipping",
-                    item.external_id,
-                    item.parent_id,
-                )
+                # Reviews and questions are standalone — persist evidence even
+                # without a parent ContentItem so the intelligence pipeline can
+                # still use them.
+                await self._create_evidence(item, research_run_id)
                 orphaned += 1
                 continue
 
@@ -162,12 +161,32 @@ class AcquisitionCollector:
         for item in captions:
             await self._create_evidence(item, research_run_id)
 
+        # Niche-family adapters emit content types (listing, project, trend,
+        # interest, pageview_trend, creator_page) that don't map to content
+        # items or interactions.  Persist their evidence so downstream
+        # pipelines can still use the raw text.
+        unhandled = [
+            i
+            for i in items
+            if i.content_type not in _CONTENT_TYPE_MAP
+            and i.content_type not in _INTERACTION_TYPE_MAP
+            and i.content_type not in ("caption", "profile")
+        ]
+        for item in unhandled:
+            logger.info(
+                "Unhandled content_type %r from %s — persisting evidence only",
+                item.content_type,
+                item.source_platform,
+            )
+            await self._create_evidence(item, research_run_id)
+
         return {
             "content_items": len(videos),
             "interactions": len(comments) - orphaned,
             "captions": len(captions),
             "profiles": len(profiles),
             "orphaned_interactions": orphaned,
+            "evidence_only": len(unhandled),
         }
 
     async def _record_profile(
