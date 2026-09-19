@@ -88,3 +88,17 @@ class PersistedDossierResponse(BaseModel):
     status: str
     generated_at: datetime
     content: dict[str, Any]
+
+
+class WatchingDossierResponse(BaseModel):
+    """Summary of a dossier in WATCHING status, joined with creator and
+    niche data for the re-scan schedule visibility page."""
+
+    id: str
+    creator_id: str
+    creator_name: str
+    niche_id: str
+    niche_name: str
+    status: str
+    generated_at: datetime
+    next_recheck_at: datetime | None = None

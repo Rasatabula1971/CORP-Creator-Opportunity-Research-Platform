@@ -31,6 +31,7 @@ class NicheLifecycleStatus(str, enum.Enum):
     EXPAND = "expand"
     COOLDOWN = "cooldown"
     RECHECK_DUE = "recheck_due"
+    EXCLUDED = "excluded"
 
 
 class Niche(TimestampMixin, Base):

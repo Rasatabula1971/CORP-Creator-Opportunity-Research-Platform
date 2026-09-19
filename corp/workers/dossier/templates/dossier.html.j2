@@ -77,6 +77,25 @@
   {% endfor %}
 </div>
 
+<!-- ── Audience & Engagement Analysis ──────────────────────────────── -->
+{% if creator_score and creator_score.diagnostics %}
+{% set cd = creator_score.diagnostics %}
+<h2>Audience &amp; Engagement Analysis</h2>
+<table>
+  <tbody>
+  <tr><td>Audience platforms</td><td>{{ (cd.get('audience_platforms') or []) | join(", ") or "—" }}</td></tr>
+  <tr><td>Engagement rate</td><td>
+    {% if cd.get('engagement_rate_by_platform') %}{% for p, r in cd.get('engagement_rate_by_platform').items() %}{{ p }}: {{ "%.2f"|format(r * 100) }}%{{ ", " if not loop.last }}{% endfor %}{% else %}—{% endif %}
+  </td></tr>
+  <tr><td>Follower growth (between collections)</td><td>{% if cd.get('follower_growth') is not none %}{{ "%+.1f"|format(cd.get('follower_growth') * 100) }}%{% else %}not yet measurable{% endif %}</td></tr>
+  <tr><td>Existing monetisation</td><td>
+    {% if cd.get('monetisation') %}{% for k, n in cd.get('monetisation').items() %}{{ k }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}{% else %}none found on creator web pages{% endif %}
+  </td></tr>
+  <tr><td>Creator-side observations</td><td>{{ cd.get('creator_observations') or 0 }}</td></tr>
+  </tbody>
+</table>
+{% endif %}
+
 <!-- ── Aggregate Score ─────────────────────────────────────────────── -->
 {% if creator_score %}
 <h2>Overall Score</h2>
@@ -114,23 +133,6 @@
   {% endfor %}
   </tbody>
 </table>
-{% if creator_score.diagnostics %}
-{% set cd = creator_score.diagnostics %}
-<h3>Creator Signals</h3>
-<table>
-  <tbody>
-  <tr><td>Audience platforms</td><td>{{ (cd.get('audience_platforms') or []) | join(", ") or "—" }}</td></tr>
-  <tr><td>Engagement rate</td><td>
-    {% if cd.get('engagement_rate_by_platform') %}{% for p, r in cd.get('engagement_rate_by_platform').items() %}{{ p }}: {{ "%.2f"|format(r * 100) }}%{{ ", " if not loop.last }}{% endfor %}{% else %}—{% endif %}
-  </td></tr>
-  <tr><td>Follower growth (between collections)</td><td>{% if cd.get('follower_growth') is not none %}{{ "%+.1f"|format(cd.get('follower_growth') * 100) }}%{% else %}not yet measurable{% endif %}</td></tr>
-  <tr><td>Existing monetisation</td><td>
-    {% if cd.get('monetisation') %}{% for k, n in cd.get('monetisation').items() %}{{ k }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}{% else %}none found on creator web pages{% endif %}
-  </td></tr>
-  <tr><td>Creator-side observations</td><td>{{ cd.get('creator_observations') or 0 }}</td></tr>
-  </tbody>
-</table>
-{% endif %}
 {% endif %}
 
 <!-- ── Top Audience Problems ───────────────────────────────────────── -->
@@ -231,6 +233,39 @@
 <p class="stub">No commercial signals classified yet.</p>
 {% endif %}
 
+<!-- ── Demand Validation ──────────────────────────────────────────── -->
+<h2>Demand Validation</h2>
+{% if opportunities %}
+{% set ns = namespace(has_demand=false) %}
+{% for opp in opportunities %}
+{% if opp.score.diagnostics and (opp.score.diagnostics.get('content_view_growth') is not none or opp.score.diagnostics.get('frequency_growth') is not none or opp.score.diagnostics.get('commerce_overlap') is not none) %}
+{% set ns.has_demand = true %}
+{% endif %}
+{% endfor %}
+{% if ns.has_demand %}
+<table>
+  <thead><tr><th>Problem</th><th>View Growth</th><th>Frequency Growth</th><th>Commerce Overlap</th></tr></thead>
+  <tbody>
+  {% for opp in opportunities %}
+  {% if opp.score.diagnostics and (opp.score.diagnostics.get('content_view_growth') is not none or opp.score.diagnostics.get('frequency_growth') is not none or opp.score.diagnostics.get('commerce_overlap') is not none) %}
+  {% set d = opp.score.diagnostics %}
+  <tr>
+    <td>{{ opp.cluster.label }}</td>
+    <td>{% if d.get('content_view_growth') is not none %}{{ "%+.0f"|format(d.get('content_view_growth') * 100) }}%{% else %}—{% endif %}</td>
+    <td>{% if d.get('frequency_growth') is not none %}{{ "%+.0f"|format(d.get('frequency_growth') * 100) }}%{% else %}—{% endif %}</td>
+    <td>{% if d.get('commerce_overlap') is not none %}{{ "%.0f"|format(d.get('commerce_overlap') * 100) }}%{% else %}—{% endif %}</td>
+  </tr>
+  {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="stub">No demand signals (view growth, frequency growth, commerce overlap) recorded yet. These appear after multiple data collection runs.</p>
+{% endif %}
+{% else %}
+<p class="stub">No problem clusters found — demand validation requires at least one scored opportunity.</p>
+{% endif %}
+
 <!-- ── Competitive Landscape ───────────────────────────────────────── -->
 <h2>Competitive Landscape</h2>
 {% if opportunities and (opportunities | map(attribute="competitors") | map("length") | sum) > 0 %}
@@ -261,9 +296,13 @@
 <p class="stub">No competitive research recorded yet for this creator's problem clusters.</p>
 {% endif %}
 
-<!-- ── Recommended Product Concepts (stub) ─────────────────────── -->
-<h2>Recommended Product Concepts</h2>
-<p class="stub">Product concept generation will be available in Phase 5+.</p>
+<!-- ── Product Concepts ───────────────────────────────────────────── -->
+<h2>Product Concepts</h2>
+<p class="stub">Product ideas are generated alongside the persisted dossier. Use the Generate Dossier button on the dashboard to view product concepts with type, complexity, and pricing.</p>
+
+<!-- ── Recommendation ─────────────────────────────────────────────── -->
+<h2>Recommendation</h2>
+<p class="stub">A confidence-rated recommendation (approve / research more / watch / reject) is generated with the persisted dossier.</p>
 
 <!-- ── Confidence Assessment ──────────────────────────────────────── -->
 <h2>Confidence Assessment</h2>

@@ -20,6 +20,15 @@ class ComplianceStatus(str, enum.Enum):
     VERIFY = "verify"
 
 
+class EvidenceOrigin(str, enum.Enum):
+    """Whether the row is raw data or an LLM-derived claim (Provenance Invariant).
+    Nullable at the DB level for backward compatibility with pre-Stage-4 rows;
+    every row created by T3 onward must set it."""
+
+    OBSERVATION = "observation"
+    INFERENCE = "inference"
+
+
 class EvidenceType(str, enum.Enum):
     """Which capability-provider interface (CORP1 Stage 4) produced this row.
     Nullable at the DB level for backward compatibility with pre-Stage-4
@@ -61,3 +70,4 @@ class Evidence(Base):
     )
     research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))
     evidence_type: Mapped[EvidenceType | None] = mapped_column(Enum(EvidenceType))
+    origin: Mapped[EvidenceOrigin | None] = mapped_column(Enum(EvidenceOrigin))

@@ -32,6 +32,7 @@ evidence = Table(
     Column("collected_at", String(40), nullable=False),
     Column("research_run_id", String(36)),
     Column("evidence_type", String(50)),
+    Column("origin", String(50)),
 )
 
 problem_observations = Table(

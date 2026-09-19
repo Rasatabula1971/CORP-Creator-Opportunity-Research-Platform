@@ -261,6 +261,18 @@ export interface DossierJson {
   generated_at: string;
 }
 
+// Re-scan schedule visibility — watching dossiers with niche recheck info.
+export interface WatchingDossier {
+  id: string;
+  creator_id: string;
+  creator_name: string;
+  niche_id: string;
+  niche_name: string;
+  status: string;
+  generated_at: string;
+  next_recheck_at: string | null;
+}
+
 // CORP1 Stage 5, T8 — the dossier-level four-state decision gate.
 // Distinct from Decision above (Gate A, creator-status-scoped).
 export type DossierDecisionType = "reject" | "research_more" | "watch" | "approve";

@@ -11,10 +11,11 @@ from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
-from corp.core.models.dossier import Dossier
+from corp.core.models.dossier import Dossier, DossierStatus
 from corp.core.models.evidence import Evidence
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.intent import CommercialSignal
+from corp.core.models.niche import Niche
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
 from corp.core.schemas.campaign import CampaignResponse
@@ -34,6 +35,7 @@ from corp.core.schemas.dossier import (
     DossierScoreResponse,
     DossierSignalResponse,
     PersistedDossierResponse,
+    WatchingDossierResponse,
 )
 from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
@@ -316,6 +318,54 @@ async def get_persisted_dossier(
     if dossier is None:
         raise HTTPException(status_code=404, detail="No persisted dossier for this creator yet")
     return dossier
+
+
+# ── Watching dossiers (re-scan schedule visibility) ────────────────
+
+
+@router.get("/dossiers/watching", response_model=list[WatchingDossierResponse])
+async def list_watching_dossiers(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[WatchingDossierResponse]:
+    """Return all active (non-superseded) WATCHING dossiers joined with
+    their creator name, niche name, and the niche's next_recheck_at.
+    Used by the frontend re-scan schedule visibility page."""
+    result = await session.execute(
+        select(
+            Dossier.id,
+            Dossier.creator_id,
+            Creator.name.label("creator_name"),
+            Dossier.niche_id,
+            Niche.canonical_name.label("niche_name"),
+            Dossier.status,
+            Dossier.generated_at,
+            Niche.next_recheck_at,
+        )
+        .join(Creator, Creator.id == Dossier.creator_id)
+        .join(Niche, Niche.id == Dossier.niche_id)
+        .where(
+            Dossier.status == DossierStatus.WATCHING,
+            Dossier.superseded_at.is_(None),
+        )
+        .order_by(Niche.next_recheck_at.asc().nulls_last())
+        .offset(offset)
+        .limit(limit)
+    )
+    return [
+        WatchingDossierResponse(
+            id=row.id,
+            creator_id=row.creator_id,
+            creator_name=row.creator_name,
+            niche_id=row.niche_id,
+            niche_name=row.niche_name,
+            status=row.status.value if hasattr(row.status, "value") else row.status,
+            generated_at=row.generated_at,
+            next_recheck_at=row.next_recheck_at,
+        )
+        for row in result.all()
+    ]
 
 
 # ── Evidence ─────────────────────────────────────────────────────────

@@ -38,6 +38,12 @@ export function Layout() {
               >
                 Jobs
               </NavLink>
+              <NavLink
+                to="/rescan"
+                className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ""}`}
+              >
+                Re-scan
+              </NavLink>
             </nav>
           </div>
           <SettingsPanel />

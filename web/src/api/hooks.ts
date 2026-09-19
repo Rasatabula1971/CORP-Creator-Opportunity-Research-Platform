@@ -17,6 +17,7 @@ import type {
   PersistedDossier,
   ProblemObservation,
   ResearchRun,
+  WatchingDossier,
 } from "./types";
 
 // Backend list endpoints default to limit=50 and cap at 200; ask for the cap
@@ -254,5 +255,14 @@ export function useRecordDossierDecision(creatorId: string, dossierId: string | 
       qc.invalidateQueries({ queryKey: ["creators", creatorId, "dossier", "persisted"] });
       qc.invalidateQueries({ queryKey: ["jobs"] });
     },
+  });
+}
+
+// ── Watching dossiers (re-scan schedule) ────────────────────────────
+
+export function useWatchingDossiers() {
+  return useQuery({
+    queryKey: ["dossiers", "watching"],
+    queryFn: () => api.get<WatchingDossier[]>(`/dossiers/watching?limit=${LIST_LIMIT}`),
   });
 }

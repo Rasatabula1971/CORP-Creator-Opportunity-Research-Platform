@@ -178,6 +178,16 @@ class DossierGenerator:
                     "signal_level": o.signal.signal_level.value if o.signal else None,
                     "observation_count": len(o.observations),
                     "competitor_count": len(o.competitors),
+                    "competitors": [
+                        {
+                            "name": c.name,
+                            "competitor_type": c.competitor_type.value,
+                            "strength": c.strength.value,
+                            "gap_notes": c.gap_notes,
+                            "url": c.url,
+                        }
+                        for c in o.competitors
+                    ],
                 }
                 for o in data.opportunities
             ],
@@ -224,6 +234,7 @@ class DossierGenerator:
             opportunity_score_id=top.score.id,
             research_run_id=top.score.research_run_id,
             content=content,
+            niche_path=path,
         )
         self._session.add(dossier)
         await self._session.flush()

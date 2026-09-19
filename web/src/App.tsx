@@ -6,6 +6,7 @@ import { CampaignsPage } from "./pages/CampaignsPage";
 import { CampaignDetailPage } from "./pages/CampaignDetailPage";
 import { RunsPage } from "./pages/RunsPage";
 import { JobsPage } from "./pages/JobsPage";
+import { RescanPage } from "./pages/RescanPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
         <Route path="/runs" element={<RunsPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/rescan" element={<RescanPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -77,6 +77,7 @@ class Dossier(TimestampMixin, Base):
     # replaces this one. Same latest-wins convention as CreatorScore /
     # OpportunityScore / NicheCandidate. Rows are never deleted.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    niche_path: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     evidence: Mapped[list["DossierEvidence"]] = relationship(
         back_populates="dossier", cascade="all, delete-orphan"

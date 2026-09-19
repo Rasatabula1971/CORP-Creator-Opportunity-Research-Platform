@@ -232,9 +232,9 @@ async def test_stubs_present():
         generated_at="2025-01-15 10:30 UTC",
     )
 
-    assert "Phase 5+" in html
-    assert "Competitive" in html
     assert "Product Concepts" in html
+    assert "persisted dossier" in html
+    assert "Competitive" in html
 
 
 async def test_competitive_landscape_with_data():
