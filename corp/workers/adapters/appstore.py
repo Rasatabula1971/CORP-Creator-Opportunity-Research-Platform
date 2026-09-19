@@ -33,7 +33,7 @@ from tenacity import (
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter, stable_id
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ def _parse_review_feed(
 
         review_id_data = entry.get("id", {})
         review_id = review_id_data.get("label", "") if isinstance(review_id_data, dict) else str(review_id_data)
-        ext_id = f"as_{review_id}" if review_id else f"as_{hash(text) & 0xFFFFFFFF:08x}"
+        ext_id = f"as_{review_id}" if review_id else stable_id("as", text)
 
         link_data = entry.get("link", {})
         url = None

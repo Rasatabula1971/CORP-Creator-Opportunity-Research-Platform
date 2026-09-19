@@ -1,10 +1,26 @@
 import enum
+import hashlib
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 from pydantic import BaseModel, Field
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
+
+
+def content_hash(*parts: str) -> str:
+    """Deterministic short digest of content, for use as (part of) a fallback id.
+
+    Content-derived ids must not use the builtin ``hash()``: it is salted
+    per-process (``PYTHONHASHSEED``), so the same content gets a different
+    id on every worker restart, silently defeating dedup.
+    """
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:8]
+
+
+def stable_id(prefix: str, *parts: str) -> str:
+    """Deterministic ``{prefix}_{digest}`` fallback id for content with no natural id."""
+    return f"{prefix}_{content_hash(*parts)}"
 
 
 class AdapterFamily(str, enum.Enum):

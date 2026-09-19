@@ -35,7 +35,7 @@ from tenacity import (
 )
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
-from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter, stable_id
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class GoogleTrendsAdapter(SourceAdapter):
                 NormalizedContent(
                     source_platform="googletrends",
                     content_type="interest",
-                    external_id=f"gt_iot_{hash(keyword + self._geo) & 0xFFFFFFFF:08x}",
+                    external_id=stable_id("gt_iot", keyword, self._geo),
                     text=f"Google Trends interest-over-time for '{keyword}' ({self._geo})",
                     author=None,
                     timestamp=datetime.now(tz=UTC),
@@ -258,7 +258,7 @@ def _parse_trends_rss(xml_text: str, geo: str) -> list[NormalizedContent]:
                     "url": ni_url.text if ni_url is not None else None,
                 })
 
-        ext_id = f"gt_{hash(title + geo) & 0xFFFFFFFF:08x}"
+        ext_id = stable_id("gt", title, geo)
 
         results.append(
             NormalizedContent(
