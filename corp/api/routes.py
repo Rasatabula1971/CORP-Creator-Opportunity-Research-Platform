@@ -85,6 +85,7 @@ async def list_campaign_niches(
 @router.get("/campaigns/{campaign_id}/creators", response_model=list[CreatorResponse])
 async def list_campaign_creators(
     campaign_id: str,
+    response: Response,
     niche_status: CampaignNicheStatus = CampaignNicheStatus.SELECTED,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -102,11 +103,13 @@ async def list_campaign_creators(
             CampaignNiche.status == niche_status,
         )
         .distinct()
-        .order_by(Creator.created_at.desc())
-        .offset(offset)
-        .limit(limit)
     )
-    result = await session.execute(query)
+    total = (await session.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
+
+    result = await session.execute(
+        query.order_by(Creator.created_at.desc()).offset(offset).limit(limit)
+    )
     return [CreatorResponse.model_validate(c) for c in result.scalars().all()]
 
 

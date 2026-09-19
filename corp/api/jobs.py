@@ -9,7 +9,6 @@ shared across workers and does not survive a restart. ResearchRun rows are
 the durable record; a job is only the handle while work is in flight.
 """
 
-import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -62,7 +61,6 @@ class JobRegistry:
     def __init__(self, max_jobs: int = 500) -> None:
         self._jobs: dict[str, JobResponse] = {}
         self._max = max_jobs
-        self._lock = asyncio.Lock()
 
     def create(
         self,

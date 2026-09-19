@@ -142,6 +142,7 @@ async def test_list_campaign_creators_defaults_to_selected(clean_db: AsyncSessio
     body = resp.json()
     assert len(body) == 1
     assert body[0]["name"] == "Onboarded Creator"
+    assert resp.headers["X-Total-Count"] == "1"
 
 
 @pytest.mark.asyncio
@@ -156,6 +157,7 @@ async def test_list_campaign_creators_niche_status_filter_excludes(clean_db: Asy
         )
     assert resp.status_code == 200
     assert resp.json() == []
+    assert resp.headers["X-Total-Count"] == "0"
 
 
 @pytest.mark.asyncio
