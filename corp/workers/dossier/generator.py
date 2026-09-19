@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.dossier import Dossier, DossierEvidence
-from corp.core.models.evidence import Evidence
+from corp.core.models.evidence import Evidence, EvidenceType
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -45,6 +45,24 @@ from corp.workers.intelligence.runs import supersede
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+_LANGUAGE_PATTERNS = (
+    "how do i",
+    "how to",
+    "how can i",
+    "i wish",
+    "i want",
+    "i need",
+    "why can't",
+    "why doesn't",
+    "is there a",
+    "does anyone know",
+    "looking for",
+    "struggling with",
+    "help with",
+    "best way to",
+    "alternative to",
+)
 
 # Mirrors rules/scoring.yaml's score_bands keys, in the same priority
 # order get_score_band checks them -- used here to recover the band KEY
@@ -135,6 +153,10 @@ class DossierGenerator:
         product_ideas = await self._load_product_ideas(creator_id)
         path = await self._niche_path(niche_id)
 
+        cluster_competitors = {
+            o.cluster.id: o.competitors for o in data.opportunities
+        }
+
         niche_opps = await self._filter_niche_opportunities(data.opportunities, niche_id)
         if not niche_opps:
             logger.warning(
@@ -157,6 +179,11 @@ class DossierGenerator:
                     "platform": a.platform,
                     "handle": a.handle,
                     "subscriber_count": a.subscriber_count,
+                    "total_view_count": a.total_view_count,
+                    "video_count": a.video_count,
+                    "joined_at": a.joined_at.isoformat() if a.joined_at else None,
+                    "country": a.country,
+                    "description": a.description,
                 }
                 for a in data.platform_accounts
             ],
@@ -164,6 +191,8 @@ class DossierGenerator:
                 {
                     "aggregate_score": data.creator_score.aggregate_score,
                     "confidence_band": data.creator_score.confidence_band.value,
+                    "component_scores": data.creator_score.component_scores,
+                    "diagnostics": data.creator_score.diagnostics,
                 }
                 if data.creator_score
                 else None
@@ -172,11 +201,16 @@ class DossierGenerator:
             "opportunities": [
                 {
                     "cluster_label": o.cluster.label,
+                    "cluster_description": o.cluster.description,
                     "aggregate_score": o.score.aggregate_score,
                     "confidence_band": o.score.confidence_band.value,
                     "component_scores": o.score.component_scores,
                     "signal_level": o.signal.signal_level.value if o.signal else None,
                     "observation_count": len(o.observations),
+                    "sample_evidence": [obs.text[:500] for obs in o.observations[:3]],
+                    "frequency": o.cluster.frequency,
+                    "recency_score": o.cluster.recency_score,
+                    "evidence_strength": o.cluster.evidence_strength,
                     "competitor_count": len(o.competitors),
                     "competitors": [
                         {
@@ -202,6 +236,10 @@ class DossierGenerator:
                     "price_max": p.price_max,
                     "fit_rationale": p.fit_rationale,
                     "evidence_terms": p.evidence_terms,
+                    "comparable_products": [
+                        {"name": c.name, "url": c.url, "strength": c.strength.value}
+                        for c in cluster_competitors.get(p.problem_cluster_id, [])[:5]
+                    ],
                 }
                 for p in product_ideas
             ],
@@ -212,6 +250,8 @@ class DossierGenerator:
                 "observation_count": data.data_coverage.observation_count,
                 "competitor_count": data.data_coverage.competitor_count,
             },
+            "audience_analysis": self._build_audience_analysis(data.opportunities),
+            "demand_validation": await self._build_demand_validation(creator_id),
             "niche_path": path,
             "recommendation": recommendation,
             "generated_at": data.generated_at,
@@ -462,6 +502,126 @@ class DossierGenerator:
         )
 
     # ── T6: persistence helpers ──────────────────────────────────────
+
+    @staticmethod
+    def _build_audience_analysis(
+        opportunities: list[OpportunityContext],
+    ) -> dict[str, Any]:
+        top_questions: list[dict[str, Any]] = []
+        all_audience_obs: list[ProblemObservation] = []
+
+        for opp in opportunities:
+            audience_obs = [o for o in opp.observations if o.source_side == "audience"]
+            all_audience_obs.extend(audience_obs)
+            if audience_obs:
+                top_questions.append({
+                    "cluster_label": opp.cluster.label,
+                    "questions": [
+                        {"text": o.text[:500], "sentiment": o.sentiment, "urgency": o.urgency}
+                        for o in audience_obs[:5]
+                    ],
+                })
+
+        themes = [
+            {
+                "label": opp.cluster.label,
+                "description": opp.cluster.description,
+                "frequency": opp.cluster.frequency,
+                "observation_count": len(opp.observations),
+                "evidence_strength": opp.cluster.evidence_strength,
+                "recency_score": opp.cluster.recency_score,
+            }
+            for opp in opportunities
+        ]
+
+        pattern_counts: dict[str, int] = {}
+        for obs in all_audience_obs:
+            lower = obs.text.lower()
+            for pat in _LANGUAGE_PATTERNS:
+                if lower.startswith(pat) or f" {pat} " in lower:
+                    pattern_counts[pat] = pattern_counts.get(pat, 0) + 1
+        language_patterns = [
+            {"pattern": p, "count": c}
+            for p, c in sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+
+        sentiment_dist: dict[str, int] = {}
+        urgency_dist: dict[str, int] = {}
+        for obs in all_audience_obs:
+            if obs.sentiment:
+                sentiment_dist[obs.sentiment] = sentiment_dist.get(obs.sentiment, 0) + 1
+            if obs.urgency:
+                urgency_dist[obs.urgency] = urgency_dist.get(obs.urgency, 0) + 1
+
+        return {
+            "top_questions": top_questions,
+            "recurring_themes": themes,
+            "language_patterns": language_patterns,
+            "engagement_quality": {
+                "total_audience_observations": len(all_audience_obs),
+                "sentiment_distribution": sentiment_dist,
+                "urgency_distribution": urgency_dist,
+            },
+        }
+
+    async def _build_demand_validation(
+        self, creator_id: str,
+    ) -> dict[str, Any]:
+        creator_runs = select(ResearchRun.id).where(
+            ResearchRun.creator_id == creator_id
+        )
+
+        type_result = await self._session.execute(
+            select(Evidence.evidence_type, func.count())
+            .where(
+                Evidence.research_run_id.in_(creator_runs),
+                Evidence.evidence_type.isnot(None),
+            )
+            .group_by(Evidence.evidence_type)
+        )
+        by_type: dict[str, int] = {}
+        for ev_type, count in type_result.all():
+            if isinstance(ev_type, EvidenceType):
+                by_type[ev_type.value] = count
+
+        platform_result = await self._session.execute(
+            select(Evidence.source_platform, func.count())
+            .where(Evidence.research_run_id.in_(creator_runs))
+            .group_by(Evidence.source_platform)
+        )
+        by_platform: dict[str, int] = {
+            row[0]: row[1] for row in platform_result.all()
+        }
+
+        return {
+            "evidence_by_type": by_type,
+            "evidence_by_platform": by_platform,
+            "signals": {
+                "search_intent": by_type.get("search_intent", 0),
+                "trend": by_type.get("trend", 0),
+                "planning_intent": by_type.get("planning_intent", 0),
+                "transaction": by_type.get("transaction", 0),
+                "monetisation": by_type.get("monetisation", 0),
+                "dissatisfaction": by_type.get("dissatisfaction", 0),
+            },
+            "platform_highlights": {
+                "reddit_discussions": by_platform.get("reddit", 0),
+                "pinterest_activity": by_platform.get("pinterest", 0),
+                "crowdfunding_signals": (
+                    by_platform.get("kickstarter", 0)
+                    + by_platform.get("indiegogo", 0)
+                    + by_platform.get("crowdfunding", 0)
+                ),
+                "patreon_indicators": by_platform.get("patreon", 0),
+                "substack_indicators": by_platform.get("substack", 0),
+                "marketplace_competition": (
+                    by_platform.get("gumroad", 0)
+                    + by_platform.get("etsy", 0)
+                    + by_platform.get("udemy", 0)
+                    + by_platform.get("marketplace", 0)
+                ),
+            },
+        }
 
     async def _filter_niche_opportunities(
         self, opportunities: list[OpportunityContext], niche_id: str
