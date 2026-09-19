@@ -62,6 +62,7 @@ class RedditAdapter(SourceAdapter):
         self._base_url = base_url.rstrip("/")
         self._client = client
         self._last_request_at: float | None = None
+        self._throttle_lock = asyncio.Lock()
         self.request_count = 0
 
     # ── SourceAdapter contract ───────────────────────────────────────
@@ -215,13 +216,17 @@ class RedditAdapter(SourceAdapter):
         return self._client
 
     async def _throttle(self) -> None:
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        if self._last_request_at is not None:
-            wait = self._interval - (now - self._last_request_at)
-            if wait > 0:
-                await asyncio.sleep(wait)
-        self._last_request_at = loop.time()
+        # Locked so concurrent calls on the same adapter instance can't both
+        # read a stale _last_request_at and fire back-to-back, defeating the
+        # rate limit this method exists to enforce.
+        async with self._throttle_lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            if self._last_request_at is not None:
+                wait = self._interval - (now - self._last_request_at)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+            self._last_request_at = loop.time()
 
     @retry(
         retry=retry_if_exception(_is_retryable),
