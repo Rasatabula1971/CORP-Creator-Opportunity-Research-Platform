@@ -78,9 +78,23 @@ function CreateCampaignForm({ onDone }: { onDone: (id: string) => void }) {
   const [creatorsPerNiche, setCreatorsPerNiche] = useState(10);
   const [minFollowers, setMinFollowers] = useState(10000);
   const [maxFollowers, setMaxFollowers] = useState(200000);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (targetNicheCount < 1 || creatorsPerNiche < 1) {
+      setValidationError("Target niches and creators per niche must be at least 1.");
+      return;
+    }
+    if (minFollowers < 0 || maxFollowers < 0) {
+      setValidationError("Follower counts cannot be negative.");
+      return;
+    }
+    if (minFollowers > maxFollowers) {
+      setValidationError("Min followers cannot be greater than max followers.");
+      return;
+    }
+    setValidationError(null);
     create.mutate(
       {
         name,
@@ -158,6 +172,7 @@ function CreateCampaignForm({ onDone }: { onDone: (id: string) => void }) {
           </div>
         </div>
 
+        {validationError && <ErrorBanner error={validationError} />}
         {create.error && <ErrorBanner error={create.error} />}
 
         <Button type="submit" disabled={create.isPending}>
