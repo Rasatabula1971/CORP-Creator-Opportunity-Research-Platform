@@ -168,6 +168,18 @@ async def test_list_posts_paginates_until_limit():
     await adapter.close()
 
 
+async def test_list_posts_skips_malformed_post_missing_id():
+    """A single malformed record (e.g. a promoted/placeholder child with no
+    id) must be skipped, not abort the whole batch with a KeyError."""
+    good = _post("abc")
+    bad = _post("def")
+    del bad["id"]
+    adapter = _adapter({"/r/test/new.json": _listing([good, bad])})
+    posts = await adapter.list_posts("r/test")
+    assert [p.external_id for p in posts] == ["abc"]
+    await adapter.close()
+
+
 async def test_get_comments_walks_tree_and_threads_replies():
     comments = [
         _comment(
@@ -189,6 +201,16 @@ async def test_get_comments_walks_tree_and_threads_replies():
     assert by_id["c2"].metadata["depth"] == 1
     assert by_id["c2"].metadata["post_id"] == "abc"
     assert by_id["c1"].author == "user_c1"
+    await adapter.close()
+
+
+async def test_get_comments_skips_malformed_comment_but_keeps_its_replies():
+    reply = _comment("c2", "t1_c1", "still recursed into")
+    malformed = _comment("c1", "t3_abc", "no id", replies=[reply])
+    del malformed["data"]["id"]
+    adapter = _adapter({"/comments/abc.json": _thread(_post("abc"), [malformed])})
+    out = await adapter.get_comments("abc")
+    assert [c.external_id for c in out] == ["c2"]
     await adapter.close()
 
 

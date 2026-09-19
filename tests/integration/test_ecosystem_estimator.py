@@ -231,11 +231,13 @@ class FakeEnricher:
     def __init__(self, counts: dict[str, int | None]) -> None:
         self._counts = counts
         self.called_with: list[str] = []
+        self.call_count = 0
 
     async def get_subscriber_counts(
         self, channel_ids: list[str],
     ) -> dict[str, int | None]:
         self.called_with = list(channel_ids)
+        self.call_count += 1
         return {cid: self._counts.get(cid) for cid in channel_ids}
 
 
@@ -323,3 +325,39 @@ async def test_enricher_skips_non_uc_channel_ids(clean_db: AsyncSession):
 
     assert enricher.called_with == ["UCeeeeeeeeeeeeeeeeeeeeee"]
     assert run.stats["extra"]["results"][0]["target_band_creators"] == 1
+
+
+@pytest.mark.asyncio
+async def test_channel_shared_across_niches_enriched_once(clean_db: AsyncSession):
+    """A channel appearing in multiple niches must cost one Data API lookup
+    for the whole campaign, not one per niche — mirrors creator_onboarding.py's
+    campaign-wide _enrich_all, instead of the old per-niche enrichment that
+    re-looked-up the same shared channel once per niche it appeared in."""
+    session = clean_db
+    campaign, niche_a, cn_a = await _setup_verified_niche(session, "Home Espresso")
+    _, niche_b, cn_b = await _setup_verified_niche(session, "Pour Over Coffee", campaign)
+
+    shared = "UCsharedsharedsharedshar"
+    adapter = FakeSearchAdapter({
+        "Home Espresso": [_FakeItem("Shared Creator", shared, None)],
+        "Pour Over Coffee": [
+            _FakeItem("Shared Creator", shared, None),
+            _FakeItem("Other Creator", "UCotherotherotherotherot", None),
+        ],
+    })
+    enricher = FakeEnricher({shared: 50_000, "UCotherotherotherotherot": 20_000})
+
+    estimator = EcosystemEstimator(
+        adapter, session,
+        EcoConfig(min_followers=10_000, max_followers=200_000),
+        enricher=enricher,
+    )
+    run = await estimator.estimate(campaign.id)
+
+    assert enricher.call_count == 1
+    assert sorted(enricher.called_with) == sorted([shared, "UCotherotherotherotherot"])
+
+    await session.refresh(cn_a)
+    await session.refresh(cn_b)
+    assert cn_a.target_band_creator_count == 1
+    assert cn_b.target_band_creator_count == 2

@@ -177,6 +177,42 @@ async def test_collect_with_answers(mock_client):
     assert answers[1].parent_id == "2"
 
 
+async def test_malformed_question_and_answer_are_skipped_not_fatal(mock_client):
+    """A single record missing its id (e.g. deleted content omitted under
+    filter=withbody) must be skipped, not abort the batch with a KeyError."""
+    adapter = StackExchangeAdapter(
+        max_questions=5,
+        include_answers=True,
+        client=mock_client,
+    )
+
+    good_question = _question(1)
+    bad_question = _question(2)
+    del bad_question["question_id"]
+
+    good_answer = _answer(101, 1)
+    bad_answer = _answer(102, 1)
+    del bad_answer["answer_id"]
+
+    call_count = 0
+
+    async def mock_get(path, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_resp(_make_response([good_question, bad_question]))
+        return _mock_resp(_make_response([good_answer, bad_answer]))
+
+    mock_client.get = mock_get
+
+    results = await adapter.collect("tag:python")
+
+    questions = [r for r in results if r.content_type == "question"]
+    answers = [r for r in results if r.content_type == "reply"]
+    assert [q.external_id for q in questions] == ["1"]
+    assert [a.external_id for a in answers] == ["101"]
+
+
 # ── pagination ──────────────────────────────────────────────────────
 
 

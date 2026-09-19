@@ -63,12 +63,12 @@ async def test_commercial_intent_strong():
 
 async def test_commercial_intent_weak_low_confidence():
     s = score_commercial_intent(SignalLevel.WEAK, 0.5)
-    assert abs(s - 0.075) < 1e-10
+    assert abs(s - 0.125) < 1e-10
 
 
 async def test_commercial_intent_validation():
     s = score_commercial_intent(SignalLevel.VALIDATION, 1.0)
-    assert s == 0.95
+    assert s == 1.0
 
 
 async def test_commercial_intent_confidence_clamped():

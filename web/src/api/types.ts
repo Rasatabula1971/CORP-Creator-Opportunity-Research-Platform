@@ -1,5 +1,10 @@
 export type CreatorStatus = string;
 
+export interface Paged<T> {
+  items: T[];
+  totalCount: number;
+}
+
 export interface PlatformAccount {
   id: string;
   creator_id: string;

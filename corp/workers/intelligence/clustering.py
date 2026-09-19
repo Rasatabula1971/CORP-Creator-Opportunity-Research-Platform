@@ -1,6 +1,7 @@
 """Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling."""
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -116,6 +117,12 @@ def _build_clusters(
         representative = _pick_representative(cluster_texts)
         label_str = _generate_label(cluster_texts)
 
+        # 0.0 is reserved to mean "no timestamp data at all" (the case below
+        # this block, when no cluster member has a timestamp). A real, however
+        # old, date decays exponentially and only approaches but never reaches
+        # 0.0, so a 400-day-old cluster and a 4000-day-old cluster stay
+        # distinguishable instead of both saturating to the same value — and
+        # neither one is ever confused with "we have no idea how old this is".
         recency = 0.0
         if timestamps:
             cluster_ts: list[datetime] = [
@@ -123,8 +130,8 @@ def _build_clusters(
             ]
             if cluster_ts:
                 most_recent = max(cluster_ts)
-                days_ago = (now - most_recent).total_seconds() / 86400
-                recency = max(0.0, 1.0 - (days_ago / 365.0))
+                days_ago = max(0.0, (now - most_recent).total_seconds() / 86400)
+                recency = math.exp(-days_ago / 365.0)
 
         evidence_strength = min(1.0, len(indices) / 10.0)
 
@@ -134,7 +141,9 @@ def _build_clusters(
                 description=representative,
                 member_indices=indices,
                 frequency=len(indices),
-                recency_score=round(recency, 4),
+                # 6 decimals: 4 would round anything past ~3 years old to
+                # exactly 0.0, colliding with the "no timestamp data" sentinel.
+                recency_score=round(recency, 6),
                 evidence_strength=round(evidence_strength, 4),
             )
         )

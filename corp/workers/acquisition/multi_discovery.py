@@ -30,6 +30,7 @@ from corp.core.state.research_run import validate_run_type
 from corp.warmstore.sync import mirror_evidence
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent
 from corp.workers.adapters.health import SourceHealthTracker
+from corp.workers.acquisition.slug import slugify
 from corp.workers.adapters.registry import build_adapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
@@ -51,11 +52,6 @@ NICHE_PLATFORMS = (
     "googletrends",
     "appstore",
 )
-
-
-def _slug(text: str) -> str:
-    import re
-    return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_").lower()[:80] or "query"
 
 
 class MultiSourceDiscovery:
@@ -270,7 +266,7 @@ class MultiSourceDiscovery:
     ) -> str | None:
         if not items:
             return None
-        relative = Path("discovery") / run_id / f"multi__{_slug(query)}.jsonl"
+        relative = Path("discovery") / run_id / f"multi__{slugify(query)}.jsonl"
         target = self._data_path / relative
         try:
             target.parent.mkdir(parents=True, exist_ok=True)

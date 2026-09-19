@@ -23,13 +23,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.niche import Niche
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
+from corp.workers.intelligence.niche_queries import verified_niches
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -164,11 +162,24 @@ class EcosystemEstimator:
         stats = PipelineStats()
 
         try:
-            niches = await self._verified_niches(campaign_id)
+            niches = await verified_niches(self._session, campaign_id)
+
+            # Pass 1 — search every niche (yt-dlp; no reliable subscriber counts).
+            niche_channels: list[tuple[Niche, dict[str, dict]]] = [
+                (niche, await self._search_niche_channels(niche)) for _, niche in niches
+            ]
+
+            # Pass 2 — one deduplicated, batched Data API enrichment for the
+            # whole campaign. A channel found in several niches is looked up
+            # once, and channels.list bills 1 quota unit per 50 IDs, so this
+            # is the cheapest way to get real subscriber counts (mirrors
+            # creator_onboarding.py's _enrich_all).
+            await self._enrich_all(niche_channels)
+
             results: list[dict[str, Any]] = []
 
-            for cn, niche in niches:
-                result = await self._estimate_niche(niche)
+            for (cn, niche), (_, channels) in zip(niches, niche_channels, strict=True):
+                result = self._summarize_niche(niche, channels)
                 cn.creator_count_observed = result.total_creators
                 cn.target_band_creator_count = result.target_band_creators
                 await self._session.flush()
@@ -200,7 +211,11 @@ class EcosystemEstimator:
             )
             raise
 
-    async def _estimate_niche(self, niche: Niche) -> NicheEcoResult:
+    async def _search_niche_channels(self, niche: Niche) -> dict[str, dict]:
+        """Search one niche and return every unique channel, uncorrected
+        subscriber counts (yt-dlp only). Enrichment happens once, campaign-wide,
+        in :meth:`_enrich_all` — not here — so a channel found in several
+        niches costs one Data API lookup, not one per niche."""
         query = f"ytsearch{self._cfg.search_count}:{niche.canonical_name}"
         items = await self._adapter.collect(query)
 
@@ -224,14 +239,51 @@ class EcosystemEstimator:
                 "name": getattr(item, "author", None),
                 "follower_count": _as_int_or_none(meta.get("follower_count")),
             }
+        return seen_channels
 
-        if self._enricher and seen_channels:
-            await self._enrich_subscriber_counts(seen_channels)
+    async def _enrich_all(
+        self, niche_channels: list[tuple[Niche, dict[str, dict]]],
+    ) -> None:
+        """One deduplicated, batched subscriber-count lookup for the whole
+        campaign, applied back into every niche's channel dict in place.
 
-        total = len(seen_channels)
+        Each niche has its own separate channels dict from
+        :meth:`_search_niche_channels`, so a channel shared across niches
+        exists as multiple independent dict entries — the count must be
+        written into all of them, not just one arbitrary occurrence.
+        """
+        if self._enricher is None:
+            return
+        ids = sorted({
+            cid
+            for _, channels in niche_channels
+            for cid in channels
+            if cid.startswith("UC") and len(cid) == 24
+        })
+        if not ids:
+            return
+        try:
+            counts = await self._enricher.get_subscriber_counts(ids)
+        except Exception:
+            logger.warning(
+                "YouTube API enrichment failed; using yt-dlp counts only",
+                exc_info=True,
+            )
+            return
+        for _, channels in niche_channels:
+            for cid, info in channels.items():
+                count = counts.get(cid)
+                if count is not None:
+                    info["follower_count"] = count
+        logger.info(
+            "Enriched %d/%d channels with subscriber counts", len(counts), len(ids),
+        )
+
+    def _summarize_niche(self, niche: Niche, channels: dict[str, dict]) -> NicheEcoResult:
+        total = len(channels)
         in_band = 0
         channels_out: list[dict[str, Any]] = []
-        for info in seen_channels.values():
+        for info in channels.values():
             fc = info.get("follower_count")
             in_target = (
                 fc is not None
@@ -249,40 +301,3 @@ class EcosystemEstimator:
             channels=channels_out,
         )
 
-    async def _enrich_subscriber_counts(
-        self, channels: dict[str, dict[str, Any]],
-    ) -> None:
-        ids = [
-            cid for cid in channels
-            if cid.startswith("UC") and len(cid) == 24
-        ]
-        if not ids:
-            return
-        try:
-            counts = await self._enricher.get_subscriber_counts(ids)  # type: ignore[union-attr]
-            for cid, count in counts.items():
-                if cid in channels and count is not None:
-                    channels[cid]["follower_count"] = count
-            logger.info(
-                "Enriched %d/%d channels with subscriber counts",
-                len(counts), len(ids),
-            )
-        except Exception:
-            logger.warning(
-                "YouTube API enrichment failed; using yt-dlp counts only",
-                exc_info=True,
-            )
-
-    async def _verified_niches(
-        self, campaign_id: str,
-    ) -> list[tuple[CampaignNiche, Niche]]:
-        result = await self._session.execute(
-            select(CampaignNiche)
-            .options(selectinload(CampaignNiche.niche))
-            .where(
-                CampaignNiche.campaign_id == campaign_id,
-                CampaignNiche.status == CampaignNicheStatus.VERIFIED,
-            )
-        )
-        rows = list(result.scalars().all())
-        return [(cn, cn.niche) for cn in rows]

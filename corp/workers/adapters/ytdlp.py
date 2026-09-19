@@ -18,6 +18,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
@@ -26,6 +27,19 @@ from corp.workers.adapters.captions import fetch_youtube_caption
 logger = logging.getLogger(__name__)
 
 SUPPORTED_PLATFORMS = ("youtube", "tiktok")
+
+# yt-dlp's generic extractor will fetch whatever URL it's handed, server-side.
+# A caller-supplied identifier that happens to be an absolute URL must be
+# restricted to the platform's own domains, or this becomes an SSRF primitive.
+_ALLOWED_HOSTS: dict[str, tuple[str, ...]] = {
+    "youtube": ("youtube.com", "youtu.be"),
+    "tiktok": ("tiktok.com",),
+}
+
+
+def _host_allowed(host: str, platform: str) -> bool:
+    host = host.lower()
+    return any(host == domain or host.endswith(f".{domain}") for domain in _ALLOWED_HOSTS[platform])
 
 
 class _Extractor(Protocol):
@@ -145,8 +159,15 @@ class YtDlpAdapter(SourceAdapter):
 
     def profile_url(self, identifier: str) -> str:
         ident = identifier.strip()
-        if ident.startswith(("http://", "https://")) or self.is_search(ident):
+        if self.is_search(ident):
             # yt-dlp takes ``ytsearchN:query`` in the URL position as-is.
+            return ident
+        if ident.startswith(("http://", "https://")):
+            host = urlparse(ident).hostname or ""
+            if not _host_allowed(host, self._platform):
+                raise ValueError(
+                    f"URL host {host!r} is not allowed for platform {self._platform!r}: {ident!r}"
+                )
             return ident
         if self._platform == "youtube":
             if ident.startswith("UC"):

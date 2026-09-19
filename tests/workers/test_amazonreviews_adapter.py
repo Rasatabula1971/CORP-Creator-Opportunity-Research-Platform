@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from corp.workers.adapters.amazonreviews import (
+    MAX_REVIEW_PAGES,
     STAR_FILTER,
     AmazonReviewAdapter,
     _extract_asins,
@@ -249,6 +250,32 @@ async def test_empty_results(mock_client):
 
     results = await adapter.collect("asin:B00NONEXIST")
     assert results == []
+
+
+# ── pagination is bounded even when Amazon never returns empty ─────
+
+
+async def test_pagination_stops_after_max_pages(mock_client):
+    """Amazon has been observed to repeat the last valid page past its real
+    pagination limit instead of returning empty — without an explicit page
+    cap the collector would retry forever."""
+    adapter = AmazonReviewAdapter(
+        max_reviews=10_000, client=mock_client, request_interval_seconds=0.0
+    )
+
+    call_count = 0
+
+    async def mock_get(path, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return _mock_resp(SAMPLE_REVIEW_HTML)  # never empty, always 2 reviews
+
+    mock_client.get = mock_get
+
+    results = await adapter.collect("asin:B08TEST")
+
+    assert call_count == MAX_REVIEW_PAGES
+    assert len(results) == MAX_REVIEW_PAGES * 2
 
 
 # ── request counting ──────────────────────────────────────────────

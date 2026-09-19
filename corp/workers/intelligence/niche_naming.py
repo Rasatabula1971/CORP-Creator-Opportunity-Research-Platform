@@ -79,12 +79,18 @@ def _normalize(text: str) -> str:
 
 
 def check_grounding(terms: list[str], texts: list[str]) -> list[str]:
-    """Return the cited terms that do NOT occur in the texts (case/space-insensitive)."""
+    """Return the cited terms that do NOT occur in the texts (case/space-insensitive).
+
+    Matches on word boundaries rather than plain substring containment, so a
+    short but genuinely-cited term ("AI", "EV", "VR") is verified correctly
+    instead of being blanket-rejected for being short — and so it can't be
+    credited for merely appearing as a fragment inside an unrelated word.
+    """
     corpus = _normalize(" \n ".join(texts))
     missing: list[str] = []
     for term in terms:
         needle = _normalize(term).strip()
-        if len(needle) < 3 or needle not in corpus:
+        if not needle or not re.search(rf"\b{re.escape(needle)}\b", corpus):
             missing.append(term)
     return missing
 

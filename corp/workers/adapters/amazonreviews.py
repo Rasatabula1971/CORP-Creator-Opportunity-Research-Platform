@@ -51,6 +51,11 @@ DEFAULT_USER_AGENT = (
 # every rating comes back.
 STAR_FILTER = "critical"
 
+# Amazon caps how far its review pagination actually goes for anonymous
+# access; past that it has been observed to repeat the last valid page
+# instead of returning empty, which would otherwise loop forever below.
+MAX_REVIEW_PAGES = 10
+
 
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
@@ -100,6 +105,7 @@ class AmazonReviewAdapter(SourceAdapter, DissatisfactionProvider):
         self._interval = request_interval_seconds
         self._client = client
         self._last_request_at: float | None = None
+        self._throttle_lock = asyncio.Lock()
         self.request_count = 0
 
     @property
@@ -166,7 +172,7 @@ class AmazonReviewAdapter(SourceAdapter, DissatisfactionProvider):
         results: list[NormalizedContent] = []
         page = 1
 
-        while len(results) < limit:
+        while len(results) < limit and page <= MAX_REVIEW_PAGES:
             html = await self._get_page(
                 f"/product-reviews/{asin}",
                 params={
@@ -206,13 +212,17 @@ class AmazonReviewAdapter(SourceAdapter, DissatisfactionProvider):
         return self._client
 
     async def _throttle(self) -> None:
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        if self._last_request_at is not None:
-            wait = self._interval - (now - self._last_request_at)
-            if wait > 0:
-                await asyncio.sleep(wait)
-        self._last_request_at = loop.time()
+        # Locked so concurrent calls on the same adapter instance can't both
+        # read a stale _last_request_at and fire back-to-back, defeating the
+        # rate limit this method exists to enforce.
+        async with self._throttle_lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            if self._last_request_at is not None:
+                wait = self._interval - (now - self._last_request_at)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+            self._last_request_at = loop.time()
 
     @retry(
         retry=retry_if_exception(_is_retryable),

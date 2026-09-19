@@ -1,3 +1,5 @@
+import type { Paged } from "./types";
+
 const API_BASE_KEY = "corp.apiBase";
 const API_KEY_KEY = "corp.apiKey";
 
@@ -48,7 +50,6 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     }
     throw new ApiError(res.status, code, message);
   }
-
   return res;
 }
 
@@ -58,8 +59,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function requestWithCount<T>(path: string): Promise<{ items: T[]; totalCount: number }> {
-  const res = await send(path);
+async function requestWithCount<T>(path: string, init?: RequestInit): Promise<Paged<T>> {
+  const res = await send(path, init);
   const items = (await res.json()) as T[];
   const totalCount = Number(res.headers.get("X-Total-Count") ?? items.length);
   return { items, totalCount };

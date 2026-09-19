@@ -6,6 +6,7 @@ the score but never hashed.
 """
 
 import logging
+import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -570,6 +571,20 @@ class ScoringPipeline:
         return creator_score
 
 
+# clustering.py reserves an exact 0.0 recency_score for "no timestamp data at
+# all", distinct from any real (however old) date, which decays exponentially
+# and never reaches exactly 0.0. Feeding that sentinel through the inverse
+# formula would divide by zero, so it maps to a fixed "unknown recency" age
+# instead — comfortably past every confidence-band threshold, so it's still
+# scored conservatively, just not confused with a specific measured age.
+_UNKNOWN_RECENCY_DAYS = 3650
+
+
 def _days_from_recency(recency_score: float) -> int:
-    """Invert the 0..1 recency score back to an approximate age in days."""
-    return int((1.0 - recency_score) * 365) if recency_score < 1.0 else 0
+    """Invert clustering.py's exponential decay (recency = exp(-days/365))
+    back to an approximate age in days."""
+    if recency_score <= 0.0:
+        return _UNKNOWN_RECENCY_DAYS
+    if recency_score >= 1.0:
+        return 0
+    return round(-365.0 * math.log(recency_score))

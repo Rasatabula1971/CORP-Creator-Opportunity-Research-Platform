@@ -70,6 +70,7 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
         self._api_key = api_key
         self._client = client
         self._last_request_at: float | None = None
+        self._throttle_lock = asyncio.Lock()
         self.request_count = 0
         self.quota_remaining: int | None = None
 
@@ -150,7 +151,9 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
                 break
 
             for q in items:
-                results.append(self._question_to_content(q))
+                content = self._question_to_content(q)
+                if content is not None:
+                    results.append(content)
                 remaining -= 1
                 if remaining <= 0:
                     break
@@ -202,9 +205,13 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
                     break
                 page += 1
 
-        return [self._answer_to_content(a) for a in best.values()]
+        contents = (self._answer_to_content(a) for a in best.values())
+        return [c for c in contents if c is not None]
 
-    def _question_to_content(self, q: dict[str, Any]) -> NormalizedContent:
+    def _question_to_content(self, q: dict[str, Any]) -> NormalizedContent | None:
+        question_id = q.get("question_id")
+        if question_id is None:
+            return None
         title = q.get("title", "")
         body = _html_to_text(q.get("body", ""))
         text = f"{title}\n\n{body}".strip() if body else title
@@ -214,7 +221,7 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
         return NormalizedContent(
             source_platform="stackexchange",
             content_type="question",
-            external_id=str(q["question_id"]),
+            external_id=str(question_id),
             text=text,
             author=owner.get("display_name"),
             timestamp=_ts(q.get("creation_date")),
@@ -232,12 +239,15 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
             },
         )
 
-    def _answer_to_content(self, a: dict[str, Any]) -> NormalizedContent:
+    def _answer_to_content(self, a: dict[str, Any]) -> NormalizedContent | None:
+        answer_id = a.get("answer_id")
+        if answer_id is None:
+            return None
         owner = a.get("owner", {})
         return NormalizedContent(
             source_platform="stackexchange",
             content_type="reply",
-            external_id=str(a["answer_id"]),
+            external_id=str(answer_id),
             text=_html_to_text(a.get("body", "")),
             author=owner.get("display_name"),
             timestamp=_ts(a.get("creation_date")),
@@ -261,13 +271,17 @@ class StackExchangeAdapter(SourceAdapter, ProblemProvider):
         return self._client
 
     async def _throttle(self) -> None:
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        if self._last_request_at is not None:
-            wait = self._interval - (now - self._last_request_at)
-            if wait > 0:
-                await asyncio.sleep(wait)
-        self._last_request_at = loop.time()
+        # Locked so concurrent calls on the same adapter instance can't both
+        # read a stale _last_request_at and fire back-to-back, defeating the
+        # rate limit this method exists to enforce.
+        async with self._throttle_lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            if self._last_request_at is not None:
+                wait = self._interval - (now - self._last_request_at)
+                if wait > 0:
+                    await asyncio.sleep(wait)
+            self._last_request_at = loop.time()
 
     @retry(
         retry=retry_if_exception(_is_retryable),

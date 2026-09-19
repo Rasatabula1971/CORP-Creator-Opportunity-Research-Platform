@@ -54,8 +54,21 @@ def test_check_grounding_is_case_and_space_insensitive():
     assert check_grounding(["ESPRESSO  machine", "Grind size"], TEXTS) == []
 
 
-def test_check_grounding_reports_missing_and_too_short_terms():
+def test_check_grounding_reports_missing_terms():
     assert check_grounding(["espresso machine", "latte art", "ok"], TEXTS) == ["latte art", "ok"]
+
+
+def test_check_grounding_does_not_reject_a_genuinely_present_short_term():
+    """A short term that's actually cited in the evidence (e.g. "to" in "how
+    to fix") must not be discarded just for being short — that used to
+    silently fail an otherwise well-grounded naming result."""
+    assert check_grounding(["to"], TEXTS) == []
+
+
+def test_check_grounding_rejects_short_term_matching_only_as_a_fragment():
+    """A short needle must match a whole word, not a substring of a longer,
+    unrelated one (e.g. "to" inside "shots")."""
+    assert check_grounding(["hot"], ["the shots taste sour"]) == ["hot"]
 
 
 # ── the call ──────────────────────────────────────────────────────────

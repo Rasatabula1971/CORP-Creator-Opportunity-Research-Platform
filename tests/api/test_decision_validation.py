@@ -72,6 +72,38 @@ def test_extra_body_fields_ignored():
     assert resp.status_code == 404
 
 
+def test_invalid_transition_returns_dedicated_error_code():
+    """record_gate_a_decision's InvalidTransitionError must propagate to the
+    app-level handler (409, code="invalid_transition"), not get swallowed
+    into a generic HTTPException(409) with code="conflict"."""
+    from unittest.mock import AsyncMock, patch
+
+    from corp.core.state.machine import InvalidTransitionError
+
+    app = FastAPI()
+    register_error_handlers(app)
+    app.include_router(router)
+
+    async def _fake_session():
+        s = MagicMock()
+        s.get = AsyncMock(return_value=MagicMock())
+        yield s
+
+    app.dependency_overrides[get_session] = _fake_session
+    client = TestClient(app, raise_server_exceptions=False)
+
+    with patch(
+        "corp.api.routes.record_gate_a_decision",
+        AsyncMock(side_effect=InvalidTransitionError("creator already decided")),
+    ):
+        resp = client.post(
+            "/creators/abc/decisions",
+            json={"creator_id": "abc", "gate": "gate_a", "decision": "approve"},
+        )
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "invalid_transition"
+
+
 def test_get_dossier_missing_creator_is_404():
     # session.get -> None means no such creator → 404 (and other errors are no
     # longer masked as "Creator not found").

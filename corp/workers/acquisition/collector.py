@@ -175,7 +175,7 @@ class AcquisitionCollector:
     ) -> None:
         """Update the platform account's follower count and append a snapshot."""
         meta = item.metadata or {}
-        followers = meta.get("follower_count")
+        followers = _int_or_none(meta.get("follower_count"))
         result = await self._session.execute(
             select(CreatorPlatformAccount).where(
                 CreatorPlatformAccount.creator_id == creator_id,
@@ -191,7 +191,7 @@ class AcquisitionCollector:
             )
         else:
             if followers is not None:
-                account.subscriber_count = _int_or_none(followers)
+                account.subscriber_count = followers
             if meta.get("handle") and not account.external_id:
                 account.external_id = str(meta["handle"])[:255]
             # Populate main-lineage typed channel enrichment columns from adapter
@@ -220,7 +220,7 @@ class AcquisitionCollector:
         snapshot = MetricsSnapshot(
             research_run_id=research_run_id,
             platform_account_id=account.id if account else None,
-            follower_count=_int_or_none(followers),
+            follower_count=followers,
             extra={
                 "platform": item.source_platform,
                 "display_name": meta.get("display_name"),
@@ -313,9 +313,12 @@ class AcquisitionCollector:
         item: NormalizedContent,
         content_map: dict[str, ContentItem],
     ) -> ContentItem | None:
-        """Find the ContentItem a comment/reply belongs to."""
-        # For top-level comments, parent_id is the video external_id
-        if item.content_type == "comment" and item.parent_id:
+        """Find the ContentItem a comment/reply/question/review belongs to."""
+        # Top-level interactions: parent_id, when set, is the content item's
+        # external_id directly. "question"/"review" are declared as supported
+        # interaction types (see _INTERACTION_TYPE_MAP) alongside "comment", so
+        # they must be matched the same way or they're silently orphaned.
+        if item.content_type in ("comment", "question", "review") and item.parent_id:
             return content_map.get(item.parent_id)
 
         # For replies, parent_id is the comment external_id.
