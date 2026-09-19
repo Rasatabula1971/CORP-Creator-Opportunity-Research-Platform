@@ -11,8 +11,10 @@ creator published to be read.
 """
 
 import asyncio
+import ipaddress
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -36,6 +38,27 @@ COMMERCE_PATTERNS: dict[str, re.Pattern[str]] = {
 }
 
 _SKIP_TAGS = {"script", "style", "noscript", "svg", "template"}
+
+_MAX_REDIRECTS = 5
+
+
+def _is_public_ip(ip: str) -> bool:
+    addr = ipaddress.ip_address(ip)
+    return not (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+        or addr.is_unspecified
+    )
+
+
+async def _default_resolve_host(host: str) -> list[str]:
+    """Real DNS resolution, off the event loop thread."""
+    loop = asyncio.get_running_loop()
+    infos = await loop.getaddrinfo(host, None)
+    return [info[4][0] for info in infos]
 
 
 class _TextAndLinks(HTMLParser):
@@ -124,12 +147,14 @@ class WebPresenceAdapter(SourceAdapter):
         request_interval_seconds: float = 1.0,
         max_text_chars: int = 20_000,
         client: httpx.AsyncClient | None = None,
+        resolve_host: Callable[[str], Awaitable[list[str]]] = _default_resolve_host,
     ) -> None:
         self._user_agent = user_agent
         self._max_pages = max_pages
         self._interval = request_interval_seconds
         self._max_text = max_text_chars
         self._client = client
+        self._resolve_host = resolve_host
 
     @property
     def platform(self) -> str:
@@ -197,11 +222,33 @@ class WebPresenceAdapter(SourceAdapter):
 
     async def _fetch_page(self, url: str) -> NormalizedContent | None:
         client = self._get_client()
+        current = url
+        resp: httpx.Response | None = None
+        for _ in range(_MAX_REDIRECTS + 1):
+            if not await self._is_safe_url(current):
+                logger.warning("Refusing to fetch unsafe host for %s", current)
+                return None
+            try:
+                # Redirects are followed manually (one hop at a time) so each
+                # hop is re-validated below — otherwise a safe start URL could
+                # redirect straight into an internal/metadata address (SSRF).
+                resp = await client.get(current, follow_redirects=False)
+            except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                logger.warning("Fetch failed for %s: %s", current, exc)
+                return None
+            location = resp.headers.get("location")
+            if not (300 <= resp.status_code < 400 and location):
+                break
+            current = urljoin(str(resp.url), location)
+        else:
+            logger.warning("Too many redirects for %s", url)
+            return None
+
+        assert resp is not None
         try:
-            resp = await client.get(url)
             resp.raise_for_status()
-        except (httpx.HTTPError, httpx.InvalidURL) as exc:
-            logger.warning("Fetch failed for %s: %s", url, exc)
+        except httpx.HTTPError as exc:
+            logger.warning("Fetch failed for %s: %s", current, exc)
             return None
         if "html" not in resp.headers.get("content-type", "").lower():
             return None
@@ -225,6 +272,26 @@ class WebPresenceAdapter(SourceAdapter):
                 "commerce_signals": parsed["commerce_signals"],
             },
         )
+
+    async def _is_safe_url(self, url: str) -> bool:
+        """Reject scheme/host combos that could point at internal infrastructure."""
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            pass
+        else:
+            return _is_public_ip(host)
+        try:
+            addrs = await self._resolve_host(host)
+        except OSError:
+            return False
+        return bool(addrs) and all(_is_public_ip(a) for a in addrs)
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:

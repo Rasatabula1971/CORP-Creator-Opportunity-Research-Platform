@@ -23,6 +23,11 @@ LANDING = """
 SHOP = "<html><head><title>Shop</title></head><body><p>Bracket kit $29</p></body></html>"
 
 
+async def _resolve_public(host: str) -> list[str]:
+    """Test double: every host resolves to a fixed public IP, no real DNS."""
+    return ["93.184.216.34"]
+
+
 def _adapter(routes: dict[str, httpx.Response], calls=None, **kw) -> WebPresenceAdapter:
     async def handler(request: httpx.Request) -> httpx.Response:
         if calls is not None:
@@ -30,6 +35,7 @@ def _adapter(routes: dict[str, httpx.Response], calls=None, **kw) -> WebPresence
         return routes.get(str(request.url), httpx.Response(404, text="nope"))
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True)
+    kw.setdefault("resolve_host", _resolve_public)
     return WebPresenceAdapter(request_interval_seconds=0.0, client=client, **kw)
 
 
@@ -144,4 +150,36 @@ async def test_no_duplicate_when_candidates_redirect_to_same_page():
     items = await a.collect("https://example.com/")
     shop_pages = [i for i in items if i.external_id == "https://example.com/shop"]
     assert len(shop_pages) == 1  # both redirects land on /shop; collected once
+    await a.close()
+
+
+async def test_refuses_host_resolving_to_private_ip():
+    async def resolve_private(host: str) -> list[str]:
+        return ["10.0.0.5"]
+
+    a = _adapter({"https://internal.example/": _html(LANDING)}, resolve_host=resolve_private)
+    assert await a.collect("internal.example") == []
+    await a.close()
+
+
+async def test_refuses_literal_ip_in_reserved_range():
+    calls: list[str] = []
+    a = _adapter({}, calls=calls)
+    assert await a.collect("http://169.254.169.254/latest/meta-data/") == []
+    assert calls == []  # never even attempted the request
+    await a.close()
+
+
+async def test_refuses_redirect_into_private_ip():
+    routes = {
+        "https://example.com/": httpx.Response(
+            302, headers={"location": "http://internal.example/secret"}
+        ),
+    }
+
+    async def resolve(host: str) -> list[str]:
+        return ["10.0.0.5"] if host == "internal.example" else ["93.184.216.34"]
+
+    a = _adapter(routes, resolve_host=resolve)
+    assert await a.collect("https://example.com/") == []
     await a.close()
