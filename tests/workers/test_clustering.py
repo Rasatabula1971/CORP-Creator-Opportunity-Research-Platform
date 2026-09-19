@@ -87,6 +87,30 @@ async def test_cluster_recency_scoring():
         assert results[0].recency_score > 0.9
 
 
+async def test_recency_distinguishes_no_data_from_old_data():
+    """0.0 must mean "no timestamp data" specifically — a real but old
+    timestamp must decay to a small positive value, never collide with the
+    no-data sentinel, and different old ages must stay distinguishable from
+    each other (previously both saturated to an identical 0.0)."""
+    from datetime import timedelta
+
+    texts, embeddings = _make_clustered_embeddings(n_per_cluster=10, n_clusters=1, dim=10)
+    config = ClusteringConfig(min_cluster_size=3, min_samples=2, umap_n_components=3)
+
+    no_timestamps = cluster_observations(texts, embeddings, None, config=config)
+    now = datetime.now(UTC)
+    old_400 = cluster_observations(
+        texts, embeddings, [now - timedelta(days=400)] * len(texts), config=config
+    )
+    old_4000 = cluster_observations(
+        texts, embeddings, [now - timedelta(days=4000)] * len(texts), config=config
+    )
+
+    if no_timestamps and old_400 and old_4000:
+        assert no_timestamps[0].recency_score == 0.0
+        assert 0.0 < old_4000[0].recency_score < old_400[0].recency_score < 1.0
+
+
 async def test_cluster_determinism():
     """Same input + same seed → same output."""
     texts, embeddings = _make_clustered_embeddings(n_per_cluster=10, n_clusters=2, dim=10, seed=99)
