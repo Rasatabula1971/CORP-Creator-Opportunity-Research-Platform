@@ -52,7 +52,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
-from corp.core.models.evidence import Evidence, EvidenceType
+from corp.core.models.evidence import Evidence, EvidenceOrigin, EvidenceType
 from corp.core.models.niche import Niche, NicheAlias
 from corp.core.models.niche_candidate import (
     NicheCandidate,
@@ -685,4 +685,5 @@ def _to_evidence(item: NormalizedContent, run_id: str, evidence_type: EvidenceTy
         compliance_status=item.compliance_status,
         research_run_id=run_id,
         evidence_type=evidence_type,
+        origin=EvidenceOrigin.OBSERVATION,
     )

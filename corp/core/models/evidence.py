@@ -44,6 +44,41 @@ class EvidenceType(str, enum.Enum):
     DISSATISFACTION = "dissatisfaction"
 
 
+_PLATFORM_EVIDENCE_TYPE: dict[str, EvidenceType] = {
+    "youtube": EvidenceType.PROBLEM,
+    "reddit": EvidenceType.PROBLEM,
+    "stackexchange": EvidenceType.PROBLEM,
+    "hackernews": EvidenceType.PROBLEM,
+    "quora": EvidenceType.PROBLEM,
+    "google_trends": EvidenceType.TREND,
+    "google_trends_rss": EvidenceType.TREND,
+    "wikipedia": EvidenceType.TREND,
+    "gumroad": EvidenceType.TRANSACTION,
+    "etsy": EvidenceType.TRANSACTION,
+    "udemy": EvidenceType.TRANSACTION,
+    "marketplace": EvidenceType.TRANSACTION,
+    "crowdfunding": EvidenceType.TRANSACTION,
+    "kickstarter": EvidenceType.TRANSACTION,
+    "indiegogo": EvidenceType.TRANSACTION,
+    "amazon": EvidenceType.DISSATISFACTION,
+    "amazon_reviews": EvidenceType.DISSATISFACTION,
+    "app_store": EvidenceType.SOLUTION,
+    "search_demand": EvidenceType.SEARCH_INTENT,
+    "patreon": EvidenceType.MONETISATION,
+    "substack": EvidenceType.MONETISATION,
+    "pinterest": EvidenceType.PLANNING_INTENT,
+    "trustpilot": EvidenceType.DISSATISFACTION,
+    "product_hunt": EvidenceType.SOLUTION,
+    "google_books": EvidenceType.SOLUTION,
+    "google_shopping": EvidenceType.SOLUTION,
+}
+
+
+def infer_evidence_type(source_platform: str) -> EvidenceType | None:
+    """Best-effort platform → evidence-type mapping for legacy collect() paths."""
+    return _PLATFORM_EVIDENCE_TYPE.get(source_platform)
+
+
 class Evidence(Base):
     """Append-only evidence store. No UPDATE or DELETE — ever."""
 
