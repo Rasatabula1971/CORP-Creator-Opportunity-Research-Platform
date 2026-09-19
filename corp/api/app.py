@@ -1,5 +1,9 @@
 """FastAPI application factory."""
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,10 +13,40 @@ from corp.api.routes import router
 from corp.api.routes_ops import health
 from corp.api.routes_ops import router as ops_router
 from corp.config import settings
+from corp.database import async_session
+from corp.workers.scheduler.registry_rescan import RegistryRescanScheduler
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    scheduler: RegistryRescanScheduler | None = None
+    try:
+        scheduler = RegistryRescanScheduler(
+            async_session,
+            settings.scoring_rules_path,
+        )
+        scheduler.start()
+        logger.info("Registry re-scan scheduler started")
+    except Exception:
+        logger.exception(
+            "Registry re-scan scheduler failed to start — API continues without auto-rescan",
+        )
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            await scheduler.stop()
+            logger.info("Registry re-scan scheduler stopped")
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CORP", description="Creator Opportunity Research Platform")
+    app = FastAPI(
+        title="CORP",
+        description="Creator Opportunity Research Platform",
+        lifespan=lifespan,
+    )
 
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
