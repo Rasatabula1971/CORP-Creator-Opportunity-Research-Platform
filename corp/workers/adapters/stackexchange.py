@@ -142,7 +142,9 @@ class StackExchangeAdapter(SourceAdapter):
                 break
 
             for q in items:
-                results.append(self._question_to_content(q))
+                content = self._question_to_content(q)
+                if content is not None:
+                    results.append(content)
                 remaining -= 1
                 if remaining <= 0:
                     break
@@ -177,10 +179,15 @@ class StackExchangeAdapter(SourceAdapter):
 
             data = await self._get_json(f"/questions/{ids}/answers", params)
             for a in data.get("items", []):
-                results.append(self._answer_to_content(a))
+                content = self._answer_to_content(a)
+                if content is not None:
+                    results.append(content)
         return results
 
-    def _question_to_content(self, q: dict[str, Any]) -> NormalizedContent:
+    def _question_to_content(self, q: dict[str, Any]) -> NormalizedContent | None:
+        question_id = q.get("question_id")
+        if question_id is None:
+            return None
         title = q.get("title", "")
         body = q.get("body", "")
         text = f"{title}\n\n{body}".strip() if body else title
@@ -190,7 +197,7 @@ class StackExchangeAdapter(SourceAdapter):
         return NormalizedContent(
             source_platform="stackexchange",
             content_type="question",
-            external_id=str(q["question_id"]),
+            external_id=str(question_id),
             text=text,
             author=owner.get("display_name"),
             timestamp=_ts(q.get("creation_date")),
@@ -208,12 +215,15 @@ class StackExchangeAdapter(SourceAdapter):
             },
         )
 
-    def _answer_to_content(self, a: dict[str, Any]) -> NormalizedContent:
+    def _answer_to_content(self, a: dict[str, Any]) -> NormalizedContent | None:
+        answer_id = a.get("answer_id")
+        if answer_id is None:
+            return None
         owner = a.get("owner", {})
         return NormalizedContent(
             source_platform="stackexchange",
             content_type="reply",
-            external_id=str(a["answer_id"]),
+            external_id=str(answer_id),
             text=a.get("body", ""),
             author=owner.get("display_name"),
             timestamp=_ts(a.get("creation_date")),

@@ -112,7 +112,10 @@ class RedditAdapter(SourceAdapter):
             for child in children:
                 if child.get("kind") != "t3":
                     continue
-                posts.append(self._post_to_content(child["data"]))
+                post = self._post_to_content(child["data"])
+                if post is None:
+                    continue
+                posts.append(post)
                 if len(posts) >= self._posts_per_creator:
                     break
             after = data.get("data", {}).get("after")
@@ -135,14 +138,17 @@ class RedditAdapter(SourceAdapter):
 
     # ── Mapping ──────────────────────────────────────────────────────
 
-    def _post_to_content(self, d: dict[str, Any]) -> NormalizedContent:
+    def _post_to_content(self, d: dict[str, Any]) -> NormalizedContent | None:
+        post_id = d.get("id")
+        if post_id is None:
+            return None
         title = d.get("title") or ""
         body = d.get("selftext") or ""
         text = f"{title}\n\n{body}".strip() if body else title
         return NormalizedContent(
             source_platform="reddit",
             content_type="post",
-            external_id=d["id"],
+            external_id=post_id,
             text=text,
             author=d.get("author"),
             timestamp=_ts(d.get("created_utc")),
@@ -169,27 +175,29 @@ class RedditAdapter(SourceAdapter):
             if child.get("kind") != "t1":
                 continue  # "more" stubs need extra requests; skipped deliberately
             d = child["data"]
+            comment_id = d.get("id")
             parent_full = d.get("parent_id", "")
             is_top_level = parent_full.startswith("t3_")
-            out.append(
-                NormalizedContent(
-                    source_platform="reddit",
-                    content_type="comment" if is_top_level else "reply",
-                    external_id=d["id"],
-                    text=d.get("body") or "",
-                    author=d.get("author"),
-                    timestamp=_ts(d.get("created_utc")),
-                    parent_id=post_id if is_top_level else parent_full.split("_", 1)[-1],
-                    url=f"{self._base_url}{d.get('permalink', '')}",
-                    access_method=self.access_method,
-                    compliance_status=self.compliance_status,
-                    metadata={
-                        "like_count": d.get("score", 0),
-                        "depth": d.get("depth", 0),
-                        "post_id": post_id,
-                    },
+            if comment_id is not None:
+                out.append(
+                    NormalizedContent(
+                        source_platform="reddit",
+                        content_type="comment" if is_top_level else "reply",
+                        external_id=comment_id,
+                        text=d.get("body") or "",
+                        author=d.get("author"),
+                        timestamp=_ts(d.get("created_utc")),
+                        parent_id=post_id if is_top_level else parent_full.split("_", 1)[-1],
+                        url=f"{self._base_url}{d.get('permalink', '')}",
+                        access_method=self.access_method,
+                        compliance_status=self.compliance_status,
+                        metadata={
+                            "like_count": d.get("score", 0),
+                            "depth": d.get("depth", 0),
+                            "post_id": post_id,
+                        },
+                    )
                 )
-            )
             replies = d.get("replies")
             if isinstance(replies, dict):
                 self._walk_comments(replies.get("data", {}).get("children", []), post_id, out)
