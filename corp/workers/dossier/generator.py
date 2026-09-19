@@ -134,7 +134,9 @@ class DossierGenerator:
 
         product_ideas = await self._load_product_ideas(creator_id)
         path = await self._niche_path(niche_id)
-        top = data.opportunities[0]  # already sorted by aggregate_score desc
+
+        niche_opps = await self._filter_niche_opportunities(data.opportunities, niche_id)
+        top = niche_opps[0] if niche_opps else data.opportunities[0]
         recommendation = self._build_recommendation(data, top)
 
         content: dict[str, Any] = {
@@ -406,6 +408,28 @@ class DossierGenerator:
         )
 
     # ── T6: persistence helpers ──────────────────────────────────────
+
+    async def _filter_niche_opportunities(
+        self, opportunities: list[OpportunityContext], niche_id: str
+    ) -> list[OpportunityContext]:
+        """Return only opportunities whose evidence traces to research runs
+        for this niche, preserving the existing sort order. Falls back to
+        empty if no evidence links exist (caller picks global top)."""
+        all_ev_ids = {obs.evidence_id for o in opportunities for obs in o.observations}
+        if not all_ev_ids:
+            return []
+        result = await self._session.execute(
+            select(Evidence.id)
+            .join(ResearchRun, ResearchRun.id == Evidence.research_run_id)
+            .where(Evidence.id.in_(all_ev_ids), ResearchRun.niche_id == niche_id)
+        )
+        niche_ev_ids = set(result.scalars().all())
+        if not niche_ev_ids:
+            return []
+        return [
+            o for o in opportunities
+            if any(obs.evidence_id in niche_ev_ids for obs in o.observations)
+        ]
 
     async def _load_product_ideas(self, creator_id: str) -> list[ProductIdea]:
         result = await self._session.execute(

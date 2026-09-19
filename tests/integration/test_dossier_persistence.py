@@ -372,6 +372,89 @@ async def test_rerun_supersedes_prior_dossier(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_niche_scoping_picks_niche_relevant_opportunity(clean_db: AsyncSession):
+    """A multi-niche creator's dossier should reference the top opportunity
+    whose evidence traces to THIS niche, not the globally highest score."""
+    session = clean_db
+    creator = await _make_creator(session)
+    niche_a = await _make_niche(session, "Home Espresso")
+    niche_b = await _make_niche(session, "Baking")
+
+    run_a = ResearchRun(
+        creator_id=creator.id, status="completed", niche_id=niche_a.id,
+    )
+    run_b = ResearchRun(
+        creator_id=creator.id, status="completed", niche_id=niche_b.id,
+    )
+    session.add_all([run_a, run_b])
+    await session.flush()
+
+    # Opportunity A: lower score but evidence from niche_a's run
+    cluster_a = ProblemCluster(
+        creator_id=creator.id, label="Grinder confusion", frequency=3, evidence_strength=0.8
+    )
+    session.add(cluster_a)
+    await session.flush()
+    ev_a = await _make_evidence(session, run_a.id, "espresso grinder issue")
+    obs_a = ProblemObservation(
+        evidence_id=ev_a.id, text=ev_a.raw_text, is_inferred=False,
+        extraction_prompt_version="v1", model_version="fixture",
+    )
+    session.add(obs_a)
+    await session.flush()
+    session.add(ProblemClusterMember(
+        cluster_id=cluster_a.id, observation_id=obs_a.id, similarity_score=0.9,
+    ))
+    opp_a = OpportunityScore(
+        creator_id=creator.id, problem_cluster_id=cluster_a.id,
+        component_scores={"frequency": 0.6}, aggregate_score=0.60,
+        computed_hash="hash_a", confidence_band=ConfidenceBand.MEDIUM,
+        rule_version="v1", model_version="fixture", research_run_id=run_a.id,
+    )
+    session.add(opp_a)
+
+    # Opportunity B: higher score but evidence from niche_b's run
+    cluster_b = ProblemCluster(
+        creator_id=creator.id, label="Sourdough starter", frequency=5, evidence_strength=0.9
+    )
+    session.add(cluster_b)
+    await session.flush()
+    ev_b = await _make_evidence(session, run_b.id, "sourdough baking question")
+    obs_b = ProblemObservation(
+        evidence_id=ev_b.id, text=ev_b.raw_text, is_inferred=False,
+        extraction_prompt_version="v1", model_version="fixture",
+    )
+    session.add(obs_b)
+    await session.flush()
+    session.add(ProblemClusterMember(
+        cluster_id=cluster_b.id, observation_id=obs_b.id, similarity_score=0.9,
+    ))
+    opp_b = OpportunityScore(
+        creator_id=creator.id, problem_cluster_id=cluster_b.id,
+        component_scores={"frequency": 0.9}, aggregate_score=0.90,
+        computed_hash="hash_b", confidence_band=ConfidenceBand.HIGH,
+        rule_version="v1", model_version="fixture", research_run_id=run_b.id,
+    )
+    session.add(opp_b)
+
+    session.add(CreatorScore(
+        creator_id=creator.id, component_scores={"frequency": 0.75},
+        aggregate_score=0.75, computed_hash="hash_cs",
+        confidence_band=ConfidenceBand.HIGH, rule_version="v1", model_version="fixture",
+    ))
+    await session.commit()
+
+    gen = DossierGenerator(session, rules_path=RULES_PATH)
+    dossier = await gen.generate_and_persist(creator.id, niche_a.id)
+    await session.commit()
+
+    # Dossier for niche_a should reference niche_a's opportunity (0.60),
+    # not the global top (0.90 from niche_b).
+    assert dossier.opportunity_score_id == opp_a.id
+    assert dossier.niche_id == niche_a.id
+
+
+@pytest.mark.asyncio
 async def test_no_opportunities_raises(clean_db: AsyncSession):
     session = clean_db
     creator = await _make_creator(session)
