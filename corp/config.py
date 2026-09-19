@@ -129,6 +129,7 @@ class Settings(BaseSettings):
 
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
+    niche_qualification_rules_path: str = "rules/niche_qualification.yaml"
 
     # A run whose per-item failure rate exceeds this is marked "partial", not "completed".
     pipeline_max_failure_rate: float = 0.2

@@ -23,7 +23,6 @@ from corp.core.schemas.evidence import EvidenceResponse
 from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionCreate, DecisionResponse, ResearchRunResponse
 from corp.core.state.gates import record_gate_a_decision
-from corp.core.state.machine import InvalidTransitionError
 from corp.database import get_session
 from corp.workers.dossier.generator import DossierGenerator
 
@@ -36,7 +35,7 @@ router = APIRouter()
 @router.get("/campaigns", response_model=list[CampaignResponse])
 async def list_campaigns(
     response: Response,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
@@ -87,7 +86,7 @@ async def list_campaign_niches(
 async def list_campaign_creators(
     campaign_id: str,
     niche_status: CampaignNicheStatus = CampaignNicheStatus.SELECTED,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
@@ -119,7 +118,7 @@ async def list_creators(
     response: Response,
     status: CreatorStatus | None = None,
     min_score: float | None = None,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
@@ -188,7 +187,7 @@ async def get_dossier(
 @router.get("/creators/{creator_id}/evidence", response_model=list[EvidenceResponse])
 async def get_evidence(
     creator_id: str,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_session),
 ):
     creator = await session.get(Creator, creator_id)
@@ -260,17 +259,18 @@ async def create_decision(
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    try:
-        decision = await record_gate_a_decision(
-            session=session,
-            creator=creator,
-            decision=body.decision,
-            rationale=body.rationale,
-            decided_by=body.decided_by,
-            opportunity_score_id=body.opportunity_score_id,
-        )
-    except InvalidTransitionError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+    # InvalidTransitionError is left to propagate: the app-level handler
+    # registered in errors.py returns 409 with the dedicated "invalid_transition"
+    # code, which callers branch on — catching it here and re-raising a plain
+    # HTTPException would fall back to the generic "conflict" code instead.
+    decision = await record_gate_a_decision(
+        session=session,
+        creator=creator,
+        decision=body.decision,
+        rationale=body.rationale,
+        decided_by=body.decided_by,
+        opportunity_score_id=body.opportunity_score_id,
+    )
 
     await session.commit()
     return DecisionResponse.model_validate(decision)
@@ -282,7 +282,7 @@ async def create_decision(
 @router.get("/research-runs", response_model=list[ResearchRunResponse])
 async def list_research_runs(
     creator_id: str | None = None,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_session),
 ):
     query = select(ResearchRun)

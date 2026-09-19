@@ -211,7 +211,7 @@ async def start_pipeline(
 
 
 @router.get("/jobs", response_model=list[JobResponse])
-async def list_jobs(creator_id: str | None = None, limit: int = Query(default=50, le=200)):
+async def list_jobs(creator_id: str | None = None, limit: int = Query(default=50, ge=1, le=200)):
     return registry.list(creator_id=creator_id, limit=limit)
 
 
@@ -355,7 +355,7 @@ async def get_clusters(
 async def get_cluster_observations(
     cluster_id: str,
     response: Response,
-    limit: int = Query(default=50, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):

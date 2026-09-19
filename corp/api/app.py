@@ -12,7 +12,18 @@ from corp.config import settings
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CORP", description="Creator Opportunity Research Platform")
+    # When an API key is configured, the auto-generated docs/schema routes
+    # must be protected too — they aren't covered by the router-level
+    # `dependencies=protected` below, since FastAPI serves them directly off
+    # the app instance and would otherwise leak every route/param/model.
+    protect_docs = bool(settings.api_key)
+    app = FastAPI(
+        title="CORP",
+        description="Creator Opportunity Research Platform",
+        docs_url=None if protect_docs else "/docs",
+        redoc_url=None if protect_docs else "/redoc",
+        openapi_url=None if protect_docs else "/openapi.json",
+    )
 
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()] or ["*"]
     app.add_middleware(

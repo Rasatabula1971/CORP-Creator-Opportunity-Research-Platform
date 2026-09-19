@@ -340,7 +340,7 @@ async def run_campaign_pipeline(
 
         async with async_session() as session:
             run = await NicheQualifier(
-                session, settings.scoring_rules_path.replace("scoring", "niche_qualification"),
+                session, settings.niche_qualification_rules_path,
             ).qualify_campaign(campaign_id)
             await session.commit()
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
