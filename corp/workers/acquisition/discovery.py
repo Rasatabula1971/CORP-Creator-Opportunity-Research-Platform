@@ -12,7 +12,6 @@ generation, any scoring, any creator discovery. No LLM is called.
 
 import json
 import logging
-import re
 from pathlib import Path
 
 from sqlalchemy import select
@@ -25,6 +24,7 @@ from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.research.ledger import record_query
 from corp.core.state.research_run import validate_run_type
 from corp.warmstore.sync import mirror_evidence
+from corp.workers.acquisition.slug import slugify
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
 from corp.workers.intelligence.runs import (
     PipelineStats,
@@ -36,10 +36,6 @@ from corp.workers.intelligence.runs import (
 logger = logging.getLogger(__name__)
 
 PIPELINE = "niche_discovery"
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_").lower()[:80] or "query"
 
 
 class NicheDiscoveryCollector:
@@ -152,7 +148,7 @@ class NicheDiscoveryCollector:
         """Write the raw normalized items as JSONL; return a data-path-relative
         reference. Non-fatal: the DB evidence is the durable record, the archive
         is the bulk copy (§24)."""
-        relative = Path("discovery") / run_id / f"{source}__{_slug(query)}.jsonl"
+        relative = Path("discovery") / run_id / f"{source}__{slugify(query)}.jsonl"
         target = self._data_path / relative
         try:
             target.parent.mkdir(parents=True, exist_ok=True)

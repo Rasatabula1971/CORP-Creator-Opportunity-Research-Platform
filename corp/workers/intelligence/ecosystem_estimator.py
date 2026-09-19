@@ -23,13 +23,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.niche import Niche
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
+from corp.workers.intelligence.niche_queries import verified_niches
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -153,7 +151,7 @@ class EcosystemEstimator:
         stats = PipelineStats()
 
         try:
-            niches = await self._verified_niches(campaign_id)
+            niches = await verified_niches(self._session, campaign_id)
             results: list[dict] = []
 
             for cn, niche in niches:
@@ -262,16 +260,3 @@ class EcosystemEstimator:
                 exc_info=True,
             )
 
-    async def _verified_niches(
-        self, campaign_id: str,
-    ) -> list[tuple[CampaignNiche, Niche]]:
-        result = await self._session.execute(
-            select(CampaignNiche)
-            .options(selectinload(CampaignNiche.niche))
-            .where(
-                CampaignNiche.campaign_id == campaign_id,
-                CampaignNiche.status == CampaignNicheStatus.VERIFIED,
-            )
-        )
-        rows = list(result.scalars().all())
-        return [(cn, cn.niche) for cn in rows]

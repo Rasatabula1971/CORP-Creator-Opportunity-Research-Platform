@@ -15,10 +15,8 @@ import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
-from corp.core.models.niche import Niche
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.scoring.niche_qualification import (
@@ -26,6 +24,7 @@ from corp.core.scoring.niche_qualification import (
     load_rules,
     qualify,
 )
+from corp.workers.intelligence.niche_queries import verified_niches
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -62,7 +61,7 @@ class NicheQualifier:
         stats = PipelineStats()
 
         try:
-            niches = await self._verified_niches(campaign_id)
+            niches = await verified_niches(self._session, campaign_id)
             results: list[dict] = []
 
             for cn, niche in niches:
@@ -116,20 +115,6 @@ class NicheQualifier:
                 "Niche qualification failed for campaign %s", campaign_id,
             )
             raise
-
-    async def _verified_niches(
-        self, campaign_id: str,
-    ) -> list[tuple[CampaignNiche, Niche]]:
-        result = await self._session.execute(
-            select(CampaignNiche)
-            .options(selectinload(CampaignNiche.niche))
-            .where(
-                CampaignNiche.campaign_id == campaign_id,
-                CampaignNiche.status == CampaignNicheStatus.VERIFIED,
-            )
-        )
-        rows = list(result.scalars().all())
-        return [(cn, cn.niche) for cn in rows]
 
     async def _promoted_candidate(
         self, campaign_id: str, niche_id: str,
