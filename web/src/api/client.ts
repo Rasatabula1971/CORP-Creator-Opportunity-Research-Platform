@@ -1,3 +1,5 @@
+import type { Paged } from "./types";
+
 const API_BASE_KEY = "corp.apiBase";
 const API_KEY_KEY = "corp.apiKey";
 
@@ -28,7 +30,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchApi(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
   const apiKey = getApiKey();
@@ -48,30 +50,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, code, message);
   }
+  return res;
+}
 
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetchApi(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
-async function requestWithCount<T>(path: string): Promise<{ items: T[]; totalCount: number }> {
-  const headers = new Headers();
-  headers.set("Content-Type", "application/json");
-  const apiKey = getApiKey();
-  if (apiKey) headers.set("X-Api-Key", apiKey);
-
-  const res = await fetch(`${getApiBase()}${path}`, { headers });
-  if (!res.ok) {
-    let code = "error";
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      code = body?.error?.code ?? code;
-      message = body?.error?.message ?? body?.detail ?? message;
-    } catch {
-      /* body wasn't JSON */
-    }
-    throw new ApiError(res.status, code, message);
-  }
+async function requestWithCount<T>(path: string, init?: RequestInit): Promise<Paged<T>> {
+  const res = await fetchApi(path, init);
   const items = (await res.json()) as T[];
   const totalCount = Number(res.headers.get("X-Total-Count") ?? items.length);
   return { items, totalCount };
