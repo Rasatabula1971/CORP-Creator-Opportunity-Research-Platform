@@ -33,6 +33,7 @@ from corp.workers.intelligence.cluster_pipeline import ClusterPipeline
 from corp.workers.intelligence.embeddings import Embedder
 from corp.workers.intelligence.intent_pipeline import IntentPipeline
 from corp.workers.intelligence.pipeline import IntelligencePipeline
+from corp.workers.intelligence.runs import PipelineStats, fail_run, finish_run, start_run
 from corp.workers.intelligence.scoring_pipeline import ScoringPipeline
 from corp.workers.providers.registry import LLMProvider
 
@@ -136,9 +137,29 @@ class ResearchOrchestrator:
                 return report
 
             await advance(self._session, creator, CreatorStatus.RESEARCH_COMPLETE)
-            report.dossier_html = await DossierGenerator(
-                self._session, self._cfg.scoring_rules_path
-            ).generate(creator_id)
+
+            dossier_run = await start_run(
+                self._session,
+                pipeline="dossier",
+                creator_id=creator_id,
+                config={"rules_path": self._cfg.scoring_rules_path},
+                prompt_versions={},
+                model_versions={},
+            )
+            dossier_stats = PipelineStats()
+            try:
+                report.dossier_html = await DossierGenerator(
+                    self._session, self._cfg.scoring_rules_path
+                ).generate(creator_id)
+                dossier_stats.ok()
+                await finish_run(self._session, dossier_run, dossier_stats)
+            except Exception as exc:
+                if dossier_run.status == "running":
+                    await fail_run(self._session, dossier_run, exc)
+                raise
+            if await step(dossier_run):
+                return report
+
             await advance(self._session, creator, CreatorStatus.DOSSIER_GENERATED)
             await advance(self._session, creator, CreatorStatus.HUMAN_REVIEW)
             await commit()
