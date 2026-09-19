@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -32,8 +33,14 @@ class QualificationResult:
 
 
 def load_rules(path: str) -> dict[str, Any]:
-    with open(path) as f:
-        return yaml.safe_load(f)
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Niche qualification rules file not found: {p}")
+    with open(p) as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Niche qualification rules file must be a YAML mapping: {p}")
+    return data
 
 
 def _log_score(value: int, cap: int) -> float:

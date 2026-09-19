@@ -1,4 +1,10 @@
-from corp.core.scoring.niche_qualification import NicheInput, compute_research_completeness
+import pytest
+
+from corp.core.scoring.niche_qualification import (
+    NicheInput,
+    compute_research_completeness,
+    load_rules,
+)
 
 FULL = NicheInput(
     evidence_count=10,
@@ -45,3 +51,25 @@ def test_missing_completeness_stages_falls_back_to_all_four():
 def test_unknown_stage_names_are_ignored():
     rules = {"completeness_stages": ["has_evidence", "not_a_real_stage"]}
     assert compute_research_completeness(FULL, True, rules) == 1.0
+
+
+def test_load_rules_missing_file_raises_file_not_found(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_rules(str(tmp_path / "does_not_exist.yaml"))
+
+
+def test_load_rules_non_mapping_yaml_raises_value_error(tmp_path):
+    """An empty or truncated YAML file parses to None, not a dict — without
+    validation this surfaced as an unhelpful AttributeError two calls later
+    (rules.get(...) on None) instead of a clear error at load time."""
+    bad = tmp_path / "not_a_mapping.yaml"
+    bad.write_text("- just\n- a\n- list\n")
+    with pytest.raises(ValueError, match="must be a YAML mapping"):
+        load_rules(str(bad))
+
+
+def test_load_rules_empty_file_raises_value_error(tmp_path):
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("")
+    with pytest.raises(ValueError, match="must be a YAML mapping"):
+        load_rules(str(empty))
