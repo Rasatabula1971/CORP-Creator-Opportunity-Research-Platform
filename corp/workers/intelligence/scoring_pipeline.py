@@ -413,6 +413,7 @@ class ScoringPipeline:
             evidence_depth=ctx.member_count,
             days_since_newest=_days_from_recency(cluster.recency_score),
             single_source=compliant_sources <= 1,
+            thresholds=self._rules.get("confidence_thresholds", {}),
         )
 
         previous_frequency = await self._previous_frequency(cluster)
@@ -483,6 +484,7 @@ class ScoringPipeline:
             evidence_depth=total_evidence,
             days_since_newest=_days_from_recency(best_recency),
             single_source=len(compliant) <= 1,
+            thresholds=self._rules.get("confidence_thresholds", {}),
         )
 
         creator_score = CreatorScore(
