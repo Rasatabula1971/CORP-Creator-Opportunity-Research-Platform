@@ -124,14 +124,18 @@ def compute_confidence(
 
 
 def compute_research_completeness(
-    inp: NicheInput, is_verified: bool,
+    inp: NicheInput, is_verified: bool, rules: dict[str, Any],
 ) -> float:
-    stages = [
-        inp.evidence_count > 0,
-        is_verified,
-        inp.creator_count_observed > 0,
-        inp.target_band_creator_count > 0,
-    ]
+    flags = {
+        "has_evidence": inp.evidence_count > 0,
+        "is_verified": is_verified,
+        "has_ecosystem_data": inp.creator_count_observed > 0,
+        "has_target_band_data": inp.target_band_creator_count > 0,
+    }
+    stage_names = rules.get("completeness_stages") or list(flags)
+    stages = [flags[name] for name in stage_names if name in flags]
+    if not stages:
+        return 0.0
     return sum(stages) / len(stages)
 
 
@@ -142,7 +146,7 @@ def qualify(
     components = compute_components(inp, rules)
     score = compute_qualification_score(components, weights)
     confidence = compute_confidence(inp, rules)
-    completeness = compute_research_completeness(inp, is_verified)
+    completeness = compute_research_completeness(inp, is_verified, rules)
     return QualificationResult(
         qualification_score=round(score, 4),
         confidence=round(confidence, 4),
