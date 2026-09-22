@@ -12,6 +12,22 @@ recursion:
   breadth_per_branch: 10
   recheck_days: 90
 
+# CORP1 R12 -- re-research of a watched dossier (scheduler) or after a
+# Research More decision. See docs/design/R12_watch_rescan_recollect.md.
+watch_rescan:
+  # Hourly tick: at most this many watched dossiers are re-researched per tick.
+  max_dossiers_per_tick: 3
+  # Defer the tick when every LLM provider is in cooldown.
+  skip_when_provider_cooling: true
+  # false = today's behaviour (re-render the dossier from current scores only).
+  recollect_creator: true
+  # "The evidence strengthened" (design 3.3, option C): resurface when the top
+  # opportunity's aggregate score rose by at least this much OR its confidence
+  # band improved, OR at least this many new distinct evidence rows arrived
+  # with the score not falling.
+  resurface_min_score_delta: 0.05
+  resurface_min_new_evidence: 10
+
 # Deterministic substring match (case-insensitive) against a keyword or a
 # synthesized candidate's name + description. Any hit excludes — never an
 # LLM judgment call. Keep terms lowercase and specific enough to avoid

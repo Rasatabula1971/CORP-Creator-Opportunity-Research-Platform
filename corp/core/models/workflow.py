@@ -91,6 +91,9 @@ class RunType(str, enum.Enum):
     CREATOR_ONBOARDING = "creator_onboarding"
     CAMPAIGN_RESEARCH_BATCH = "campaign_research_batch"
     CREATOR_RESEARCH = "creator_research"
+    # R12: one run per re-research of a (creator, niche) dossier -- from a
+    # Research More decision or a Watch re-scan -- parenting the stage runs.
+    WATCH_RESCAN = "watch_rescan"
 
 
 class ResearchRun(TimestampMixin, Base):

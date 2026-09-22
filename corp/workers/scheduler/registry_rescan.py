@@ -28,12 +28,9 @@ shipping the tested logic before something else wires it in).
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -42,6 +39,9 @@ from corp.core.models.dossier import Dossier, DossierStatus
 from corp.core.models.niche import Niche
 from corp.workers.dossier.generator import DossierGenerator
 from corp.workers.intelligence.niche_discovery import DiscoveryConfig
+from corp.workers.watch_rescan import content_fingerprint
+
+__all__ = ["content_fingerprint", "find_due_watched_dossiers", "rescan_watched_dossiers"]
 
 logger = logging.getLogger(__name__)
 
@@ -61,18 +61,8 @@ class RescanStats:
     unchanged: int = 0
 
 
-# Volatile keys that differ on every regeneration without the dossier's
-# substance changing; excluded from the fingerprint.
-_FINGERPRINT_IGNORE = frozenset({"generated_at"})
-
-
-def content_fingerprint(content: dict[str, Any]) -> str:
-    """Stable hash of a dossier's content, ignoring timestamps, so a re-scan
-    can tell "the evidence moved" from "nothing changed"."""
-    stable = {k: v for k, v in content.items() if k not in _FINGERPRINT_IGNORE}
-    return hashlib.sha256(
-        json.dumps(stable, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()
+# content_fingerprint moved to corp.workers.watch_rescan (R12a) so the
+# rescanner and this scheduler share one definition without an import cycle.
 
 
 async def find_due_watched_dossiers(

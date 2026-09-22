@@ -241,8 +241,8 @@ More: the dossier is returned to `PENDING_REVIEW` (never stuck).
 
 | Task | Scope | Depends on |
 | --- | --- | --- |
-| **R12a** Research More completes | `WatchRescanner` core (`research_more` → orchestrator → ideation → `generate_and_persist`), called from `_run_research_more`; dossier never stuck; tests §3.7-4,6,7 | §4.2 decision |
-| **R12b** Creator status mirrors dossier gate | Dossier gate Watch/Approve/Reject move the creator via the state machine; backfill; tests | — (can precede R12a) |
+| **R12a** Research More completes — **done, ADR-0061** | `WatchRescanner` core (`research_more` → orchestrator → ideation → `generate_and_persist`), called from `_run_research_more`; dossier never stuck; ideation also wired into `POST …/dossier/generate` (best-effort); tests §3.7-4,6,7 | §4.2 decision |
+| **R12b** Creator status mirrors dossier gate — **done, ADR-0060 (b7c8b81)** | Dossier gate Watch/Approve/Reject move the creator via the state machine; backfill; tests | — (can precede R12a) |
 | **R12c** Watch re-scan uses the rescanner | Scheduler calls `WatchRescanner` with §3.3 decision, §3.4 limits, `content["rescan"]`; tests §3.7-1,2,3,5 | R12a, R12b |
 | **R12d** Surface it | R7 panel shows the rescan block; `/rescan` page shows last outcome | R12c |
 

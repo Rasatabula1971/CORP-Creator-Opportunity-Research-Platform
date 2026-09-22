@@ -19,6 +19,7 @@ from corp.api.jobs import (
     run_pipeline,
     run_research,
 )
+from corp.config import settings
 from corp.core.models.campaign import Campaign
 from corp.core.models.campaign_niche import CampaignNiche
 from corp.core.models.creator import Creator, CreatorPlatformAccount
@@ -501,30 +502,66 @@ async def get_decisions(
 # ── Dossier decision gate (CORP1 Stage 5, T8) ───────────────────────
 
 
-async def _run_research_more(niche_id: str, campaign_id: str) -> dict[str, Any]:
-    """Work function for the Research More decision outcome. Mirrors
-    corp.api.jobs.run_campaign_pipeline's "discover" branch but calls
-    RecursiveNicheDiscovery.research_more (added by this task) instead of
-    discover -- resumes drilling the dossier's specific niche one level
-    deeper rather than starting a fresh depth-0 scan. Defined here, not in
-    corp.api.jobs, to stay within T8's frozen route-file scope."""
+async def _run_research_more(dossier_id: str, niche_id: str, campaign_id: str) -> dict[str, Any]:
+    """Work function for the Research More decision outcome (T8, completed
+    by R12a). Runs the full re-research chain through WatchRescanner --
+    niche drill at depth+1, creator re-research, product ideation, a new
+    dossier version -- and always resurfaces the result to PENDING_REVIEW.
+    On failure the rescanner puts the dossier back to PENDING_REVIEW so it
+    is never stuck in research_more_in_progress."""
+    from corp.api.jobs import _embedder_factory
     from corp.database import async_session
-    from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
     from corp.workers.providers.factory import build_provider
+    from corp.workers.watch_rescan import build_watch_rescanner
 
     provider = build_provider()
     try:
         async with async_session() as session:
-            discovery = RecursiveNicheDiscovery(
-                session, provider, "rules/niche_discovery_prompt.yaml"
-            )
-            run = await discovery.research_more(niche_id, campaign_id)
-            await session.commit()
+            try:
+                rescanner = build_watch_rescanner(
+                    session,
+                    provider,
+                    _embedder_factory(),
+                    scoring_rules_path=settings.scoring_rules_path,
+                    niche_rules_path="rules/niche_discovery_prompt.yaml",
+                    ideation_rules_path="rules/product_ideation_prompt.yaml",
+                )
+                outcome = await rescanner.rescan(dossier_id, trigger="research_more")
+                await session.commit()
+            except Exception:
+                # Persist the failed run row and the PENDING_REVIEW restore if
+                # the session can still commit; then ALWAYS re-check in a
+                # fresh transaction -- a rolled-back session commits cleanly
+                # having lost the restore, and the route committed
+                # research_more_in_progress before this job started. "Never
+                # stuck" is the design's contract; the check is status-guarded
+                # so a second restore is a no-op.
+                try:
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                async with async_session() as fresh:
+                    dossier = await fresh.get(Dossier, dossier_id)
+                    if (
+                        dossier is not None
+                        and dossier.status == DossierStatus.RESEARCH_MORE_IN_PROGRESS
+                    ):
+                        dossier.status = DossierStatus.PENDING_REVIEW
+                        await fresh.commit()
+                raise
     finally:
         close = getattr(provider, "close", None)
         if callable(close):
             await close()
-    return {"run_id": run.id, "status": run.status, "stats": run.stats}
+    return {
+        "run_id": outcome.run_id,
+        "status": "completed",
+        "dossier_id": outcome.dossier_id,
+        "previous_dossier_id": outcome.previous_dossier_id,
+        "niche_id": niche_id,
+        "campaign_id": campaign_id,
+        "reason": outcome.decision.reason,
+    }
 
 
 @router.post(
@@ -600,9 +637,12 @@ async def record_dossier_decision(
         dossier.status = DossierStatus.RESEARCH_MORE_IN_PROGRESS
         job = registry.create("research_more", campaign_id=campaign_niche.campaign_id)
         job_id = job.id
+        dossier_id_ = dossier.id
         niche_id, campaign_id = dossier.niche_id, campaign_niche.campaign_id
         background.add_task(
-            registry.execute, job, lambda: _run_research_more(niche_id, campaign_id)
+            registry.execute,
+            job,
+            lambda: _run_research_more(dossier_id_, niche_id, campaign_id),
         )
 
     await session.flush()

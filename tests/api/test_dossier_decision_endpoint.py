@@ -153,10 +153,12 @@ async def test_research_more_starts_a_job_and_sets_in_progress(
     session = clean_db
     dossier = await _seed_dossier(session, with_campaign=True)
 
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, str]] = []
 
-    async def _fake_run_research_more(niche_id: str, campaign_id: str) -> dict[str, Any]:
-        calls.append((niche_id, campaign_id))
+    async def _fake_run_research_more(
+        dossier_id: str, niche_id: str, campaign_id: str
+    ) -> dict[str, Any]:
+        calls.append((dossier_id, niche_id, campaign_id))
         return {"run_id": "fake-run", "status": "completed", "stats": {}}
 
     monkeypatch.setattr(routes_ops, "_run_research_more", _fake_run_research_more)
@@ -178,7 +180,7 @@ async def test_research_more_starts_a_job_and_sets_in_progress(
 
     await session.refresh(dossier)
     assert dossier.status == DossierStatus.RESEARCH_MORE_IN_PROGRESS
-    assert calls == [(dossier.niche_id, campaign_niche.campaign_id)]
+    assert calls == [(dossier.id, dossier.niche_id, campaign_niche.campaign_id)]
 
 
 @pytest.mark.asyncio

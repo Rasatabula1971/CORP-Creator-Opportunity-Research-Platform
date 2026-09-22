@@ -1,5 +1,7 @@
 """API routes — CORP Step 8 endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +47,8 @@ from corp.core.schemas.workflow import DecisionCreate, DecisionResponse, Researc
 from corp.core.state.gates import record_gate_a_decision
 from corp.database import get_session
 from corp.workers.dossier.generator import DossierGenerator
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -306,6 +310,13 @@ async def generate_persisted_dossier(
             status_code=422, detail="Creator has no associated niche to generate a dossier for"
         )
 
+    # R12a: the spec's step 6 -- product ideas are generated for the current
+    # clusters before the dossier is persisted. T5 shipped the generator
+    # unwired, so until now every real dossier had an empty Product
+    # Concepts section. Best-effort: with no LLM provider configured the
+    # dossier is still produced (ideas empty), never a 503.
+    await _generate_product_ideas_best_effort(session, creator_id)
+
     gen = DossierGenerator(session, rules_path=settings.scoring_rules_path)
     try:
         dossier = await gen.generate_and_persist(creator_id, creator_niche.niche_id)
@@ -313,6 +324,35 @@ async def generate_persisted_dossier(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await session.commit()
     return dossier
+
+
+async def _generate_product_ideas_best_effort(session: AsyncSession, creator_id: str) -> None:
+    from corp.workers.intelligence.product_ideation import ProductIdeationGenerator
+    from corp.workers.providers.factory import ProviderConfigError, build_provider
+
+    try:
+        provider = build_provider()
+    except ProviderConfigError as exc:
+        logger.warning("Skipping product ideation for %s: %s", creator_id, exc)
+        return
+    try:
+        run = await ProductIdeationGenerator(
+            provider, session, "rules/product_ideation_prompt.yaml"
+        ).generate(creator_id)
+        if run.status == "failed":
+            logger.warning(
+                "Product ideation failed for %s: %s", creator_id, run.error_message
+            )
+    except Exception:  # noqa: BLE001 -- ideas are additive; the dossier must still ship
+        logger.exception("Product ideation crashed for %s; generating dossier without ideas",
+                         creator_id)
+    finally:
+        close = getattr(provider, "close", None)
+        if callable(close):
+            try:
+                await close()
+            except Exception:  # noqa: BLE001
+                logger.exception("Provider close() failed after ideation for %s", creator_id)
 
 
 @router.get(

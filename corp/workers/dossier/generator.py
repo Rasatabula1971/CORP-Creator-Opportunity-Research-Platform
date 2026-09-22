@@ -651,6 +651,24 @@ class DossierGenerator:
             Evidence.id.in_(candidate_evidence),
         )
 
+    async def count_new_evidence(
+        self, creator_id: str, niche_ids: list[str], since: datetime
+    ) -> int:
+        """Distinct evidence rows in this creator/niche scope collected after
+        ``since`` -- the "more people are saying this" half of R12's
+        resurface rule. Same scope as demand validation."""
+        creator_runs = select(ResearchRun.id).where(ResearchRun.creator_id == creator_id)
+        result = await self._session.execute(
+            select(func.count(func.distinct(Evidence.id))).where(
+                or_(
+                    Evidence.research_run_id.in_(creator_runs),
+                    self._niche_evidence_clause(niche_ids),
+                ),
+                Evidence.collected_at > since,
+            )
+        )
+        return int(result.scalar() or 0)
+
     async def _build_demand_validation(
         self, creator_id: str, niche_ids: list[str],
     ) -> dict[str, Any]:
