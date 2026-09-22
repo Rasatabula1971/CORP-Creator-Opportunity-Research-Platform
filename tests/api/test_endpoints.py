@@ -396,7 +396,8 @@ async def test_create_decision_research_more_is_422_at_gate_a(clean_db: AsyncSes
         )
     assert resp.status_code == 422
     body = resp.json()
-    assert "not valid for Gate A" in body["detail"]
+    # R10 tightened the request schema, so this is now a validation 422
+    # (the gate's own ValueError → 422 from R9 remains as defence in depth).
     assert body["error"]["code"] == "validation_error"
     await session.refresh(creator)
     assert creator.status == CreatorStatus.HUMAN_REVIEW  # nothing transitioned
@@ -434,3 +435,63 @@ async def test_dossier_html_renders_enriched_sections(clean_db: AsyncSession):
     # A real recommendation is derived from the seeded score, not a stub.
     assert "persisted dossier" not in html
     assert "human decision gate remains the decision-maker" in html
+
+
+# ---------- R10: per-niche printable dossier, list totals ----------
+
+
+@pytest.mark.asyncio
+async def test_dossier_html_scoped_to_niche(clean_db: AsyncSession):
+    from corp.core.models.creator_niche import CreatorNiche
+    from corp.core.models.niche import Niche
+
+    session = clean_db
+    creator = await _seed(session)
+    niche = Niche(canonical_name="Home Espresso", depth=1)
+    other = Niche(canonical_name="Sourdough", depth=1)
+    session.add_all([niche, other])
+    await session.flush()
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+    await session.flush()
+    async with _make_client(session) as client:
+        ok = await client.get(f"/creators/{creator.id}/dossier", params={"niche_id": niche.id})
+        auto = await client.get(f"/creators/{creator.id}/dossier")
+        unlinked = await client.get(
+            f"/creators/{creator.id}/dossier", params={"niche_id": other.id}
+        )
+        missing = await client.get(
+            f"/creators/{creator.id}/dossier", params={"niche_id": "no-such-niche"}
+        )
+    assert ok.status_code == 200
+    assert "Dossier scope" in ok.text and "Home Espresso" in ok.text
+    # Exactly one linked niche: the page scopes itself without the parameter.
+    assert auto.status_code == 200 and "Dossier scope" in auto.text
+    assert unlinked.status_code == 422
+    assert "not linked" in unlinked.json()["detail"]
+    assert missing.status_code == 404
+    assert "Niche not found" in missing.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_campaign_niches_reports_total_and_rejects_zero_limit(clean_db: AsyncSession):
+    from corp.core.models.campaign import Campaign
+    from corp.core.models.campaign_niche import CampaignNiche
+    from corp.core.models.niche import Niche
+
+    session = clean_db
+    campaign = Campaign(name="Totals")
+    session.add(campaign)
+    await session.flush()
+    for i in range(3):
+        niche = Niche(canonical_name=f"Niche {i}")
+        session.add(niche)
+        await session.flush()
+        session.add(CampaignNiche(campaign_id=campaign.id, niche_id=niche.id))
+    await session.flush()
+    async with _make_client(session) as client:
+        page = await client.get(f"/campaigns/{campaign.id}/niches", params={"limit": 2})
+        zero = await client.get(f"/campaigns/{campaign.id}/niches", params={"limit": 0})
+    assert page.status_code == 200
+    assert len(page.json()) == 2
+    assert page.headers["X-Total-Count"] == "3"
+    assert zero.status_code == 422

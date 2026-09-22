@@ -193,7 +193,8 @@ export function useCreateCampaign() {
 export function useCampaignNiches(campaignId: string | undefined) {
   return useQuery({
     queryKey: ["campaigns", campaignId, "niches"],
-    queryFn: () => api.get<CampaignNiche[]>(`/campaigns/${campaignId}/niches`),
+    queryFn: () =>
+      api.getWithCount<CampaignNiche>(`/campaigns/${campaignId}/niches?limit=${LIST_LIMIT}`),
     enabled: !!campaignId,
   });
 }
@@ -201,7 +202,8 @@ export function useCampaignNiches(campaignId: string | undefined) {
 export function useCampaignCreators(campaignId: string | undefined) {
   return useQuery({
     queryKey: ["campaigns", campaignId, "creators"],
-    queryFn: () => api.get<Creator[]>(`/campaigns/${campaignId}/creators`),
+    queryFn: () =>
+      api.getWithCount<Creator>(`/campaigns/${campaignId}/creators?limit=${LIST_LIMIT}`),
     enabled: !!campaignId,
   });
 }

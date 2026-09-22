@@ -65,6 +65,12 @@
     <span class="meta-label">Discovery Source</span>
     {{ creator.discovery_source or "—" }}
   </div>
+  {% if dossier_niche %}
+  <div class="meta-item">
+    <span class="meta-label">Dossier scope</span>
+    {{ dossier_niche.canonical_name }} (depth {{ dossier_niche.depth }})
+  </div>
+  {% endif %}
   <div class="meta-item">
     <span class="meta-label">Status</span>
     {{ creator.status.value }}

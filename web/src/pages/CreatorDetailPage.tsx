@@ -14,7 +14,7 @@ import {
   useStartResearch,
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
-import { ApiError } from "../api/client";
+import { ApiError, getApiBase } from "../api/client";
 import type {
   ClusterDetail,
   Competitor,
@@ -25,9 +25,9 @@ import type {
 export function CreatorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: creator, isLoading, error } = useCreator(id);
-  const { data: clusters } = useClusters(id);
-  const { data: dossier } = useDossier(id);
-  const { data: decisions } = useDecisions(id);
+  const { data: clusters, error: clustersError } = useClusters(id);
+  const { data: dossier, error: dossierError } = useDossier(id);
+  const { data: decisions, error: decisionsError } = useDecisions(id);
   const { data: persistedDossier } = usePersistedDossier(id);
   const startResearch = useStartResearch();
   const [activeJobId, setActiveJobId] = useState<string | undefined>();
@@ -64,6 +64,10 @@ export function CreatorDetailPage() {
       </div>
 
       {startResearch.error && <ErrorBanner error={startResearch.error} />}
+      {/* A failing sub-request must never masquerade as "no data yet". */}
+      {dossierError && <ErrorBanner error={dossierError} />}
+      {clustersError && <ErrorBanner error={clustersError} />}
+      {decisionsError && <ErrorBanner error={decisionsError} />}
 
       {/* Active job */}
       {job && (
@@ -107,10 +111,9 @@ export function CreatorDetailPage() {
         </div>
       )}
 
-      {/* Decision Actions */}
-      {id && creator.status !== "approved" && creator.status !== "rejected" && (
-        <DecisionPanel creatorId={id} />
-      )}
+      {/* Decision Actions: the server only accepts a Gate A decision from
+          HUMAN_REVIEW (409 otherwise), so only offer it then. */}
+      {id && creator.status === "human_review" && <DecisionPanel creatorId={id} />}
 
       {/* Persisted Dossier (CORP1 Stage 5, T6) */}
       {id && <PersistedDossierPanel creatorId={id} />}
@@ -510,9 +513,27 @@ function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
         </p>
       ) : (
         <div className="mt-3 space-y-3">
-          <div className="flex items-center gap-3 text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
             <StatusBadge status={persisted.status} />
             <span>Generated {new Date(persisted.generated_at).toLocaleString()}</span>
+            <a
+              href={`${getApiBase()}/creators/${creatorId}/dossier?niche_id=${persisted.niche_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              Printable dossier
+            </a>
+            {persisted.status === "approved" && (
+              <a
+                href={`${getApiBase()}/dossiers/${persisted.id}/handoff`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                CORP2 handoff package
+              </a>
+            )}
           </div>
 
           {persisted.content.niche_path?.length > 0 && (

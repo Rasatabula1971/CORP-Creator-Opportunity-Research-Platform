@@ -132,21 +132,34 @@ class DossierGenerator:
             autoescape=True,
         )
 
-    async def generate(self, creator_id: str) -> str:
+    async def generate(self, creator_id: str, niche_id: str | None = None) -> str:
         """Live HTML view. Carries the same enriched sections the persisted
         dossier does (audience analysis, demand validation, product ideas,
-        recommendation) so the two never diverge; demand validation is
-        scoped over every niche the creator is linked to, since this view
-        has no single niche_id."""
+        recommendation) so the two never diverge.
+
+        Scope (R10): with ``niche_id`` -- or when the creator is linked to
+        exactly one niche -- evidence and the recommendation's top
+        opportunity are scoped to that niche, exactly as the persisted
+        dossier is. Only a multi-niche creator viewed without ``niche_id``
+        falls back to the union of every linked niche and the global top."""
         data = await self._load_data(creator_id)
-        niche_ids = list(
+        linked = list(
             (
                 await self._session.execute(
                     select(CreatorNiche.niche_id).where(CreatorNiche.creator_id == creator_id)
                 )
             ).scalars().all()
         )
+        if niche_id is None and len(linked) == 1:
+            niche_id = linked[0]
+        niche_ids = [niche_id] if niche_id else linked
+        dossier_niche = await self._session.get(Niche, niche_id) if niche_id else None
+
         top = data.opportunities[0] if data.opportunities else None
+        if niche_id and data.opportunities:
+            niche_opps = await self._filter_niche_opportunities(data.opportunities, niche_id)
+            if niche_opps:
+                top = niche_opps[0]
         product_ideas = await self._load_product_ideas(creator_id)
         cluster_competitors = {o.cluster.id: o.competitors for o in data.opportunities}
         return self._render(
@@ -159,6 +172,7 @@ class DossierGenerator:
                 for p in product_ideas
             },
             recommendation=self._build_recommendation(data, top) if top else None,
+            dossier_niche=dossier_niche,
         )
 
     async def generate_data(self, creator_id: str) -> DossierData:
@@ -385,9 +399,11 @@ class DossierGenerator:
         product_ideas: list[ProductIdea] | None = None,
         comparable_products: dict[str, list[dict[str, Any]]] | None = None,
         recommendation: dict[str, Any] | None = None,
+        dossier_niche: Niche | None = None,
     ) -> str:
         template = self._env.get_template("dossier.html.j2")
         return template.render(
+            dossier_niche=dossier_niche,
             creator=data.creator,
             platform_accounts=data.platform_accounts,
             creator_score=data.creator_score,

@@ -84,8 +84,9 @@ async def get_campaign(
 )
 async def list_campaign_niches(
     campaign_id: str,
+    response: Response,
     status: CampaignNicheStatus | None = None,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CampaignNicheDetailResponse]:
@@ -99,6 +100,10 @@ async def list_campaign_niches(
     )
     if status is not None:
         query = query.where(CampaignNiche.status == status)
+    # Recursive discovery can yield hundreds of niches per campaign; the
+    # client needs the total to know a page is a page (same as /creators).
+    total = (await session.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    response.headers["X-Total-Count"] = str(total or 0)
     query = query.order_by(CampaignNiche.qualification_score.desc().nulls_last())
     result = await session.execute(query.offset(offset).limit(limit))
     return [CampaignNicheDetailResponse.model_validate(cn) for cn in result.scalars().all()]
@@ -196,14 +201,27 @@ async def get_creator(
 @router.get("/creators/{creator_id}/dossier")
 async def get_dossier(
     creator_id: str,
+    niche_id: str | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    # Only a missing creator is a 404; other failures (e.g. a rules/YAML parse
-    # error inside the generator) must not be masked as "Creator not found".
+    # Only a missing creator/niche is a 404; other failures (e.g. a rules/YAML
+    # parse error inside the generator) must not be masked as "not found".
     if await session.get(Creator, creator_id) is None:
         raise HTTPException(status_code=404, detail="Creator not found")
+    if niche_id is not None:
+        if await session.get(Niche, niche_id) is None:
+            raise HTTPException(status_code=404, detail="Niche not found")
+        linked = await session.execute(
+            select(CreatorNiche.id).where(
+                CreatorNiche.creator_id == creator_id, CreatorNiche.niche_id == niche_id
+            )
+        )
+        if linked.first() is None:
+            # Scoping to a niche the creator isn't in would render a
+            # "Dossier scope" header over creator-only evidence.
+            raise HTTPException(status_code=422, detail="Niche is not linked to this creator")
     gen = DossierGenerator(session, rules_path=settings.scoring_rules_path)
-    html = await gen.generate(creator_id)
+    html = await gen.generate(creator_id, niche_id)
     return Response(content=html, media_type="text/html")
 
 
@@ -426,7 +444,7 @@ async def get_opportunities(
 )
 async def get_competitors(
     creator_id: str,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CompetitorResponse]:

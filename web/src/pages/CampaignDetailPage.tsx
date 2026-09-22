@@ -35,8 +35,10 @@ const PIPELINE_STAGES: readonly PipelineStage[] = [
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: campaign, isLoading, error } = useCampaign(id);
-  const { data: niches } = useCampaignNiches(id);
-  const { data: creators } = useCampaignCreators(id);
+  const { data: nichesPage, error: nichesError } = useCampaignNiches(id);
+  const { data: creatorsPage, error: creatorsError } = useCampaignCreators(id);
+  const niches = nichesPage?.items;
+  const creators = creatorsPage?.items;
   const startPipeline = useStartCampaignPipeline();
   const [activeJobId, setActiveJobId] = useState<string | undefined>();
   const { data: job } = useJob(activeJobId, { pollUntilDone: true });
@@ -132,8 +134,14 @@ export function CampaignDetailPage() {
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">
-          Niches{niches ? ` (${niches.length})` : ""}
+          Niches{nichesPage ? ` (${nichesPage.totalCount})` : ""}
         </h2>
+        {nichesError && <ErrorBanner error={nichesError} />}
+        {nichesPage && niches && nichesPage.totalCount > niches.length && (
+          <p className="mb-2 text-xs text-neutral-500">
+            Showing the first {niches.length} of {nichesPage.totalCount}.
+          </p>
+        )}
         {!niches || niches.length === 0 ? (
           <p className="text-sm text-neutral-500">
             No niches discovered yet. Run the Discover stage to find niches.
@@ -187,8 +195,14 @@ export function CampaignDetailPage() {
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">
-          Onboarded Creators{creators ? ` (${creators.length})` : ""}
+          Onboarded Creators{creatorsPage ? ` (${creatorsPage.totalCount})` : ""}
         </h2>
+        {creatorsError && <ErrorBanner error={creatorsError} />}
+        {creatorsPage && creators && creatorsPage.totalCount > creators.length && (
+          <p className="mb-2 text-xs text-neutral-500">
+            Showing the first {creators.length} of {creatorsPage.totalCount}.
+          </p>
+        )}
         {!creators || creators.length === 0 ? (
           <p className="text-sm text-neutral-500">
             No creators onboarded yet. Run the Onboard stage after niche selection.

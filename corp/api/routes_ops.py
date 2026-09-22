@@ -479,7 +479,7 @@ async def get_cluster_observations(
 @router.get("/creators/{creator_id}/decisions", response_model=list[DecisionResponse])
 async def get_decisions(
     creator_id: str,
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[DecisionResponse]:

@@ -183,10 +183,11 @@ export interface Competitor {
 export interface Decision {
   id: string;
   creator_id: string;
-  opportunity_id: string | null;
+  opportunity_score_id: string | null;
   decision: string;
   rationale: string | null;
   decided_at: string;
+  decided_by: string | null;
   gate: string;
 }
 
@@ -195,7 +196,8 @@ export interface ResearchRun {
   creator_id: string | null;
   scope: string;
   status: string;
-  started_at: string;
+  // Null until the run actually starts (ResearchRunResponse.started_at is optional).
+  started_at: string | null;
   completed_at: string | null;
   stats: Record<string, unknown> | null;
 }

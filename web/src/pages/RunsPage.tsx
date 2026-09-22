@@ -33,7 +33,7 @@ export function RunsPage() {
                     <StatusBadge status={r.status} />
                   </td>
                   <td className="px-4 py-2.5 text-neutral-500">
-                    {new Date(r.started_at).toLocaleString()}
+                    {r.started_at ? new Date(r.started_at).toLocaleString() : "not started"}
                   </td>
                 </tr>
               ))}

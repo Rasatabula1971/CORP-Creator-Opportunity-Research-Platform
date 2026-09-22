@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -7,10 +7,14 @@ from corp.core.models.workflow import DecisionType, Gate
 
 
 class DecisionCreate(BaseModel):
+    """Gate A (creator-level) decision. research_more belongs to the dossier
+    gate (POST /dossiers/{id}/decision), so it is rejected here at
+    validation time rather than by the gate logic (R10, after R9)."""
+
     model_config = ConfigDict(extra="forbid")
 
     opportunity_score_id: str | None = None
-    decision: DecisionType
+    decision: Literal[DecisionType.APPROVE, DecisionType.REJECT, DecisionType.WATCH]
     rationale: str | None = None
     decided_by: str | None = None
 

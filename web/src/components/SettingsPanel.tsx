@@ -27,7 +27,7 @@ export function SettingsPanel() {
           <input
             value={base}
             onChange={(e) => setBase(e.target.value)}
-            placeholder="http://localhost:8000"
+            placeholder="http://localhost:8010"
             className="mb-3 w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-950"
           />
           <label className="mb-1 block text-xs font-medium text-neutral-500">API key</label>
