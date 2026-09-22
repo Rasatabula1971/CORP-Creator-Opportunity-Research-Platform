@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 from sqlalchemy import func, select
@@ -57,6 +57,12 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.82
 @dataclass(frozen=True, slots=True)
 class CanonConfig:
     similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
+    # Research-registry clock (spec: "always set on scan completion").
+    # Promotion IS the end of the scan that discovered the niche, so the
+    # clock starts here -- not only at verification, which a niche may never
+    # reach, leaving next_recheck_at NULL and the registry treating it as
+    # perpetually due. Same rules-file value T3/T10 use (recursion.recheck_days).
+    recheck_days: int = 90
 
 
 class NicheCanonicalizer:
@@ -138,12 +144,14 @@ class NicheCanonicalizer:
                         cand.label, niche.canonical_name, niche.id,
                     )
                 else:
+                    now = datetime.now(UTC)
                     niche = Niche(
                         canonical_name=cand.label,
                         description=cand.description,
                         lifecycle_status=NicheLifecycleStatus.CANDIDATE,
-                        first_discovered_at=cand.earliest_collected_at
-                        or datetime.now(UTC),
+                        first_discovered_at=cand.earliest_collected_at or now,
+                        last_researched_at=now,
+                        next_recheck_at=now + timedelta(days=self._cfg.recheck_days),
                         parent_niche_id=parent_niche.id if parent_niche else None,
                         # Tree depth is derived from the parent niche, not
                         # copied from the candidate: a parent that merged

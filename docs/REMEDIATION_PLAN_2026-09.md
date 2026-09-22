@@ -27,7 +27,7 @@ R1 and is isolated to one file.
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
 | **R4** Populate `Niche.parent_niche_id` / `depth` on promotion | #3 | `niche_canonicalization.py` | After a depth-3 drill, `_niche_path()` returns ≥3 nodes; handoff package shows full path; parent resolves via the parent candidate's `niche_id` (PROMOTED or MERGED); depth derived from the parent niche; no cycles | Done — ADR-0052 |
-| **R5** Depth cap on `research_more`; fan-out includes `crowdfunding` + `patreon_substack`; recheck clock set at promotion; `NicheLifecycleStatus.EXCLUDED` set on exclusion | #6 #9 #11 #10 | `niche_discovery.py`, `niche_canonicalization.py` | No candidate persisted above `max_depth`; TRANSACTION/MONETISATION evidence collected in drill; no promoted niche with NULL `next_recheck_at` | |
+| **R5** Depth cap on `research_more`; fan-out includes `crowdfunding` + `patreon_substack`; recheck clock set at promotion; `NicheLifecycleStatus.EXCLUDED` set on exclusion | #6 #9 #11 #10 | `niche_discovery.py`, `niche_canonicalization.py` | No candidate persisted above `max_depth`; TRANSACTION/MONETISATION evidence collected in drill; no promoted niche with NULL `next_recheck_at` | Done — ADR-0053 |
 
 ## Phase C — Make the dossier truthful
 

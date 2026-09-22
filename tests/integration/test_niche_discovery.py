@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
 from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
-from corp.core.models.niche import Niche
+from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
 from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
@@ -727,3 +727,173 @@ async def _make_campaign_run(session: AsyncSession, campaign_id: str) -> Researc
     session.add(run)
     await session.flush()
     return run
+
+
+# ---------- R5: depth cap on research_more, EXCLUDED lifecycle, fan-out ----------
+
+
+def test_fan_out_includes_transaction_and_monetisation_sources():
+    from corp.workers.intelligence.niche_discovery import NICHE_FAN_OUT_PLATFORMS
+
+    assert "crowdfunding" in NICHE_FAN_OUT_PLATFORMS
+    assert "patreon_substack" in NICHE_FAN_OUT_PLATFORMS
+
+
+@pytest.mark.asyncio
+async def test_research_more_at_max_depth_persists_nothing(clean_db: AsyncSession, monkeypatch):
+    """A niche whose promoted candidate already sits at max_depth cannot be
+    drilled deeper: the run completes, records the skip, and no candidate
+    is written past the cap."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    niche = Niche(canonical_name="Home Espresso", depth=3)
+    session.add(niche)
+    await session.flush()
+    session.add(NicheCandidate(
+        campaign_id=campaign.id,
+        research_run_id=(await _make_campaign_run(session, campaign.id)).id,
+        label="Home Espresso",
+        naming_method="llm",
+        evidence_count=1, source_count=1, author_count=1,
+        depth=3,
+        status=NicheCandidateStatus.PROMOTED,
+        niche_id=niche.id,
+    ))
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about espresso machines")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider({
+        "Topic: Home Espresso": {"niches": [_niche("Too Deep", ["espresso"], True)]}
+    })
+    discovery = RecursiveNicheDiscovery(
+        session, provider, rules_path="unused", config=_config(max_depth=3)
+    )
+    run = await discovery.research_more(niche.id, campaign.id)
+
+    assert run.status == "completed"
+    assert run.stats["extra"]["skipped_max_depth"] == 1
+    assert fake.calls == []  # never collected evidence
+    children = (await session.execute(
+        select(NicheCandidate).where(NicheCandidate.research_run_id == run.id)
+    )).scalars().all()
+    assert children == []
+
+
+@pytest.mark.asyncio
+async def test_excluded_synthesized_niche_marks_existing_niche_excluded(
+    clean_db: AsyncSession, monkeypatch
+):
+    session = clean_db
+    campaign = await _make_campaign(session)
+    existing = Niche(canonical_name="Sports Betting Odds")
+    session.add(existing)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about gambling odds")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider({
+        "Topic: hobbies": {
+            "niches": [_niche("Sports Betting Odds", ["gambling odds"], specific_enough=True)]
+        }
+    })
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    await discovery.discover(campaign.id, "hobbies")
+
+    await session.refresh(existing)
+    assert existing.lifecycle_status == NicheLifecycleStatus.EXCLUDED
+
+
+@pytest.mark.asyncio
+async def test_excluded_keyword_marks_existing_niche_excluded_via_alias(
+    clean_db: AsyncSession, monkeypatch
+):
+    session = clean_db
+    campaign = await _make_campaign(session)
+    existing = Niche(canonical_name="Wagering Lines")
+    session.add(existing)
+    await session.flush()
+    session.add(NicheAlias(niche_id=existing.id, alias="Sports Betting Odds"))
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    discovery = RecursiveNicheDiscovery(
+        session, ScriptedProvider({}), rules_path="unused", config=_config()
+    )
+    await discovery.discover(campaign.id, "sports betting odds")
+
+    await session.refresh(existing)
+    assert existing.lifecycle_status == NicheLifecycleStatus.EXCLUDED
+    assert fake.calls == []
+
+
+@pytest.mark.asyncio
+async def test_excluded_keyword_beats_registry_freshness(clean_db: AsyncSession, monkeypatch):
+    """A promoted niche always has a recheck clock now, so exclusion must be
+    checked BEFORE freshness or the excluded keyword would hide behind
+    'still fresh' for recheck_days."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    existing = Niche(
+        canonical_name="Sports Betting Odds",
+        next_recheck_at=datetime.now(UTC) + timedelta(days=60),
+    )
+    session.add(existing)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    discovery = RecursiveNicheDiscovery(
+        session, ScriptedProvider({}), rules_path="unused", config=_config()
+    )
+    await discovery.discover(campaign.id, "sports betting odds")
+
+    await session.refresh(existing)
+    assert existing.lifecycle_status == NicheLifecycleStatus.EXCLUDED
+
+
+@pytest.mark.asyncio
+async def test_description_only_exclusion_rejects_candidate_but_keeps_niche(
+    clean_db: AsyncSession, monkeypatch
+):
+    """Candidate rejection matches name+description; the niche-level EXCLUDED
+    mark requires a NAME match, so an LLM description alone cannot flip a
+    pre-existing canonical niche."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    existing = Niche(canonical_name="Weekend Hobbies")
+    session.add(existing)
+    await session.flush()
+
+    fake = _FakeTrendAdapter("faketrend", [_content("e1", "evidence about gambling odds")])
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter", lambda platform: fake
+    )
+    provider = ScriptedProvider({
+        "Topic: hobbies": {
+            "niches": [{
+                "name": "Weekend Hobbies",
+                "description": "gambling odds and sports betting for fun",
+                "specific_enough": True,
+                "evidence_terms": ["gambling odds"],
+            }]
+        }
+    })
+    discovery = RecursiveNicheDiscovery(session, provider, rules_path="unused", config=_config())
+    await discovery.discover(campaign.id, "hobbies")
+
+    cand = (await session.execute(
+        select(NicheCandidate).where(NicheCandidate.campaign_id == campaign.id)
+    )).scalar_one()
+    assert cand.status == NicheCandidateStatus.REJECTED
+    await session.refresh(existing)
+    assert existing.lifecycle_status != NicheLifecycleStatus.EXCLUDED

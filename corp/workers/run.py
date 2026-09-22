@@ -145,12 +145,14 @@ async def _run_canonicalize(campaign_id: str, similarity_threshold: float) -> in
     from corp.database import async_session
     from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
     from corp.workers.intelligence.niche_canonicalization import CanonConfig, NicheCanonicalizer
+    from corp.workers.intelligence.niche_discovery import DiscoveryConfig
 
+    recheck_days = DiscoveryConfig.from_rules("rules/niche_discovery_prompt.yaml").recheck_days
     async with async_session() as session:
         canon = NicheCanonicalizer(
             SentenceTransformerEmbedder(settings.embedding_model),
             session,
-            CanonConfig(similarity_threshold=similarity_threshold),
+            CanonConfig(similarity_threshold=similarity_threshold, recheck_days=recheck_days),
         )
         run = await canon.canonicalize(campaign_id)
         await session.commit()

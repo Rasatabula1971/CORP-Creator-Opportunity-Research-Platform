@@ -265,3 +265,21 @@ async def test_multiple_niches_in_one_run(clean_db: AsyncSession):
 
     assert run.stats["extra"]["niches_processed"] == 2
     assert run.stats["extra"]["creators_created"] == 2
+
+
+@pytest.mark.asyncio
+async def test_skips_excluded_niche_even_if_selected(clean_db: AsyncSession):
+    """R5: a niche moved to EXCLUDED after selection must not onboard creators."""
+    session = clean_db
+    campaign, niche, _ = await _setup_selected_niche(session, "Sports Betting Odds")
+    niche.lifecycle_status = NicheLifecycleStatus.EXCLUDED
+    await session.flush()
+
+    adapter = FakeSearchAdapter({
+        "Sports Betting Odds": [_FakeItem("Chan", "UCeeeeeeeeeeeeeeeeeeeeee", 10_000)],
+    })
+    onboarder = CreatorOnboarder(adapter, session)
+    run = await onboarder.onboard(campaign.id)
+
+    assert run.stats["extra"]["niches_processed"] == 0
+    assert run.stats["extra"]["creators_created"] == 0

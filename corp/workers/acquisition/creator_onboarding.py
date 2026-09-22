@@ -16,9 +16,9 @@ re-observed link just advances ``last_observed_at``.
 from __future__ import annotations
 
 import logging
-from typing import Any
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ from sqlalchemy.orm import selectinload
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.creator_niche import CreatorNiche
-from corp.core.models.niche import Niche
+from corp.core.models.niche import Niche, NicheLifecycleStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.workers.intelligence.ecosystem_estimator import ChannelEnricher, SearchAdapter
 from corp.workers.intelligence.runs import (
@@ -290,12 +290,16 @@ class CreatorOnboarder:
         return True
 
     async def _selected_niches(self, campaign_id: str) -> list[Niche]:
+        # A niche moved to EXCLUDED after selection (policy match on a later
+        # drill) must not onboard creators; un-excluding is a human action.
         result = await self._session.execute(
             select(CampaignNiche)
+            .join(Niche, Niche.id == CampaignNiche.niche_id)
             .options(selectinload(CampaignNiche.niche))
             .where(
                 CampaignNiche.campaign_id == campaign_id,
                 CampaignNiche.status == CampaignNicheStatus.SELECTED,
+                Niche.lifecycle_status != NicheLifecycleStatus.EXCLUDED,
             )
         )
         rows = list(result.scalars().all())

@@ -560,3 +560,26 @@ async def test_canonicalized_chain_yields_multi_node_dossier_path(clean_db: Asyn
         "Kitchen Gadgets", "Home Espresso", "Sim Racing Wheels"
     ]
     assert [p["depth"] for p in path] == [0, 1, 2]
+
+
+# ── R5: research-registry clock starts at promotion ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_promotion_starts_recheck_clock(clean_db: AsyncSession):
+    session = clean_db
+    campaign, (cand,) = await _seed_campaign_with_candidates(
+        session, ["Home Espresso"], campaign_name="Clock"
+    )
+    before = datetime.now(UTC)
+    await NicheCanonicalizer(
+        FakeEmbedder(), session, CanonConfig(recheck_days=30)
+    ).canonicalize(campaign.id)
+    await session.refresh(cand)
+    niche = await session.get(Niche, cand.niche_id)
+    assert niche is not None
+    assert niche.last_researched_at is not None and niche.last_researched_at >= before
+    assert niche.next_recheck_at is not None
+    assert abs((niche.next_recheck_at - niche.last_researched_at) - timedelta(days=30)) < timedelta(
+        seconds=1
+    )

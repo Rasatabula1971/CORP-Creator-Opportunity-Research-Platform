@@ -43,6 +43,7 @@ class VerifyConfig:
     min_evidence: int = 5
     min_authors: int = 3
     reject_broad_domain: bool = True
+    recheck_days: int = 90
 
 
 @dataclass(slots=True)
@@ -106,7 +107,7 @@ class NicheVerifier:
                     niche.lifecycle_status = NicheLifecycleStatus.ACTIVE
                     now = datetime.now(UTC)
                     niche.last_researched_at = now
-                    niche.next_recheck_at = now + timedelta(days=90)
+                    niche.next_recheck_at = now + timedelta(days=self._cfg.recheck_days)
                     await self._update_campaign_niche(
                         campaign_id, niche.id, CampaignNicheStatus.VERIFIED
                     )

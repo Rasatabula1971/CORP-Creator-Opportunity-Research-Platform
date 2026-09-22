@@ -53,7 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
 from corp.core.models.evidence import Evidence, EvidenceOrigin, EvidenceType
-from corp.core.models.niche import Niche, NicheAlias
+from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus
 from corp.core.models.niche_candidate import (
     NicheCandidate,
     NicheCandidateEvidence,
@@ -89,6 +89,8 @@ NICHE_FAN_OUT_PLATFORMS: tuple[str, ...] = (
     "wikipedia",
     "googletrends",
     "appstore",
+    "crowdfunding",
+    "patreon_substack",
 )
 
 SYNTHESIS_SYSTEM_PROMPT = (
@@ -420,14 +422,30 @@ class RecursiveNicheDiscovery:
         *,
         skip_registry_check: bool = False,
     ) -> None:
-        if not skip_registry_check and await self._is_registry_fresh(keyword):
-            logger.info("Skipping %r at depth %d: registry entry still fresh", keyword, depth)
+        # Hard cap on the tree (spec: max depth 3). Recursion below already
+        # stops at max_depth, but research_more() enters here at
+        # parent.depth + 1 and must not persist candidates past the cap.
+        if depth > self._config.max_depth:
+            logger.info(
+                "Skipping %r: depth %d exceeds max_depth %d",
+                keyword, depth, self._config.max_depth,
+            )
             stats.skip()
+            stats.extra["skipped_max_depth"] = stats.extra.get("skipped_max_depth", 0) + 1
             return
 
+        # Exclusion before the registry check: a promoted niche always has a
+        # recheck clock now (R5), so checking freshness first would hide an
+        # excluded keyword behind "still fresh" for recheck_days.
         excluded = matched_exclusion(keyword, self._config.exclusions)
         if excluded is not None:
             logger.info("Skipping %r at depth %d: matched exclusion %r", keyword, depth, excluded)
+            await self._mark_niche_excluded(keyword)
+            stats.skip()
+            return
+
+        if not skip_registry_check and await self._is_registry_fresh(keyword):
+            logger.info("Skipping %r at depth %d: registry entry still fresh", keyword, depth)
             stats.skip()
             return
 
@@ -498,6 +516,12 @@ class RecursiveNicheDiscovery:
         if excluded_category is not None:
             candidate.status = NicheCandidateStatus.REJECTED
             candidate.extra = {"excluded_category": excluded_category}
+            # The candidate is rejected on name+description, but a canonical
+            # Niche is only marked EXCLUDED when its NAME matches: an LLM
+            # description alone must not flip a pre-existing niche, since
+            # reversal is a human-only action.
+            if matched_exclusion(niche.name, self._config.exclusions) is not None:
+                await self._mark_niche_excluded(niche.name)
 
         self._session.add(candidate)
         await self._session.flush()
@@ -519,6 +543,35 @@ class RecursiveNicheDiscovery:
             if candidate.status == NicheCandidateStatus.DRILLING:
                 candidate.status = NicheCandidateStatus.STAGED
                 await self._session.flush()
+
+    async def _mark_niche_excluded(self, label: str) -> None:
+        """Exclusion is decided on candidates, but the spec's lifecycle
+        (and the human "un-exclude" action) lives on the canonical Niche.
+        If a niche already exists under this label or alias, move it to
+        EXCLUDED so verification/creator discovery never pick it up."""
+        lowered = label.lower().strip()
+        # Canonical name first (unique), alias only as a fallback: the two
+        # are unique within their own tables only, so one lookup over the
+        # outer join could pick either arbitrarily.
+        niche = (
+            await self._session.execute(
+                select(Niche).where(func.lower(Niche.canonical_name) == lowered).limit(1)
+            )
+        ).scalar_one_or_none()
+        if niche is None:
+            niche = (
+                await self._session.execute(
+                    select(Niche)
+                    .join(NicheAlias, NicheAlias.niche_id == Niche.id)
+                    .where(func.lower(NicheAlias.alias) == lowered)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        if niche is None or niche.lifecycle_status == NicheLifecycleStatus.EXCLUDED:
+            return
+        niche.lifecycle_status = NicheLifecycleStatus.EXCLUDED
+        await self._session.flush()
+        logger.info("Niche %r (%s) marked EXCLUDED", niche.canonical_name, niche.id)
 
     # ── Registry check (CORP1 Stage 3 research registry) ────────────────
 

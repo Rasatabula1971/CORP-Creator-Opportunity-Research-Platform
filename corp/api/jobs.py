@@ -360,13 +360,21 @@ async def run_campaign_pipeline(
 
     if kind == "canonicalize":
         from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
-        from corp.workers.intelligence.niche_canonicalization import NicheCanonicalizer
+        from corp.workers.intelligence.niche_canonicalization import (
+            CanonConfig,
+            NicheCanonicalizer,
+        )
+        from corp.workers.intelligence.niche_discovery import DiscoveryConfig
 
+        recheck_days = DiscoveryConfig.from_rules(
+            "rules/niche_discovery_prompt.yaml"
+        ).recheck_days
         async with async_session() as session:
             try:
                 canon = NicheCanonicalizer(
                     SentenceTransformerEmbedder(settings.embedding_model),
                     session,
+                    CanonConfig(recheck_days=recheck_days),
                 )
                 run = await canon.canonicalize(campaign_id)
                 await session.commit()
