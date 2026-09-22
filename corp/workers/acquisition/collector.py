@@ -44,7 +44,21 @@ _CONTENT_TYPE_MAP = {
 _INTERACTION_TYPE_MAP = {
     "comment": InteractionType.COMMENT,
     "reply": InteractionType.REPLY,
+    # "question"/"review" are in BOTH maps: a StackExchange question or an
+    # Amazon review with no parent is standalone content (THREAD/ARTICLE);
+    # the same type WITH a parent_id is an audience interaction on that
+    # content, like a comment. _is_interaction() makes the split.
+    "question": InteractionType.QUESTION,
+    "review": InteractionType.REVIEW,
 }
+
+
+def _is_interaction(item: NormalizedContent) -> bool:
+    if item.content_type not in _INTERACTION_TYPE_MAP:
+        return False
+    if item.content_type in _CONTENT_TYPE_MAP:
+        return bool(item.parent_id)
+    return True
 
 
 _EXTRA_KEYS = ("commerce_signals", "tags", "music", "domain", "duration", "flair", "subreddit")
@@ -127,8 +141,10 @@ class AcquisitionCollector:
     ) -> dict[str, int]:
         # Any adapter content type with a ContentType mapping is a content item
         # (video, post, short, ...); comments and replies hang off those.
-        videos = [i for i in items if i.content_type in _CONTENT_TYPE_MAP]
-        comments = [i for i in items if i.content_type in _INTERACTION_TYPE_MAP]
+        comments = [i for i in items if _is_interaction(i)]
+        videos = [
+            i for i in items if i.content_type in _CONTENT_TYPE_MAP and not _is_interaction(i)
+        ]
         captions = [i for i in items if i.content_type == "caption"]
         profiles = [i for i in items if i.content_type == "profile"]
         orphaned = 0
@@ -148,9 +164,9 @@ class AcquisitionCollector:
                 item, content_map
             )
             if parent_ci is None:
-                # Reviews and questions are standalone — persist evidence even
-                # without a parent ContentItem so the intelligence pipeline can
-                # still use them.
+                # An interaction whose parent content was not collected in
+                # this run: keep the evidence so the intelligence pipeline can
+                # still use it, but count it as orphaned.
                 await self._create_evidence(item, research_run_id)
                 orphaned += 1
                 continue

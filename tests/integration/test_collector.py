@@ -268,3 +268,37 @@ async def test_collect_failure_marks_run_failed(clean_db: AsyncSession):
     run = result.scalar_one()
     assert run.status == "failed"
     assert "API exploded" in run.error_message
+
+
+@pytest.mark.asyncio
+async def test_standalone_question_and_review_remain_content_items(clean_db: AsyncSession):
+    """Without a parent_id, a question (StackExchange) or review (Amazon/App
+    Store) is standalone content, not an interaction -- the pre-existing
+    mapping to THREAD/ARTICLE must survive the parented-interaction fix."""
+    from corp.core.models.content import ContentItem, ContentType
+
+    session = clean_db
+    creator = await _create_creator(session)
+    ts = datetime(2026, 1, 15, 10, 0, tzinfo=UTC)
+    items = [
+        NormalizedContent(
+            source_platform="stackexchange", content_type="question", external_id="se_1",
+            text="How do I tune a PID loop?", timestamp=ts,
+            access_method=AccessMethod.OPEN, compliance_status=ComplianceStatus.COMPLIANT,
+        ),
+        NormalizedContent(
+            source_platform="amazon_reviews", content_type="review", external_id="am_1",
+            text="Descaler ruined my boiler", timestamp=ts,
+            access_method=AccessMethod.OPEN, compliance_status=ComplianceStatus.COMPLIANT,
+        ),
+    ]
+    run = await AcquisitionCollector(FakeAdapter(items), session).collect_creator_data(
+        "@test", creator.id
+    )
+
+    assert run.stats["extra"]["content_items"] == 2
+    assert run.stats["extra"]["interactions"] == 0
+    assert run.stats["extra"]["orphaned_interactions"] == 0
+    rows = (await session.execute(select(ContentItem))).scalars().all()
+    assert {r.content_type for r in rows} == {ContentType.THREAD, ContentType.ARTICLE}
+    assert (await session.execute(select(AudienceInteraction))).scalars().all() == []

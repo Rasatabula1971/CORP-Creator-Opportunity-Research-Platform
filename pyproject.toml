@@ -38,6 +38,7 @@ dev = [
     "import-linter>=2,<3",
     "ruff>=0.5,<1",
     "mypy>=1.10,<2",
+    "types-yt-dlp>=2026.8,<2027",
     "graphifyy>=0.1",
 ]
 
@@ -74,6 +75,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 # Third-party packages that ship no type information; nothing to fix on our side.
+# (yt_dlp is covered by the types-yt-dlp stubs in the dev extras instead.)
 [[tool.mypy.overrides]]
 module = [
     "umap.*",
@@ -81,7 +83,6 @@ module = [
     "fair.*",
     "googleapiclient.*",
     "pytrends.*",
-    "yt_dlp.*",
 ]
 ignore_missing_imports = true
 

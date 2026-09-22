@@ -60,8 +60,9 @@ R1 and is isolated to one file.
 - **`str, Enum` → `StrEnum` (27 UP042 hits)** — R11 chose to ignore the
   rule in config rather than rewrite: `StrEnum` changes `str(member)`
   output, which reaches logs/f-strings; stored labels would be unchanged.
-- **Five pre-existing test failures** predating this plan
-  (`tests/workers/test_intelligence_worker.py` ×2,
-  `tests/integration/test_collector.py`, `test_dossier_pipeline.py`,
-  `test_campaign_pipeline_e2e.py`) — still deselected; need their own
-  triage task.
+- **Five pre-existing test failures** — triaged in R11b (ADR-0059): two ids
+  were stale (file gone), one was an event-loop/pool ordering defect in the
+  test harness (fixed in conftest), one was a renamed-method test, one was a
+  real collector bug (parented question/review never became an
+  interaction). Suite now runs with no deselects. `types-yt-dlp` stubs
+  adopted in the same task.

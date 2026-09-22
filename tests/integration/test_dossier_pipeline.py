@@ -322,9 +322,14 @@ async def test_load_observations_orders_by_confidence(clean_db: AsyncSession):
     await session.flush()
 
     gen = DossierGenerator(session)
-    observations = await gen._load_observations(cluster.id)
+    # _load_observations became the batched _load_observations_batch; the
+    # per-cluster cap (10) and confidence-desc ordering are unchanged.
+    observations = (await gen._load_observations_batch([cluster.id])).get(cluster.id, [])
 
     assert len(observations) == 10
+    assert [o.confidence for o in observations] == sorted(
+        (o.confidence for o in observations), reverse=True
+    )
     top_10_expected_texts = {
         f"observation {i}" for i, _ in sorted(
             enumerate(scores), key=lambda pair: pair[1], reverse=True

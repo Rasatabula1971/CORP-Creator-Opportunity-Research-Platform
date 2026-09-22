@@ -27,6 +27,22 @@ engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
 async_test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+@pytest.fixture(autouse=True)
+async def _fresh_app_engine() -> AsyncGenerator[None]:
+    """corp.database's pooled asyncpg engine binds its connections to the
+    event loop that first used it. pytest-asyncio gives every test its own
+    loop, so a pool left behind by an earlier test (e.g. the tests/api app
+    tests) makes a later test that goes through corp.database -- such as the
+    e2e test driving jobs.run_campaign_pipeline -- fail with "Event loop is
+    closed". Dispose it before each test; the engine rebuilds its pool
+    lazily on the current loop."""
+    from corp import database
+
+    if database._engine.cache_info().currsize:
+        await database._engine().dispose()
+    yield
+
+
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession]:
     async with async_test_session() as session:

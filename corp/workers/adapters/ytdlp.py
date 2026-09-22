@@ -17,7 +17,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from urllib.parse import urlparse
 
 from corp.core.models.evidence import AccessMethod, ComplianceStatus
@@ -54,7 +54,10 @@ ExtractorFactory = Callable[[dict[str, Any]], _Extractor]
 def _default_factory(opts: dict[str, Any]) -> _Extractor:
     import yt_dlp
 
-    return yt_dlp.YoutubeDL(opts)  # type: ignore[no-any-return]
+    # types-yt-dlp types extract_info with more optional parameters and a
+    # TypedDict return; the narrow _Extractor protocol is the slice we use,
+    # so the structural mismatch is a stub-precision detail, not a bug.
+    return cast(_Extractor, yt_dlp.YoutubeDL(cast(Any, opts)))
 
 
 class YtDlpAdapter(SourceAdapter):
