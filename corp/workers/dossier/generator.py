@@ -22,11 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor
 from corp.core.models.creator import Creator, CreatorPlatformAccount
+from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.dossier import Dossier, DossierEvidence
 from corp.core.models.evidence import Evidence, EvidenceType
 from corp.core.models.intelligence import (
@@ -132,8 +133,33 @@ class DossierGenerator:
         )
 
     async def generate(self, creator_id: str) -> str:
+        """Live HTML view. Carries the same enriched sections the persisted
+        dossier does (audience analysis, demand validation, product ideas,
+        recommendation) so the two never diverge; demand validation is
+        scoped over every niche the creator is linked to, since this view
+        has no single niche_id."""
         data = await self._load_data(creator_id)
-        return self._render(data)
+        niche_ids = list(
+            (
+                await self._session.execute(
+                    select(CreatorNiche.niche_id).where(CreatorNiche.creator_id == creator_id)
+                )
+            ).scalars().all()
+        )
+        top = data.opportunities[0] if data.opportunities else None
+        product_ideas = await self._load_product_ideas(creator_id)
+        cluster_competitors = {o.cluster.id: o.competitors for o in data.opportunities}
+        return self._render(
+            data,
+            audience_analysis=self._build_audience_analysis(data.opportunities),
+            demand_validation=await self._build_demand_validation(creator_id, niche_ids),
+            product_ideas=product_ideas,
+            comparable_products={
+                p.id: _comparable_products(cluster_competitors.get(p.problem_cluster_id, []))
+                for p in product_ideas
+            },
+            recommendation=self._build_recommendation(data, top) if top else None,
+        )
 
     async def generate_data(self, creator_id: str) -> DossierData:
         return await self._load_data(creator_id)
@@ -241,10 +267,9 @@ class DossierGenerator:
                     "price_max": p.price_max,
                     "fit_rationale": p.fit_rationale,
                     "evidence_terms": p.evidence_terms,
-                    "comparable_products": [
-                        {"name": c.name, "url": c.url, "strength": c.strength.value}
-                        for c in cluster_competitors.get(p.problem_cluster_id, [])[:5]
-                    ],
+                    "comparable_products": _comparable_products(
+                        cluster_competitors.get(p.problem_cluster_id, [])
+                    ),
                 }
                 for p in product_ideas
             ],
@@ -256,7 +281,7 @@ class DossierGenerator:
                 "competitor_count": data.data_coverage.competitor_count,
             },
             "audience_analysis": self._build_audience_analysis(data.opportunities),
-            "demand_validation": await self._build_demand_validation(creator_id, niche_id),
+            "demand_validation": await self._build_demand_validation(creator_id, [niche_id]),
             "niche_path": path,
             "recommendation": recommendation,
             "generated_at": data.generated_at,
@@ -351,7 +376,16 @@ class DossierGenerator:
             generated_at=datetime.now(UTC).isoformat(),
         )
 
-    def _render(self, data: DossierData) -> str:
+    def _render(
+        self,
+        data: DossierData,
+        *,
+        audience_analysis: dict[str, Any] | None = None,
+        demand_validation: dict[str, Any] | None = None,
+        product_ideas: list[ProductIdea] | None = None,
+        comparable_products: dict[str, list[dict[str, Any]]] | None = None,
+        recommendation: dict[str, Any] | None = None,
+    ) -> str:
         template = self._env.get_template("dossier.html.j2")
         return template.render(
             creator=data.creator,
@@ -362,6 +396,11 @@ class DossierGenerator:
             opportunities=data.opportunities,
             signals=data.signals,
             data_coverage=data.data_coverage,
+            audience_analysis=audience_analysis,
+            demand_validation=demand_validation,
+            product_ideas=product_ideas or [],
+            comparable_products=comparable_products or {},
+            recommendation=recommendation,
             generated_at=data.generated_at,
         )
 
@@ -570,20 +609,22 @@ class DossierGenerator:
         }
 
     @staticmethod
-    def _niche_evidence_clause(niche_id: str) -> ColumnElement[bool]:
-        """Evidence that belongs to a niche. Two sources, because the niche
+    def _niche_evidence_clause(niche_ids: list[str]) -> ColumnElement[bool]:
+        """Evidence that belongs to any of ``niche_ids``. Two sources, because the niche
         pipeline links evidence differently at each stage: the depth-0 drill
         (T3) records evidence on the NicheCandidate that later became the
         niche (PROMOTED) or was folded into it (MERGED), while research_more
         and creator onboarding tag their ResearchRun with niche_id directly.
         Creator-level research runs carry no niche_id at all, so a
         creator-only scope misses every TREND/TRANSACTION/MONETISATION row."""
-        niche_runs = select(ResearchRun.id).where(ResearchRun.niche_id == niche_id)
+        if not niche_ids:
+            return false()
+        niche_runs = select(ResearchRun.id).where(ResearchRun.niche_id.in_(niche_ids))
         candidate_evidence = (
             select(NicheCandidateEvidence.evidence_id)
             .join(NicheCandidate, NicheCandidate.id == NicheCandidateEvidence.candidate_id)
             .where(
-                NicheCandidate.niche_id == niche_id,
+                NicheCandidate.niche_id.in_(niche_ids),
                 NicheCandidate.status.in_(
                     [NicheCandidateStatus.PROMOTED, NicheCandidateStatus.MERGED]
                 ),
@@ -595,14 +636,14 @@ class DossierGenerator:
         )
 
     async def _build_demand_validation(
-        self, creator_id: str, niche_id: str,
+        self, creator_id: str, niche_ids: list[str],
     ) -> dict[str, Any]:
         creator_runs = select(ResearchRun.id).where(
             ResearchRun.creator_id == creator_id
         )
         in_scope = or_(
             Evidence.research_run_id.in_(creator_runs),
-            self._niche_evidence_clause(niche_id),
+            self._niche_evidence_clause(niche_ids),
         )
 
         type_result = await self._session.execute(
@@ -665,7 +706,7 @@ class DossierGenerator:
             return []
         result = await self._session.execute(
             select(Evidence.id).where(
-                Evidence.id.in_(all_ev_ids), self._niche_evidence_clause(niche_id)
+                Evidence.id.in_(all_ev_ids), self._niche_evidence_clause([niche_id])
             )
         )
         niche_ev_ids = set(result.scalars().all())
@@ -782,6 +823,16 @@ class DossierGenerator:
             )
         )
         return list(result.scalars().all())
+
+
+def _comparable_products(competitors: list[Competitor]) -> list[dict[str, Any]]:
+    """The spec's "comparable products" for a product idea: the competitors
+    already recorded against the idea's cluster. One mapping shared by the
+    persisted content and the HTML view."""
+    return [
+        {"name": c.name, "url": c.url, "strength": c.strength.value}
+        for c in competitors[:5]
+    ]
 
 
 def _score_band_key(aggregate: float, rules: dict[str, Any]) -> str:

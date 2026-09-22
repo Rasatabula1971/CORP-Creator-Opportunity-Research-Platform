@@ -213,6 +213,43 @@
 <p class="stub">No problem clusters found for this creator.</p>
 {% endif %}
 
+<!-- ── Audience Analysis ─────────────────────────────────────────── -->
+{% if audience_analysis %}
+<h2>Audience Analysis</h2>
+{% set aa = audience_analysis %}
+<div class="meta">
+  <div class="meta-item"><span class="meta-label">Audience observations</span>{{ aa.engagement_quality.total_audience_observations }}</div>
+  <div class="meta-item"><span class="meta-label">Sentiment</span>
+    {% if aa.engagement_quality.sentiment_distribution %}{% for k, n in aa.engagement_quality.sentiment_distribution.items() %}{{ k }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}{% else %}—{% endif %}
+  </div>
+  <div class="meta-item"><span class="meta-label">Urgency</span>
+    {% if aa.engagement_quality.urgency_distribution %}{% for k, n in aa.engagement_quality.urgency_distribution.items() %}{{ k }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}{% else %}—{% endif %}
+  </div>
+</div>
+{% if aa.language_patterns %}
+<h3>Language Patterns</h3>
+<table>
+  <thead><tr><th>Phrase</th><th>Occurrences</th></tr></thead>
+  <tbody>
+  {% for p in aa.language_patterns %}
+  <tr><td>“{{ p.pattern }}”</td><td>{{ p.count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if aa.top_questions %}
+<h3>Top Audience Questions</h3>
+{% for group in aa.top_questions %}
+<p><strong>{{ group.cluster_label }}</strong></p>
+{% for q in group.questions %}
+<blockquote>{{ q.text }}</blockquote>
+{% endfor %}
+{% endfor %}
+{% else %}
+<p class="stub">No audience-side observations yet — only creator-side content has been analysed.</p>
+{% endif %}
+{% endif %}
+
 <!-- ── Commercial Intent Assessment ──────────────────────────────── -->
 <h2>Commercial Intent Assessment</h2>
 {% if signals %}
@@ -235,6 +272,30 @@
 
 <!-- ── Demand Validation ──────────────────────────────────────────── -->
 <h2>Demand Validation</h2>
+{% if demand_validation %}
+{% set dv = demand_validation %}
+<h3>External Evidence by Type</h3>
+<table>
+  <thead><tr><th>Evidence type</th><th>Rows</th></tr></thead>
+  <tbody>
+  {% for k, n in dv.signals.items() %}
+  <tr><td>{{ k | replace("_", " ") | title }}</td><td>{{ n }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h3>Source Highlights</h3>
+<table>
+  <thead><tr><th>Source</th><th>Rows</th></tr></thead>
+  <tbody>
+  {% for k, n in dv.platform_highlights.items() %}
+  <tr><td>{{ k | replace("_", " ") | title }}</td><td>{{ n }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if not dv.evidence_by_platform %}
+<p class="stub">No niche-level evidence linked to this creator yet — the niche drill has not run for a niche this creator belongs to.</p>
+{% endif %}
+{% endif %}
 {% if opportunities %}
 {% set ns = namespace(has_demand=false) %}
 {% for opp in opportunities %}
@@ -298,11 +359,42 @@
 
 <!-- ── Product Concepts ───────────────────────────────────────────── -->
 <h2>Product Concepts</h2>
-<p class="stub">Product ideas are generated alongside the persisted dossier. Use the Generate Dossier button on the dashboard to view product concepts with type, complexity, and pricing.</p>
+{% if product_ideas %}
+<table>
+  <thead><tr><th>Idea</th><th>Type</th><th>Complexity</th><th>Price</th><th>Fit</th></tr></thead>
+  <tbody>
+  {% for idea in product_ideas %}
+  <tr>
+    <td><strong>{{ idea.title }}</strong><br><small>{{ idea.description }}</small></td>
+    <td>{{ idea.idea_type.value | replace("_", " ") }}</td>
+    <td><span class="badge badge-{{ idea.complexity.value }}">{{ idea.complexity.value | upper }}</span></td>
+    <td>{% if idea.price_min is not none and idea.price_max is not none %}${{ "%.0f"|format(idea.price_min) }}–${{ "%.0f"|format(idea.price_max) }}{% else %}—{% endif %}</td>
+    <td>{{ idea.fit_rationale }}
+      {% set comps = comparable_products.get(idea.id) or [] %}
+      {% if comps %}<br><small>Comparable: {% for c in comps %}{% if c.url and c.url.lower().startswith(("https://", "http://")) %}<a href="{{ c.url }}" rel="noopener noreferrer">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %} ({{ c.strength }}){{ ", " if not loop.last }}{% endfor %}</small>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="stub">No product ideas generated yet for this creator's problem clusters.</p>
+{% endif %}
 
 <!-- ── Recommendation ─────────────────────────────────────────────── -->
 <h2>Recommendation</h2>
-<p class="stub">A confidence-rated recommendation (approve / research more / watch / reject) is generated with the persisted dossier.</p>
+{% if recommendation %}
+<div class="meta">
+  <div class="meta-item"><span class="meta-label">Suggested action</span><strong>{{ recommendation.suggested_action | replace("_", " ") | upper }}</strong></div>
+  <div class="meta-item"><span class="meta-label">Confidence</span><span class="badge badge-{{ recommendation.confidence }}">{{ recommendation.confidence | upper }}</span></div>
+</div>
+<p>{{ recommendation.rationale }}</p>
+{% if recommendation.risks %}<p><strong>Risks</strong></p><ul>{% for r in recommendation.risks %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+{% if recommendation.next_steps %}<p><strong>Next steps</strong></p><ul>{% for s in recommendation.next_steps %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+<p class="evidence-source">Deterministic, rule-based suggestion — the human decision gate remains the decision-maker.</p>
+{% else %}
+<p class="stub">No scored opportunity yet, so no recommendation can be derived.</p>
+{% endif %}
 
 <!-- ── Confidence Assessment ──────────────────────────────────────── -->
 <h2>Confidence Assessment</h2>

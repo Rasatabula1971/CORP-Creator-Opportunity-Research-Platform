@@ -34,7 +34,7 @@ R1 and is isolated to one file.
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
 | **R6** Scope dossier evidence via `CreatorNiche → ResearchRun.niche_id` ∪ creator runs | #2 | `dossier/generator.py` | Integration test: niche-discovery evidence → non-zero `demand_validation.signals`; "using global top" warning no longer fires for candidate-linked evidence | Done — ADR-0051 |
-| **R7** Surface persisted dossier content end-to-end | #12 | `web/src/api/types.ts`, `CreatorDetailPage.tsx`, `dossier.html.j2` | `audience_analysis`, `demand_validation`, `sample_evidence`, `comparable_products`, `component_scores` typed and rendered; template stubs retired; browser-verified | |
+| **R7** Surface persisted dossier content end-to-end | #12 | `web/src/api/types.ts`, `CreatorDetailPage.tsx`, `dossier.html.j2` | `audience_analysis`, `demand_validation`, `sample_evidence`, `comparable_products`, `component_scores` typed and rendered; template stubs retired; browser-verified | Done — ADR-0056 |
 | **R8** Re-scan scheduler robustness | #7 #8 | `scheduler/registry_rescan.py` | `next_recheck_at` advanced only on success; per-dossier savepoint; resurface to `PENDING_REVIEW` only when content hash changes | Done — ADR-0054 |
 
 ## Phase D — API/UI correctness and hygiene
@@ -42,7 +42,7 @@ R1 and is isolated to one file.
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
 | **R9** Gate A returns 422 on invalid decision / foreign score id | #5 | `corp/api/routes.py`, test | Route-level `ValueError` → 422 (same pattern the persisted-dossier and handoff routes already use); no 500 path | Done — ADR-0055 |
-| **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1`; Gate A request schema restricted to approve/reject/watch (R9 follow-up) | |
+| **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1`; Gate A request schema restricted to approve/reject/watch (R9 follow-up); printable dossier per niche — `GET /creators/{id}/dossier?niche_id=` defaulting to the creator's only niche, with a per-niche link in the UI when there are several (R7 follow-up, user decision 2026-09-21) | |
 | **R11** Hygiene | #16 #20 static gates | models (`server_default`), `dossier.py` type, `pyproject.toml` mypy overrides, two stale test assertions | `ruff check` and `mypy --strict` clean project-wide; no behaviour change | |
 
 ## Planned after this run (needs its own Stage 3/4 pass first)

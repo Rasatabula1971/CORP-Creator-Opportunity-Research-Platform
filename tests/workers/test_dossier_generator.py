@@ -232,9 +232,64 @@ async def test_stubs_present():
         generated_at="2025-01-15 10:30 UTC",
     )
 
+    # R7: the former "generated with the persisted dossier" stubs are gone;
+    # with no data the sections render their honest empty states instead.
     assert "Product Concepts" in html
-    assert "persisted dossier" in html
+    assert "No product ideas generated yet" in html
+    assert "Recommendation" in html
+    assert "no recommendation can be derived" in html
+    assert "persisted dossier" not in html
     assert "Competitive" in html
+
+
+def test_enriched_sections_render_with_data():
+    html = _render_template(
+        creator=FakeCreator(),
+        platform_accounts=[],
+        creator_score=None,
+        score_band="",
+        weights={},
+        opportunities=[FakeOpportunity()],
+        signals=[],
+        data_coverage=FakeDataCoverage(),
+        generated_at="2025-01-15 10:30 UTC",
+        audience_analysis={
+            "top_questions": [
+                {"cluster_label": "Battery Issues", "questions": [
+                    {"text": "Where can I buy a battery replacement?", "sentiment": None,
+                     "urgency": "high"},
+                ]},
+            ],
+            "recurring_themes": [],
+            "language_patterns": [{"pattern": "where can i", "count": 2}],
+            "engagement_quality": {
+                "total_audience_observations": 2,
+                "sentiment_distribution": {},
+                "urgency_distribution": {"high": 2},
+            },
+        },
+        demand_validation={
+            "evidence_by_type": {"trend": 3},
+            "evidence_by_platform": {"googletrends": 3},
+            "signals": {"trend": 3, "transaction": 0},
+            "platform_highlights": {"google_trends": 3, "crowdfunding_signals": 0},
+        },
+        product_ideas=[],
+        recommendation={
+            "suggested_action": "watch",
+            "confidence": "medium",
+            "rationale": "Moderate score; single source.",
+            "risks": ["Evidence comes from a single platform only."],
+            "next_steps": ["Re-score after the next research pass."],
+        },
+    )
+    assert "Audience Analysis" in html
+    assert "where can i" in html
+    assert "External Evidence by Type" in html
+    assert "Google Trends" in html
+    assert "WATCH" in html
+    assert "single platform only" in html
+    assert "human decision gate remains the decision-maker" in html
 
 
 async def test_competitive_landscape_with_data():

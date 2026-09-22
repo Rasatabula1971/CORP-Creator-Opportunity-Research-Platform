@@ -314,7 +314,49 @@ export interface PersistedDossier {
       price_max: number | null;
       fit_rationale: string;
       evidence_terms: string[];
+      comparable_products?: Array<{ name: string; url: string | null; strength: string }>;
     }>;
+    opportunities?: Array<{
+      cluster_label: string;
+      cluster_description: string | null;
+      aggregate_score: number;
+      confidence_band: string;
+      signal_level: string | null;
+      observation_count: number;
+      sample_evidence: string[];
+      frequency: number;
+      competitor_count: number;
+    }>;
+    // Spec "Audience Analysis" section (R7): what the audience says, in
+    // its own words, grouped by problem cluster.
+    audience_analysis?: {
+      top_questions: Array<{
+        cluster_label: string;
+        questions: Array<{ text: string; sentiment: string | null; urgency: string | null }>;
+      }>;
+      recurring_themes: Array<{
+        label: string;
+        description: string | null;
+        frequency: number;
+        observation_count: number;
+        evidence_strength: number;
+        recency_score: number;
+      }>;
+      language_patterns: Array<{ pattern: string; count: number }>;
+      engagement_quality: {
+        total_audience_observations: number;
+        sentiment_distribution: Record<string, number>;
+        urgency_distribution: Record<string, number>;
+      };
+    };
+    // Spec "Demand Validation" section (R7): external evidence counted by
+    // capability type and by source platform.
+    demand_validation?: {
+      evidence_by_type: Record<string, number>;
+      evidence_by_platform: Record<string, number>;
+      signals: Record<string, number>;
+      platform_highlights: Record<string, number>;
+    };
     niche_path: Array<{ id: string; canonical_name: string; depth: number }>;
     recommendation: {
       suggested_action: string;

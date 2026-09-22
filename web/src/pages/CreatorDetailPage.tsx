@@ -15,7 +15,12 @@ import {
 } from "../api/hooks";
 import { Button, Card, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
 import { ApiError } from "../api/client";
-import type { ClusterDetail, Competitor, DossierDecisionType } from "../api/types";
+import type {
+  ClusterDetail,
+  Competitor,
+  DossierDecisionType,
+  PersistedDossier,
+} from "../api/types";
 
 export function CreatorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -548,6 +553,40 @@ function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
             </div>
           )}
 
+          <AudienceAnalysisSection analysis={persisted.content.audience_analysis} />
+
+          <DemandValidationSection demand={persisted.content.demand_validation} />
+
+          {persisted.content.opportunities?.some((o) => o.sample_evidence?.length > 0) && (
+            <div>
+              <p className="mb-1 text-xs font-medium text-neutral-500">Sample Evidence</p>
+              <div className="space-y-2">
+                {persisted.content.opportunities
+                  .filter((o) => o.sample_evidence?.length > 0)
+                  .map((o) => (
+                    <div key={o.cluster_label} className="text-xs">
+                      <p className="font-medium">
+                        {o.cluster_label}
+                        <span className="ml-2 font-normal text-neutral-400">
+                          {o.observation_count} observations · score {o.aggregate_score.toFixed(2)}
+                        </span>
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {o.sample_evidence.map((text, i) => (
+                          <li
+                            key={i}
+                            className="border-l-2 border-neutral-300 pl-2 text-neutral-600 dark:border-neutral-700 dark:text-neutral-400"
+                          >
+                            {text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {persisted.content.product_ideas?.length > 0 && (
             <div>
               <p className="mb-1 text-xs font-medium text-neutral-500">
@@ -569,6 +608,29 @@ function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
                       </span>
                     </div>
                     <p className="mt-1 text-neutral-500">{idea.fit_rationale}</p>
+                    {idea.comparable_products && idea.comparable_products.length > 0 && (
+                      <p className="mt-1 text-neutral-400">
+                        Comparable:{" "}
+                        {idea.comparable_products.map((c, i) => (
+                          <span key={`${c.name}-${i}`}>
+                            {i > 0 ? ", " : ""}
+                            {c.url && /^https?:\/\//i.test(c.url) ? (
+                              <a
+                                href={c.url}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                                className="underline"
+                              >
+                                {c.name}
+                              </a>
+                            ) : (
+                              c.name
+                            )}{" "}
+                            ({c.strength})
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -577,6 +639,100 @@ function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
         </div>
       )}
     </Card>
+  );
+}
+
+function AudienceAnalysisSection({
+  analysis,
+}: {
+  analysis: PersistedDossier["content"]["audience_analysis"];
+}) {
+  if (!analysis) return null;
+  const eq = analysis.engagement_quality;
+  const dist = (d: Record<string, number>) =>
+    Object.entries(d)
+      .map(([k, n]) => `${k} (${n})`)
+      .join(", ");
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-neutral-500">Audience Analysis</p>
+      <p className="text-xs text-neutral-500">
+        {eq.total_audience_observations} audience observations
+        {Object.keys(eq.sentiment_distribution).length > 0 &&
+          ` · sentiment: ${dist(eq.sentiment_distribution)}`}
+        {Object.keys(eq.urgency_distribution).length > 0 &&
+          ` · urgency: ${dist(eq.urgency_distribution)}`}
+      </p>
+      {analysis.language_patterns.length > 0 && (
+        <p className="mt-1 text-xs text-neutral-500">
+          Language:{" "}
+          {analysis.language_patterns
+            .slice(0, 6)
+            .map((p) => `“${p.pattern}” ×${p.count}`)
+            .join(" · ")}
+        </p>
+      )}
+      {analysis.top_questions.length > 0 ? (
+        <div className="mt-2 space-y-2">
+          {analysis.top_questions.map((group) => (
+            <div key={group.cluster_label} className="text-xs">
+              <p className="font-medium">{group.cluster_label}</p>
+              <ul className="mt-1 space-y-1">
+                {group.questions.slice(0, 3).map((q, i) => (
+                  <li
+                    key={i}
+                    className="border-l-2 border-neutral-300 pl-2 text-neutral-600 dark:border-neutral-700 dark:text-neutral-400"
+                  >
+                    {q.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-neutral-400">
+          No audience-side observations yet — only creator-side content has been analysed.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DemandValidationSection({
+  demand,
+}: {
+  demand: PersistedDossier["content"]["demand_validation"];
+}) {
+  if (!demand) return null;
+  const label = (k: string) => k.replace(/_/g, " ");
+  const hasAny = Object.keys(demand.evidence_by_platform).length > 0;
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-neutral-500">Demand Validation</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+        {Object.entries(demand.signals).map(([k, n]) => (
+          <div key={k} className="flex justify-between">
+            <span className="text-neutral-500">{label(k)}</span>
+            <span className={n > 0 ? "font-medium" : "text-neutral-400"}>{n}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+        {Object.entries(demand.platform_highlights).map(([k, n]) => (
+          <div key={k} className="flex justify-between">
+            <span className="text-neutral-500">{label(k)}</span>
+            <span className={n > 0 ? "font-medium" : "text-neutral-400"}>{n}</span>
+          </div>
+        ))}
+      </div>
+      {!hasAny && (
+        <p className="mt-1 text-xs text-neutral-400">
+          No niche-level evidence linked yet — the niche drill has not run for a niche this
+          creator belongs to.
+        </p>
+      )}
+    </div>
   );
 }
 

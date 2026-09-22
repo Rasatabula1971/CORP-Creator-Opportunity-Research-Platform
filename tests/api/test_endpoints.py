@@ -415,3 +415,22 @@ async def test_create_decision_foreign_opportunity_score_is_422(clean_db: AsyncS
     assert "does not belong to this creator" in resp.json()["detail"]
     await session.refresh(creator)
     assert creator.status == CreatorStatus.HUMAN_REVIEW
+
+
+# ---------- R7: live HTML dossier carries the enriched sections ----------
+
+
+@pytest.mark.asyncio
+async def test_dossier_html_renders_enriched_sections(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _seed(session)
+    async with _make_client(session) as client:
+        resp = await client.get(f"/creators/{creator.id}/dossier")
+    assert resp.status_code == 200
+    html = resp.text
+    for section in ("Audience Analysis", "Demand Validation", "External Evidence by Type",
+                    "Product Concepts", "Recommendation"):
+        assert section in html, section
+    # A real recommendation is derived from the seeded score, not a stub.
+    assert "persisted dossier" not in html
+    assert "human decision gate remains the decision-maker" in html
