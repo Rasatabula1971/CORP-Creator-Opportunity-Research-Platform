@@ -379,3 +379,39 @@ async def test_list_research_runs_by_creator(clean_db: AsyncSession):
     assert resp.status_code == 200
     data = resp.json()
     assert all(r["creator_id"] == creator.id for r in data)
+
+
+# ---------- R9: Gate A rejects bad input with 422, not 500 ----------
+
+
+@pytest.mark.asyncio
+async def test_create_decision_research_more_is_422_at_gate_a(clean_db: AsyncSession):
+    """research_more is a dossier-gate decision; Gate A must say so, not 500."""
+    session = clean_db
+    creator = await _seed(session)
+    async with _make_client(session) as client:
+        resp = await client.post(
+            f"/creators/{creator.id}/decisions",
+            json={"decision": "research_more"},
+        )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert "not valid for Gate A" in body["detail"]
+    assert body["error"]["code"] == "validation_error"
+    await session.refresh(creator)
+    assert creator.status == CreatorStatus.HUMAN_REVIEW  # nothing transitioned
+
+
+@pytest.mark.asyncio
+async def test_create_decision_foreign_opportunity_score_is_422(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _seed(session)
+    async with _make_client(session) as client:
+        resp = await client.post(
+            f"/creators/{creator.id}/decisions",
+            json={"decision": "approve", "opportunity_score_id": "no-such-score"},
+        )
+    assert resp.status_code == 422
+    assert "does not belong to this creator" in resp.json()["detail"]
+    await session.refresh(creator)
+    assert creator.status == CreatorStatus.HUMAN_REVIEW

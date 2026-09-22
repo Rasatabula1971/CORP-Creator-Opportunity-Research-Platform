@@ -466,14 +466,21 @@ async def create_decision(
     if creator is None:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    decision = await record_gate_a_decision(
-        session=session,
-        creator=creator,
-        decision=body.decision,
-        rationale=body.rationale,
-        decided_by=body.decided_by,
-        opportunity_score_id=body.opportunity_score_id,
-    )
+    try:
+        decision = await record_gate_a_decision(
+            session=session,
+            creator=creator,
+            decision=body.decision,
+            rationale=body.rationale,
+            decided_by=body.decided_by,
+            opportunity_score_id=body.opportunity_score_id,
+        )
+    except ValueError as exc:
+        # A decision Gate A doesn't accept (research_more belongs to the
+        # dossier gate) or an opportunity_score_id that isn't this
+        # creator's: the request is well-formed but wrong, not a server
+        # fault. InvalidTransitionError keeps its own 409 handler.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     await session.commit()
     return DecisionResponse.model_validate(decision)

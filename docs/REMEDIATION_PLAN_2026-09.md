@@ -41,8 +41,8 @@ R1 and is isolated to one file.
 
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
-| **R9** Gate A returns 422 on invalid decision / foreign score id | #5 | `corp/api/errors.py`, test | `ValueError` handler; no 500 path | |
-| **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1` | |
+| **R9** Gate A returns 422 on invalid decision / foreign score id | #5 | `corp/api/routes.py`, test | Route-level `ValueError` → 422 (same pattern the persisted-dossier and handoff routes already use); no 500 path | Done — ADR-0055 |
+| **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1`; Gate A request schema restricted to approve/reject/watch (R9 follow-up) | |
 | **R11** Hygiene | #16 #20 static gates | models (`server_default`), `dossier.py` type, `pyproject.toml` mypy overrides, two stale test assertions | `ruff check` and `mypy --strict` clean project-wide; no behaviour change | |
 
 ## Planned after this run (needs its own Stage 3/4 pass first)
