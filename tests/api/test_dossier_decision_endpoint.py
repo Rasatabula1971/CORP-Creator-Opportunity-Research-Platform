@@ -16,7 +16,7 @@ from corp.api.app import create_app
 from corp.api.jobs import registry
 from corp.core.models.campaign import Campaign
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
-from corp.core.models.creator import Creator
+from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.dossier import Dossier, DossierStatus
 from corp.core.models.intelligence import ProblemCluster
 from corp.core.models.niche import Niche
@@ -31,8 +31,17 @@ def _make_client(session: AsyncSession) -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-async def _seed_dossier(session: AsyncSession, *, with_campaign: bool = False) -> Dossier:
-    creator = Creator(name="Decision Gate Creator", discovery_source="test")
+async def _seed_dossier(
+    session: AsyncSession,
+    *,
+    with_campaign: bool = False,
+    creator_status: CreatorStatus = CreatorStatus.HUMAN_REVIEW,
+) -> Dossier:
+    # HUMAN_REVIEW is where a real creator sits when its dossier is decided,
+    # so the R12b creator-status mirror takes its normal path in every test.
+    creator = Creator(
+        name="Decision Gate Creator", discovery_source="test", status=creator_status
+    )
     session.add(creator)
     await session.flush()
 
@@ -253,3 +262,107 @@ async def test_human_decision_remains_append_only(clean_db: AsyncSession):
     # persist unchanged -- the read-cache status field is not the ledger.
     await session.refresh(dossier)
     assert dossier.status == DossierStatus.REJECTED
+
+
+# ---------- R12b: creator status mirrors the dossier gate ----------
+
+
+async def _set_creator_status(
+    session: AsyncSession, dossier: Dossier, status: CreatorStatus
+) -> Creator:
+    creator = await session.get(Creator, dossier.creator_id)
+    assert creator is not None
+    creator.status = status
+    await session.commit()
+    return creator
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("watch", CreatorStatus.WATCHING),
+        ("approve", CreatorStatus.APPROVED),
+        ("reject", CreatorStatus.REJECTED),
+    ],
+)
+async def test_dossier_decision_mirrors_to_creator_status(
+    clean_db: AsyncSession, decision: str, expected: CreatorStatus
+):
+    session = clean_db
+    dossier = await _seed_dossier(session)
+    creator = await _set_creator_status(session, dossier, CreatorStatus.HUMAN_REVIEW)
+
+    async with _make_client(session) as client:
+        resp = await client.post(f"/dossiers/{dossier.id}/decision", json={"decision": decision})
+    assert resp.status_code == 201
+
+    await session.refresh(creator)
+    assert creator.status == expected
+
+
+@pytest.mark.asyncio
+async def test_watched_creator_can_then_be_approved_from_its_dossier(clean_db: AsyncSession):
+    session = clean_db
+    dossier = await _seed_dossier(session)
+    creator = await _set_creator_status(session, dossier, CreatorStatus.HUMAN_REVIEW)
+
+    async with _make_client(session) as client:
+        assert (await client.post(
+            f"/dossiers/{dossier.id}/decision", json={"decision": "watch"}
+        )).status_code == 201
+        assert (await client.post(
+            f"/dossiers/{dossier.id}/decision", json={"decision": "approve"}
+        )).status_code == 201
+
+    await session.refresh(creator)
+    assert creator.status == CreatorStatus.APPROVED
+
+
+@pytest.mark.asyncio
+async def test_pending_dossier_on_another_niche_keeps_creator_in_review(clean_db: AsyncSession):
+    """Multi-niche precedence: a watched dossier does not park the creator
+    while another of its dossiers still awaits a decision."""
+    session = clean_db
+    dossier = await _seed_dossier(session)
+    creator = await _set_creator_status(session, dossier, CreatorStatus.HUMAN_REVIEW)
+    other_niche = Niche(canonical_name="Sourdough T8", depth=0)
+    session.add(other_niche)
+    await session.flush()
+    session.add(Dossier(
+        creator_id=creator.id, niche_id=other_niche.id,
+        opportunity_score_id=dossier.opportunity_score_id, content={},
+    ))
+    await session.commit()
+
+    async with _make_client(session) as client:
+        resp = await client.post(f"/dossiers/{dossier.id}/decision", json={"decision": "watch"})
+    assert resp.status_code == 201
+
+    await session.refresh(creator)
+    assert creator.status == CreatorStatus.HUMAN_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_mirror_never_fails_the_decision_for_a_non_gate_creator(
+    clean_db: AsyncSession, caplog: pytest.LogCaptureFixture
+):
+    """A creator not at a gate-adjacent status (fixture default DISCOVERED)
+    cannot legally move to WATCHING; the decision still succeeds and the
+    creator is left alone, with a warning."""
+    session = clean_db
+    dossier = await _seed_dossier(session, creator_status=CreatorStatus.DISCOVERED)
+    creator = await session.get(Creator, dossier.creator_id)
+    assert creator is not None and creator.status == CreatorStatus.DISCOVERED
+
+    async with _make_client(session) as client:
+        with caplog.at_level("WARNING", logger="corp.core.state.gates"):
+            resp = await client.post(
+                f"/dossiers/{dossier.id}/decision", json={"decision": "watch"}
+            )
+    assert resp.status_code == 201
+    await session.refresh(dossier)
+    await session.refresh(creator)
+    assert dossier.status == DossierStatus.WATCHING
+    assert creator.status == CreatorStatus.DISCOVERED
+    assert "Not mirroring dossier gate" in caplog.text

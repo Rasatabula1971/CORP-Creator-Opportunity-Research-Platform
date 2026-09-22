@@ -18,7 +18,15 @@ VALID_TRANSITIONS: dict[CreatorStatus, set[CreatorStatus]] = {
         CreatorStatus.WATCHING,
     },
     CreatorStatus.APPROVED: {CreatorStatus.OUTREACH_READY},
-    CreatorStatus.WATCHING: {CreatorStatus.HUMAN_REVIEW, CreatorStatus.COLLECTING},
+    # A watched creator can be re-reviewed, re-researched (R12), or decided
+    # straight from its watched dossier (the dossier gate accepts decisions
+    # on WATCHING dossiers), so the two terminal gate outcomes are legal here.
+    CreatorStatus.WATCHING: {
+        CreatorStatus.HUMAN_REVIEW,
+        CreatorStatus.COLLECTING,
+        CreatorStatus.APPROVED,
+        CreatorStatus.REJECTED,
+    },
     CreatorStatus.OUTREACH_READY: {CreatorStatus.IN_OUTREACH},
     CreatorStatus.IN_OUTREACH: {CreatorStatus.PARTNERSHIP, CreatorStatus.REJECTED},
     CreatorStatus.REJECTED: set(),

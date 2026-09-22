@@ -27,3 +27,10 @@ def test_rejected_is_terminal():
 def test_watching_allows_re_review():
     validate_transition(CreatorStatus.WATCHING, CreatorStatus.HUMAN_REVIEW)
     validate_transition(CreatorStatus.WATCHING, CreatorStatus.COLLECTING)
+
+
+def test_watching_can_be_decided_from_its_dossier():
+    """R12b: the dossier gate accepts decisions on WATCHING dossiers, so the
+    creator mirror needs WATCHING -> APPROVED / REJECTED to be legal."""
+    validate_transition(CreatorStatus.WATCHING, CreatorStatus.APPROVED)
+    validate_transition(CreatorStatus.WATCHING, CreatorStatus.REJECTED)

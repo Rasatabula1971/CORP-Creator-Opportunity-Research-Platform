@@ -255,6 +255,10 @@ export function useRecordDossierDecision(creatorId: string, dossierId: string | 
       api.post<DossierDecisionResult>(`/dossiers/${dossierId}/decision`, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["creators", creatorId, "dossier", "persisted"] });
+      // R12b: the dossier gate now moves Creator.status too, so the creator
+      // detail (badge, Gate A panel visibility) and the creator list must refresh.
+      qc.invalidateQueries({ queryKey: ["creators", creatorId] });
+      qc.invalidateQueries({ queryKey: ["creators"], exact: true });
       qc.invalidateQueries({ queryKey: ["jobs"] });
     },
   });

@@ -221,6 +221,22 @@ Inherit R8: savepoint per dossier; on failure the old dossier stays
 `failed` with the stage that failed named in `error_message`. For Research
 More: the dossier is returned to `PENDING_REVIEW` (never stuck).
 
+### 4.6 Notes carried from R12b's Stage 8 review (2026-09-22)
+
+- `registry_rescan.py` and `generate_and_persist` create `PENDING_REVIEW`
+  rows without mirroring the creator. After R12b that opens a window: a
+  watched creator whose re-scan resurfaces stays `WATCHING` while a dossier
+  awaits review, and the "unchanged → WATCHING" branch could leave a creator
+  at `HUMAN_REVIEW` after the orchestrator advanced it. **R12a/R12c must
+  call `mirror_creator_status` after the §3.3 decision** (and after the
+  Research More regeneration).
+- Found during R12a preparation: `ProductIdeationGenerator` (T5) has no
+  caller in `corp/` — product ideas are never generated in production, so
+  every real dossier's Product Concepts section is empty. R12a's chain
+  includes ideation; the same task should also run ideation in the normal
+  `POST /creators/{id}/dossier/generate` path (LLM cost accepted: it is
+  the spec's step 6).
+
 ## 5. Task decomposition (Stage 5 — proposed)
 
 | Task | Scope | Depends on |

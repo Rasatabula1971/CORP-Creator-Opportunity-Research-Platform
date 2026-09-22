@@ -41,6 +41,7 @@ from corp.core.schemas.creator import (
 from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
 from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
+from corp.core.state.gates import mirror_creator_status
 from corp.database import get_session
 from corp.workers.handoff.corp2_export import build_handoff_package
 from corp.workers.intelligence.runs import active_clusters_for_creator
@@ -605,6 +606,10 @@ async def record_dossier_decision(
         )
 
     await session.flush()
+    # R12b: Creator.status follows its active dossiers (watch → WATCHING,
+    # approve → APPROVED, reject → REJECTED; a pending/in-progress dossier on
+    # another niche keeps the creator in HUMAN_REVIEW).
+    await mirror_creator_status(session, dossier.creator_id)
     await session.commit()
     return DossierDecisionResponse(
         id=decision_row.id,
