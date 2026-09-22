@@ -14,6 +14,13 @@ Deduplication strategy (no LLM required):
 A merged candidate becomes a NicheAlias on the matched niche.
 A promoted candidate creates a new Niche and links back via niche_id.
 Both create a CampaignNiche row connecting the niche to the campaign.
+
+Tree lineage (CORP1 Stage 4, R4): the drill engine records each candidate's
+``parent_candidate_id``/``depth``; canonicalization carries that onto the
+Niche as ``parent_niche_id``/``depth`` -- the spec's "source of truth for
+tree structure" -- by resolving the parent candidate's own ``niche_id``.
+Candidates are therefore processed shallowest-first so a parent's niche
+exists before its children look it up.
 """
 
 from __future__ import annotations
@@ -105,11 +112,26 @@ class NicheCanonicalizer:
                     cand.label, existing_niches, niche_embeddings
                 )
 
+                parent_niche = await self._parent_niche(cand)
+
                 if match is not None:
                     niche = match
                     cand.status = NicheCandidateStatus.MERGED
                     cand.niche_id = niche.id
                     await self._add_alias_if_new(niche.id, cand.label)
+                    # A niche promoted before lineage was recorded (or from a
+                    # depth-0 candidate) has no parent; a later merge that
+                    # knows one fills it in. Never re-parent a niche that
+                    # already has lineage, and never create a cycle -- a
+                    # child label can merge into its parent's niche, or a
+                    # later drill can invert an earlier tree.
+                    if (
+                        niche.parent_niche_id is None
+                        and parent_niche is not None
+                        and not await self._is_self_or_descendant(niche.id, parent_niche)
+                    ):
+                        niche.parent_niche_id = parent_niche.id
+                        niche.depth = parent_niche.depth + 1
                     merged += 1
                     logger.info(
                         "Merged candidate %r into niche %r (%s)",
@@ -122,6 +144,12 @@ class NicheCanonicalizer:
                         lifecycle_status=NicheLifecycleStatus.CANDIDATE,
                         first_discovered_at=cand.earliest_collected_at
                         or datetime.now(UTC),
+                        parent_niche_id=parent_niche.id if parent_niche else None,
+                        # Tree depth is derived from the parent niche, not
+                        # copied from the candidate: a parent that merged
+                        # into a niche at another depth would otherwise
+                        # leave the child's depth inconsistent with the walk.
+                        depth=parent_niche.depth + 1 if parent_niche else 0,
                     )
                     self._session.add(niche)
                     await self._session.flush()
@@ -184,6 +212,9 @@ class NicheCanonicalizer:
         return None
 
     async def _staged_candidates(self, campaign_id: str) -> list[NicheCandidate]:
+        # Shallowest first so a parent's niche exists before its children
+        # resolve parent_niche_id; evidence_count keeps the old priority
+        # within a depth.
         result = await self._session.execute(
             select(NicheCandidate)
             .where(
@@ -191,9 +222,37 @@ class NicheCanonicalizer:
                 NicheCandidate.status == NicheCandidateStatus.STAGED,
                 NicheCandidate.superseded_at.is_(None),
             )
-            .order_by(NicheCandidate.evidence_count.desc())
+            .order_by(NicheCandidate.depth.asc(), NicheCandidate.evidence_count.desc())
         )
         return list(result.scalars().all())
+
+    async def _parent_niche(self, cand: NicheCandidate) -> Niche | None:
+        """The Niche the parent candidate resolved to (PROMOTED or MERGED --
+        lineage attaches to whichever niche the parent ended up in). None
+        for a depth-0 candidate, or when the parent was rejected / not yet
+        canonicalized (its niche_id is then unset), in which case the
+        candidate becomes a root."""
+        if cand.parent_candidate_id is None:
+            return None
+        parent = await self._session.get(NicheCandidate, cand.parent_candidate_id)
+        if parent is None or parent.niche_id is None:
+            return None
+        return await self._session.get(Niche, parent.niche_id)
+
+    async def _is_self_or_descendant(self, niche_id: str, prospective_parent: Niche) -> bool:
+        """True if attaching ``niche_id`` under ``prospective_parent`` would
+        create a cycle: the prospective parent is the niche itself or one
+        of its descendants (i.e. ``niche_id`` is among its ancestors)."""
+        current: Niche | None = prospective_parent
+        seen: set[str] = set()
+        while current is not None and current.id not in seen:
+            if current.id == niche_id:
+                return True
+            seen.add(current.id)
+            if current.parent_niche_id is None:
+                return False
+            current = await self._session.get(Niche, current.parent_niche_id)
+        return False
 
     async def _all_niches(self) -> list[Niche]:
         result = await self._session.execute(

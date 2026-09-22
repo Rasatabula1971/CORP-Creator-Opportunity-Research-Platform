@@ -395,3 +395,168 @@ async def test_superseded_candidates_are_skipped(clean_db: AsyncSession):
     canon = NicheCanonicalizer(FakeEmbedder(), session)
     run = await canon.canonicalize(campaign.id)
     assert run.stats["extra"]["candidates"] == 1
+
+
+# ── R4: tree lineage carried onto Niche ───────────────────────────────
+
+
+async def _seed_tree(
+    session: AsyncSession,
+) -> tuple[Campaign, NicheCandidate, NicheCandidate]:
+    """A depth-0 parent and a depth-1 child; the CHILD has more evidence so
+    an evidence-count-first ordering would canonicalize it before its parent."""
+    campaign, (parent, child) = await _seed_campaign_with_candidates(
+        session, ["Home Espresso", "Burr Grinder Upgrades"], campaign_name="Tree"
+    )
+    child.parent_candidate_id = parent.id
+    child.depth = 1
+    child.evidence_count = parent.evidence_count + 10
+    await session.flush()
+    return campaign, parent, child
+
+
+@pytest.mark.asyncio
+async def test_promotion_carries_parent_and_depth_onto_niche(clean_db: AsyncSession):
+    session = clean_db
+    campaign, parent, child = await _seed_tree(session)
+
+    run = await NicheCanonicalizer(FakeEmbedder(), session).canonicalize(campaign.id)
+    assert run.stats["extra"]["promoted"] == 2
+
+    await session.refresh(parent)
+    await session.refresh(child)
+    parent_niche = await session.get(Niche, parent.niche_id)
+    child_niche = await session.get(Niche, child.niche_id)
+    assert parent_niche is not None and child_niche is not None
+    assert parent_niche.parent_niche_id is None
+    assert parent_niche.depth == 0
+    assert child_niche.parent_niche_id == parent_niche.id
+    assert child_niche.depth == 1
+
+
+@pytest.mark.asyncio
+async def test_merge_fills_missing_lineage_but_never_reparents(clean_db: AsyncSession):
+    session = clean_db
+    campaign, parent, child = await _seed_tree(session)
+    # Give the parent candidate its own resolvable parent so the "never
+    # re-parent" branch is exercised for real, not short-circuited.
+    _, (grand,) = await _seed_campaign_with_candidates(
+        session, ["Reef Aquarium Lighting"], campaign_name="Grand"
+    )
+    grand.campaign_id = campaign.id
+    parent.parent_candidate_id = grand.id
+    parent.depth = 1
+    child.depth = 2
+    await session.flush()
+
+    # Pre-existing niche the child will merge into (exact-name match), with
+    # no lineage yet -- e.g. promoted before R4.
+    orphan = Niche(canonical_name="Burr Grinder Upgrades")
+    # Pre-existing niche that already HAS lineage and must be left alone.
+    root = Niche(canonical_name="Coffee")
+    session.add_all([orphan, root])
+    await session.flush()
+    rooted = Niche(canonical_name="Home Espresso", parent_niche_id=root.id, depth=1)
+    session.add(rooted)
+    await session.flush()
+
+    run = await NicheCanonicalizer(FakeEmbedder(), session).canonicalize(campaign.id)
+    assert run.stats["extra"]["merged"] == 2
+    assert run.stats["extra"]["promoted"] == 1  # Reef Aquarium Lighting
+
+    await session.refresh(orphan)
+    await session.refresh(rooted)
+    # child merged into orphan: lineage filled from the parent candidate's
+    # niche, depth derived from that niche (rooted.depth + 1), not copied.
+    assert orphan.parent_niche_id == rooted.id
+    assert orphan.depth == 2
+    # parent merged into rooted even though "Reef Aquarium Lighting" resolved as a
+    # parent: existing lineage untouched.
+    assert rooted.parent_niche_id == root.id
+    assert rooted.depth == 1
+
+
+@pytest.mark.asyncio
+async def test_child_merging_into_its_parents_niche_is_not_self_parented(
+    clean_db: AsyncSession,
+):
+    session = clean_db
+    campaign, (parent, child) = await _seed_campaign_with_candidates(
+        session, ["Home Espresso", "Home Espresso Setup"], campaign_name="Self"
+    )
+    child.parent_candidate_id = parent.id
+    child.depth = 1
+    await session.flush()
+
+    # Both labels contain "espresso" -> FakeEmbedder puts them within the
+    # similarity threshold, so the child merges into the parent's new niche.
+    await NicheCanonicalizer(FakeEmbedder(), session).canonicalize(campaign.id)
+
+    await session.refresh(child)
+    await session.refresh(parent)
+    assert child.status == NicheCandidateStatus.MERGED
+    assert child.niche_id == parent.niche_id
+    niche = await session.get(Niche, parent.niche_id)
+    assert niche is not None
+    assert niche.parent_niche_id is None
+    assert niche.depth == 0
+
+
+@pytest.mark.asyncio
+async def test_merge_fill_refuses_to_create_a_deeper_cycle(clean_db: AsyncSession):
+    """Run 1 promoted B(root) -> A(child). Run 2 drills the inverted tree
+    A(depth 0) -> B(depth 1). B's niche has lineage-less... no: A's niche has
+    lineage (untouched); B's niche is a root, and filling its parent with A's
+    niche would make NA -> NB -> NA. The guard must refuse."""
+    session = clean_db
+    nb = Niche(canonical_name="Home Espresso")
+    session.add(nb)
+    await session.flush()
+    na = Niche(canonical_name="Burr Grinder Upgrades", parent_niche_id=nb.id, depth=1)
+    session.add(na)
+    await session.flush()
+
+    campaign, (a, b) = await _seed_campaign_with_candidates(
+        session, ["Burr Grinder Upgrades", "Home Espresso"], campaign_name="Inverted"
+    )
+    b.parent_candidate_id = a.id
+    b.depth = 1
+    await session.flush()
+
+    run = await NicheCanonicalizer(FakeEmbedder(), session).canonicalize(campaign.id)
+    assert run.stats["extra"]["merged"] == 2
+
+    await session.refresh(na)
+    await session.refresh(nb)
+    assert na.parent_niche_id == nb.id
+    assert nb.parent_niche_id is None  # refused: NA is NB's descendant
+    assert nb.depth == 0
+
+
+@pytest.mark.asyncio
+async def test_canonicalized_chain_yields_multi_node_dossier_path(clean_db: AsyncSession):
+    """R4 acceptance: a drilled chain, once canonicalized, walks root-to-leaf
+    through the same _niche_path the dossier generator persists."""
+    from corp.workers.dossier.generator import DossierGenerator
+
+    session = clean_db
+    campaign, (root, mid, leaf) = await _seed_campaign_with_candidates(
+        session, ["Kitchen Gadgets", "Home Espresso", "Sim Racing Wheels"],
+        campaign_name="Chain",
+    )
+    mid.parent_candidate_id, mid.depth = root.id, 1
+    leaf.parent_candidate_id, leaf.depth = mid.id, 2
+    # Leaf has the most evidence: evidence-first ordering would break the chain.
+    leaf.evidence_count = 99
+    await session.flush()
+
+    await NicheCanonicalizer(FakeEmbedder(), session).canonicalize(campaign.id)
+    await session.refresh(leaf)
+
+    path = await DossierGenerator(session, rules_path="rules/scoring.yaml")._niche_path(
+        leaf.niche_id
+    )
+    assert [p["canonical_name"] for p in path] == [
+        "Kitchen Gadgets", "Home Espresso", "Sim Racing Wheels"
+    ]
+    assert [p["depth"] for p in path] == [0, 1, 2]
