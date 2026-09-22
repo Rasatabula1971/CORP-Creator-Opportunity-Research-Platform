@@ -78,8 +78,9 @@ orchestrator stage (any run with `status == "failed"`) counts as failure.
   additive; the dossier must still ship.
 - Documented, not changed: a failure after `generate_and_persist` (steps
   5–6) leaves the old dossier superseded and the new one `PENDING_REVIEW`
-  without a `rescan` block — no double-active dossier, and R12c's
-  per-dossier savepoint reverts the whole rescan in the scheduler path;
+  without a `rescan` block — no double-active dossier (R12c, ADR-0062,
+  commits per dossier rather than using a savepoint on this path, so that
+  outcome is durable in the scheduler too and the niche is retried soon);
   `content_fingerprint` is practically never equal once ideation runs
   (`product_ideas[].id` differs per run), so it stays a last-resort guard;
   design §3.7-7 (re-scan evidence carries provenance) is covered only by

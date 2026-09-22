@@ -371,6 +371,11 @@ class WatchRescanner:
             # error mid-stage expires every object). Do the bookkeeping on
             # re-fetched rows and never let it mask the original exception.
             try:
+                # A DB error in a post-orchestrator stage (dossier, decision,
+                # ideation) leaves the transaction poisoned with nobody having
+                # rolled back; clear it so the failed run can be recorded.
+                if not self._session.is_active:
+                    await self._session.rollback()
                 run_row = await self._session.get(ResearchRun, run_id)
                 if run_row is not None and run_row.status == "running":
                     await fail_run(self._session, run_row, RescanError(f"{stage}: {exc}"))

@@ -164,6 +164,20 @@ class FakeIdeator:
         return run
 
 
+class PoisoningIdeator(FakeIdeator):
+    """A DB error in a post-orchestrator stage: the flush fails and nobody
+    rolls back, so the transaction is poisoned when the rescanner's failure
+    bookkeeping runs (Stage 8 round 2 of R12c)."""
+
+    async def generate(self, creator_id: str) -> ResearchRun:
+        await self.session.commit()  # the orchestrator's stage commits made the run durable
+        self.session.add(Dossier(
+            creator_id="no-such-creator", niche_id="x", opportunity_score_id="y", content={},
+        ))
+        await self.session.flush()  # IntegrityError propagates
+        raise AssertionError("unreachable")
+
+
 async def _seed(
     session: AsyncSession, *, dossier_status: DossierStatus = DossierStatus.WATCHING,
     creator_status: CreatorStatus = CreatorStatus.WATCHING, old_score: float = 0.60,
@@ -458,3 +472,71 @@ async def test_rollback_in_researcher_still_fails_run_and_restores_dossier(
         select(ResearchRun).where(ResearchRun.run_type == RunType.WATCH_RESCAN.value)
     )).scalar_one()
     assert run.status == "failed" and "creator_research" in (run.error_message or "")
+
+
+@pytest.mark.asyncio
+async def test_db_error_in_post_orchestrator_stage_still_fails_run_and_restores(
+    clean_db: AsyncSession,
+):
+    """R12c round 2: a poisoned transaction (failed flush, no rollback) must
+    not leave the watch_rescan run 'running' or the dossier in progress."""
+    from sqlalchemy.exc import IntegrityError
+
+    session = clean_db
+    old = await _seed(session, dossier_status=DossierStatus.RESEARCH_MORE_IN_PROGRESS,
+                      creator_status=CreatorStatus.HUMAN_REVIEW)
+
+    with pytest.raises(IntegrityError):
+        await _rescanner(
+            session, FakeResearcher(session, new_score=0.60), FakeDriller(session),
+            PoisoningIdeator(session),
+        ).rescan(old.id, trigger="research_more")
+    await session.commit()
+
+    await session.refresh(old)
+    assert old.status == DossierStatus.PENDING_REVIEW
+    run = (await session.execute(
+        select(ResearchRun).where(ResearchRun.run_type == RunType.WATCH_RESCAN.value)
+    )).scalar_one()
+    assert run.status == "failed" and "product_ideation" in (run.error_message or "")
+
+
+class EvidenceAddingDriller(FakeDriller):
+    """Like the real drill, persists evidence rows under its run."""
+
+    async def research_more(self, niche_id: str, campaign_id: str) -> ResearchRun:
+        run = await super().research_more(niche_id, campaign_id)
+        for i in range(3):
+            self.session.add(Evidence(
+                source_type="post", source_id=f"r12c_drill_{i}", source_platform="googletrends",
+                raw_text=f"espresso trend {i}", access_method=AccessMethod.OPEN,
+                compliance_status=ComplianceStatus.COMPLIANT, research_run_id=run.id,
+                origin=EvidenceOrigin.OBSERVATION, evidence_type=EvidenceType.TREND,
+            ))
+        await self.session.flush()
+        return run
+
+
+@pytest.mark.asyncio
+async def test_rescan_evidence_carries_provenance_and_counts_as_new(clean_db: AsyncSession):
+    """Design 3.7-7: evidence appended by a re-scan has evidence_type and
+    origin (R3's constraint would reject it otherwise) and is visible to the
+    new-evidence count through the niche-tagged run."""
+    session = clean_db
+    old = await _seed(session)
+    driller = EvidenceAddingDriller(session)
+
+    outcome = await _rescanner(
+        session, FakeResearcher(session, new_score=0.60), driller, FakeIdeator(session)
+    ).rescan(old.id, trigger="watch")
+    await session.commit()
+
+    rows = (await session.execute(
+        select(Evidence).where(Evidence.source_platform == "googletrends")
+    )).scalars().all()
+    assert len(rows) == 3
+    assert all(
+        r.evidence_type is EvidenceType.TREND and r.origin is EvidenceOrigin.OBSERVATION
+        for r in rows
+    )
+    assert outcome.decision.new_evidence_count == 3

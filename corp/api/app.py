@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.api.auth import require_api_key
 from corp.api.errors import register_error_handlers
@@ -17,9 +18,85 @@ from corp.api.routes_ops import router as ops_router
 from corp.config import settings
 from corp.core.models.workflow import ResearchRun, RunStatus
 from corp.database import async_session
-from corp.workers.scheduler.registry_rescan import RegistryRescanScheduler
+from corp.workers.providers.registry import LLMProvider
+from corp.workers.scheduler.registry_rescan import (
+    RegistryRescanScheduler,
+    RescanDeferredError,
+    RescannerHandle,
+)
+from corp.workers.watch_rescan import WatchRescanConfig
 
 logger = logging.getLogger(__name__)
+
+
+async def _noop_close() -> None:
+    return None
+
+
+class RescanProviders:
+    """R12c: the Watch re-scan scheduler's LLM provider, built once and kept
+    for the scheduler's lifetime. A per-tick provider would start with an
+    empty cooldown table, so "every provider is in cooldown" (design §3.4)
+    could never be observed; keeping one lets the pool's state carry
+    between ticks. Closed at shutdown."""
+
+    def __init__(self) -> None:
+        self._provider: LLMProvider | None = None
+        self._unconfigured = False
+
+    async def factory(
+        self, session: AsyncSession, cfg: WatchRescanConfig
+    ) -> RescannerHandle | None:
+        """The scheduler's ``rescanner_factory``: None when no provider is
+        configured (re-render only), RescanDeferredError when every pooled
+        provider is cooling and the config says to skip such ticks."""
+        from corp.api.jobs import _embedder_factory
+        from corp.workers.providers.factory import ProviderConfigError, build_provider
+        from corp.workers.watch_rescan import build_watch_rescanner
+
+        if self._unconfigured:
+            return None
+        if self._provider is None:
+            try:
+                self._provider = build_provider()
+            except ProviderConfigError as exc:
+                self._unconfigured = True
+                logger.warning("Watch re-scan will re-render only (no LLM provider): %s", exc)
+                return None
+        provider = self._provider
+        available = getattr(provider, "available", None)
+        if cfg.skip_when_provider_cooling and callable(available) and not available():
+            raise RescanDeferredError("every LLM provider is in cooldown")
+        try:
+            rescanner = build_watch_rescanner(
+                session,
+                provider,
+                _embedder_factory(),
+                scoring_rules_path=settings.scoring_rules_path,
+                niche_rules_path="rules/niche_discovery_prompt.yaml",
+                ideation_rules_path="rules/product_ideation_prompt.yaml",
+                config=cfg,
+            )
+        except Exception:
+            await self.aclose()  # do not leak the HTTP client; rebuilt next tick
+            raise
+        return RescannerHandle(rescanner=rescanner, aclose=_noop_close)
+
+    async def aclose(self) -> None:
+        provider, self._provider = self._provider, None
+        close = getattr(provider, "close", None) if provider is not None else None
+        if callable(close):
+            await close()
+
+
+def _job_busy(campaign_id: str | None, creator_id: str) -> bool:
+    """A job queued/running for the campaign or the creator: the scheduler
+    must not re-research a creator the console is already researching."""
+    from corp.api.jobs import registry
+
+    if registry.active_for(creator_id) is not None:
+        return True
+    return campaign_id is not None and registry.active_for_campaign(campaign_id) is not None
 
 
 async def _mark_orphaned_runs() -> None:
@@ -49,10 +126,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("Failed to sweep orphaned research runs")
 
     scheduler: RegistryRescanScheduler | None = None
+    providers = RescanProviders()
     try:
         scheduler = RegistryRescanScheduler(
             async_session,
             settings.scoring_rules_path,
+            rescanner_factory=providers.factory,
+            is_busy=_job_busy,
         )
         scheduler.start()
         logger.info("Registry re-scan scheduler started")
@@ -71,6 +151,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if scheduler is not None:
             await scheduler.stop()
             logger.info("Registry re-scan scheduler stopped")
+        try:
+            await providers.aclose()
+        except Exception:
+            logger.exception("Closing the re-scan LLM provider failed")
 
 
 def create_app() -> FastAPI:
