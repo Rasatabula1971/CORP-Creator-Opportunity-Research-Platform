@@ -18,9 +18,9 @@ R1 and is isolated to one file.
 
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
-| **R1** Platform→type mapping uses the exact `source_platform` strings adapters emit | #1 | `corp/core/models/evidence.py`, `tests/core/test_evidence_type_mapping.py` | Every `KNOWN_PLATFORMS` entry maps; mapped type ∈ the adapter's declared capability interfaces | ADR-0048 |
-| **R2** LLM-derived Evidence rows set `origin = INFERENCE` | #4 | `competitive_pipeline.py`, `intent_pipeline.py`, `product_idea.py` docstring | Every `Evidence(` constructor in `corp/` sets both fields; `EvidenceOrigin.INFERENCE` used in real code | |
-| **R3** Backfill + `NOT NULL` | new | one Alembic migration | Backfill via corrected mapping; rows referenced by `competitors.evidence_id` / `commercial_signals.evidence_id` → `INFERENCE`; both columns `NOT NULL`; DB-level test on `corp_test` | |
+| **R1** Platform→type mapping uses the exact `source_platform` strings adapters emit | #1 | `corp/core/models/evidence.py`, `tests/core/test_evidence_type_mapping.py` | Every `KNOWN_PLATFORMS` entry maps; mapped type ∈ the adapter's declared capability interfaces | Done — ADR-0048, commit 785a627 |
+| **R2** LLM-derived Evidence rows set `origin = INFERENCE` | #4 | `competitive_pipeline.py`, `intent_pipeline.py`, `product_idea.py` docstring | Every `Evidence(` constructor in `corp/` sets both fields; `EvidenceOrigin.INFERENCE` used in real code | Done — ADR-0049, commit 07ae862 |
+| **R3** Backfill + `NOT NULL` | new | one Alembic migration | Backfill via corrected mapping; inference `source_type`s → `INFERENCE`; both columns `NOT NULL`; DB-level test on `corp_test` | Done — ADR-0050 |
 
 ## Phase B — Make the niche tree real
 

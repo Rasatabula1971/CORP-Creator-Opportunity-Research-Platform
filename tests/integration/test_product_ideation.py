@@ -8,7 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.product_idea import ProductIdea, ProductIdeaEvidence
 from corp.workers.intelligence.product_ideation import ProductIdeationGenerator
@@ -94,6 +100,8 @@ async def _make_cluster_with_evidence(
             raw_text=text,
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(evidence)
         await session.flush()

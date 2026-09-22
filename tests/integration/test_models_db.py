@@ -14,7 +14,13 @@ from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator, CreatorPlatformAccount, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
@@ -121,6 +127,8 @@ async def _create_evidence(session: AsyncSession) -> Evidence:
         raw_text="I wish there was a better case for this phone",
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()
@@ -452,6 +460,8 @@ async def test_full_evidence_chain(clean_db: AsyncSession):
         raw_text=comment.text,
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()

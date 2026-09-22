@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from corp.core.models.campaign import Campaign
 from corp.core.models.creator import Creator
 from corp.core.models.dossier import Dossier, DossierEvidence, DossierStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemCluster
 from corp.core.models.niche import Niche
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
@@ -129,6 +135,7 @@ async def test_evidence_type_persists(clean_db: AsyncSession):
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         evidence_type=EvidenceType.TREND,
+        origin=EvidenceOrigin.OBSERVATION,
     )
     session.add(evidence)
     await session.flush()
@@ -139,20 +146,25 @@ async def test_evidence_type_persists(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_evidence_type_optional_for_backward_compatibility(clean_db: AsyncSession):
-    """Pre-Stage-4 call sites that don't set evidence_type must keep working."""
+@pytest.mark.parametrize("missing", ["evidence_type", "origin"])
+async def test_evidence_provenance_fields_are_required(clean_db: AsyncSession, missing: str):
+    """Provenance Invariant, database half (R3): a row without evidence_type or
+    origin is rejected at the schema level, not just by the code paths."""
     session = clean_db
-    evidence = Evidence(
-        source_type="comment",
-        source_id="cmt_legacy",
-        source_platform="youtube",
-        raw_text="legacy row created before Stage 4",
-        access_method=AccessMethod.OFFICIAL,
-        compliance_status=ComplianceStatus.COMPLIANT,
-    )
-    session.add(evidence)
-    await session.flush()
-    assert evidence.evidence_type is None
+    kwargs: dict[str, object] = {
+        "source_type": "comment",
+        "source_id": "cmt_missing_provenance",
+        "source_platform": "youtube",
+        "raw_text": "row attempting to skip provenance",
+        "access_method": AccessMethod.OFFICIAL,
+        "compliance_status": ComplianceStatus.COMPLIANT,
+        "origin": EvidenceOrigin.OBSERVATION,
+        "evidence_type": EvidenceType.PROBLEM,
+    }
+    kwargs[missing] = None
+    session.add(Evidence(**kwargs))
+    with pytest.raises(IntegrityError):
+        await session.flush()
 
 
 # ---------- Dossier + DossierEvidence ----------
@@ -224,6 +236,7 @@ async def test_dossier_evidence_trail(clean_db: AsyncSession):
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         evidence_type=EvidenceType.TREND,
+        origin=EvidenceOrigin.OBSERVATION,
     )
     session.add(evidence)
     await session.flush()
@@ -251,6 +264,8 @@ async def test_dossier_evidence_duplicate_pair_rejected(clean_db: AsyncSession):
         raw_text="duplicate link test",
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.TREND,
     )
     session.add_all([dossier, evidence])
     await session.flush()
@@ -327,6 +342,7 @@ async def test_every_evidence_type_round_trips(clean_db: AsyncSession, evidence_
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         evidence_type=evidence_type,
+        origin=EvidenceOrigin.OBSERVATION,
     )
     session.add(evidence)
     await session.flush()

@@ -5,7 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -61,6 +67,8 @@ async def _seed_full(session: AsyncSession) -> Creator:
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=run.id,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(ev)
         await session.flush()
@@ -94,6 +102,8 @@ async def _seed_full(session: AsyncSession) -> Creator:
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         research_run_id=run.id,
+        origin=EvidenceOrigin.INFERENCE,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(signal_ev)
     await session.flush()
@@ -288,6 +298,8 @@ async def test_load_observations_orders_by_confidence(clean_db: AsyncSession):
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=run.id,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(ev)
         await session.flush()

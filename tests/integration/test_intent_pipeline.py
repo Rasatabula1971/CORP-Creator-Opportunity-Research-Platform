@@ -79,6 +79,8 @@ async def _seed_cluster(session: AsyncSession) -> tuple[Creator, ProblemCluster]
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=run.id,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(evidence)
         await session.flush()

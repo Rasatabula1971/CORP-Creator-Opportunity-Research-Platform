@@ -17,7 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator
 from corp.core.models.dossier import Dossier, DossierStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -74,6 +80,8 @@ async def _make_evidence(session: AsyncSession, run_id: str, text: str) -> Evide
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         research_run_id=run_id,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()

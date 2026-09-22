@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import CreatorPlatformAccount, CreatorStatus
-from corp.core.models.evidence import Evidence, EvidenceOrigin, infer_evidence_type
+from corp.core.models.evidence import Evidence, EvidenceOrigin, require_evidence_type
 from corp.core.models.metrics import MetricsSnapshot
 from corp.core.models.workflow import ResearchRun
 from corp.warmstore.sync import (
@@ -407,7 +407,7 @@ class AcquisitionCollector:
             access_method=item.access_method,
             compliance_status=item.compliance_status,
             research_run_id=research_run_id,
-            evidence_type=infer_evidence_type(item.source_platform),
+            evidence_type=require_evidence_type(item.source_platform),
             origin=EvidenceOrigin.OBSERVATION,
         )
         self._session.add(evidence)

@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
 from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.niche import Niche, NicheLifecycleStatus
 from corp.core.models.niche_candidate import (
     NicheCandidate,
@@ -87,6 +93,8 @@ async def _setup(
             compliance_status=ComplianceStatus.VERIFY,
             research_run_id=run.id,
             collected_at=base + timedelta(days=i),
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(ev)
         await session.flush()
@@ -266,6 +274,8 @@ async def test_multiple_niches_mixed_results(clean_db: AsyncSession):
         compliance_status=ComplianceStatus.VERIFY,
         research_run_id=run_row.id,
         collected_at=datetime(2026, 9, 1, tzinfo=UTC),
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(ev)
     await session.flush()

@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
-from corp.core.models.evidence import Evidence, EvidenceOrigin, infer_evidence_type
+from corp.core.models.evidence import Evidence, EvidenceOrigin, require_evidence_type
 from corp.core.models.research_query import ResearchQueryStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.research.ledger import record_query
@@ -140,7 +140,7 @@ class NicheDiscoveryCollector:
             access_method=item.access_method,
             compliance_status=item.compliance_status,
             research_run_id=run_id,
-            evidence_type=infer_evidence_type(item.source_platform),
+            evidence_type=require_evidence_type(item.source_platform),
             origin=EvidenceOrigin.OBSERVATION,
         )
 

@@ -9,7 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.campaign import Campaign
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.niche_candidate import (
     NicheCandidate,
     NicheCandidateEvidence,
@@ -123,6 +129,8 @@ async def _seed(
                 compliance_status=ComplianceStatus.VERIFY,
                 research_run_id=run.id,
                 collected_at=base + timedelta(days=i),
+                origin=EvidenceOrigin.OBSERVATION,
+                evidence_type=EvidenceType.PROBLEM,
             )
         )
     await session.flush()

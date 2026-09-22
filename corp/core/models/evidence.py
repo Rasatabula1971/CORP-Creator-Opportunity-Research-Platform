@@ -22,8 +22,7 @@ class ComplianceStatus(str, enum.Enum):
 
 class EvidenceOrigin(str, enum.Enum):
     """Whether the row is raw data or an LLM-derived claim (Provenance Invariant).
-    Nullable at the DB level for backward compatibility with pre-Stage-4 rows;
-    every row created by T3 onward must set it."""
+    NOT NULL since migration 5f5732311984 (R3); every write path must set it."""
 
     OBSERVATION = "observation"
     INFERENCE = "inference"
@@ -31,8 +30,7 @@ class EvidenceOrigin(str, enum.Enum):
 
 class EvidenceType(str, enum.Enum):
     """Which capability-provider interface (CORP1 Stage 4) produced this row.
-    Nullable at the DB level for backward compatibility with pre-Stage-4
-    rows; every row created by T3 onward must set it."""
+    NOT NULL since migration 5f5732311984 (R3); every write path must set it."""
 
     PROBLEM = "problem"
     SEARCH_INTENT = "search_intent"
@@ -77,8 +75,21 @@ _PLATFORM_EVIDENCE_TYPE: dict[str, EvidenceType] = {
 
 
 def infer_evidence_type(source_platform: str) -> EvidenceType | None:
-    """Best-effort platform → evidence-type mapping for legacy collect() paths."""
+    """Lenient platform → evidence-type lookup; write paths use the strict
+    require_evidence_type() below."""
     return _PLATFORM_EVIDENCE_TYPE.get(source_platform.lower())
+
+
+def require_evidence_type(source_platform: str) -> EvidenceType:
+    """Strict form for write paths: an unmapped platform is a configuration
+    error and must fail at the source, not as a NOT NULL violation at flush."""
+    ev_type = infer_evidence_type(source_platform)
+    if ev_type is None:
+        raise ValueError(
+            f"No evidence type mapped for platform {source_platform!r}; "
+            "add it to corp.core.models.evidence._PLATFORM_EVIDENCE_TYPE"
+        )
+    return ev_type
 
 
 class Evidence(Base):
@@ -106,5 +117,5 @@ class Evidence(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     research_run_id: Mapped[str | None] = mapped_column(ForeignKey("research_runs.id"))
-    evidence_type: Mapped[EvidenceType | None] = mapped_column(Enum(EvidenceType))
-    origin: Mapped[EvidenceOrigin | None] = mapped_column(Enum(EvidenceOrigin))
+    evidence_type: Mapped[EvidenceType] = mapped_column(Enum(EvidenceType), nullable=False)
+    origin: Mapped[EvidenceOrigin] = mapped_column(Enum(EvidenceOrigin), nullable=False)

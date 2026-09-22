@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.content import AudienceInteraction, ContentItem, ContentType, InteractionType
 from corp.core.models.creator import Creator
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.workflow import ResearchRun
 from corp.workers.intelligence.extraction import EXTRACTION_PROMPT_VERSION
@@ -86,6 +92,8 @@ async def _seed_data(session: AsyncSession) -> tuple[Creator, ContentItem, Evide
         author_handle="viewer1",
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()

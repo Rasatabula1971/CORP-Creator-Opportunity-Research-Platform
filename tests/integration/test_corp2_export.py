@@ -25,7 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import corp.workers.handoff.corp2_export as corp2_export
 from corp.core.models.creator import Creator
 from corp.core.models.dossier import Dossier, DossierEvidence, DossierStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemCluster
 from corp.core.models.niche import Niche
 from corp.core.models.scoring import ConfidenceBand, OpportunityScore
@@ -60,6 +66,8 @@ async def _make_evidence(session: AsyncSession, text: str, external_id: str) -> 
         source_url="https://example.com/" + external_id,
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()

@@ -23,8 +23,11 @@ from corp.workers.intelligence.runs import start_run
 
 
 def _item(ext_id: str, text: str, content_type: str = "post") -> NormalizedContent:
+    # A registered platform name: since R3, an unmapped platform is rejected
+    # at the source (require_evidence_type), so a fake adapter must still
+    # speak a real platform's name.
     return NormalizedContent(
-        source_platform="fake",
+        source_platform="hackernews",
         content_type=content_type,
         external_id=ext_id,
         text=text,
@@ -44,7 +47,7 @@ class FakeAdapter(SourceAdapter):
 
     @property
     def platform(self) -> str:
-        return "fake"
+        return "hackernews"
 
     @property
     def access_method(self) -> AccessMethod:
@@ -96,7 +99,7 @@ async def test_discovery_creates_niche_discovery_run_under_campaign(
     assert run.status == "completed"
     assert run.config_snapshot == {
         "pipeline": "niche_discovery",
-        "source": "fake",
+        "source": "hackernews",
         "query": "r/espresso",
     }
     assert run.stats["succeeded"] == 3
@@ -121,7 +124,7 @@ async def test_discovery_persists_evidence_with_run_provenance(
     assert by_id["p1"].raw_text.startswith("My espresso machine leaks")
     assert by_id["p1"].source_type == "post"
     assert by_id["c1"].source_type == "comment"
-    assert by_id["p1"].source_platform == "fake"
+    assert by_id["p1"].source_platform == "hackernews"
     assert by_id["p1"].author_handle == "u_p1"
     assert by_id["p1"].source_url == "https://fake.example/p1"
     assert by_id["p1"].access_method == AccessMethod.OPEN
@@ -139,7 +142,7 @@ async def test_discovery_records_query_with_counts(clean_db: AsyncSession, tmp_p
     queries = await find_queries(session, research_run_id=run.id)
     assert len(queries) == 1
     q = queries[0]
-    assert q.source == "fake"
+    assert q.source == "hackernews"
     assert q.query == "r/espresso"
     assert q.status == ResearchQueryStatus.SUCCEEDED
     assert (q.results_seen, q.new_results, q.duplicate_results) == (3, 3, 0)
@@ -169,7 +172,7 @@ async def test_second_run_same_query_counts_duplicates_adds_no_evidence(
     assert second.stats["skipped"] == 3
     assert second.status == "completed"
 
-    history = await find_queries(session, source="fake", query="r/espresso")
+    history = await find_queries(session, source="hackernews", query="r/espresso")
     assert {h.research_run_id for h in history} == {first.id, second.id}
 
 
@@ -184,7 +187,7 @@ async def test_discovery_writes_archive_and_records_reference(
     )
 
     q = (await find_queries(session, research_run_id=run.id))[0]
-    assert q.archive_reference == f"discovery/{run.id}/fake__r_home_espresso.jsonl"
+    assert q.archive_reference == f"discovery/{run.id}/hackernews__r_home_espresso.jsonl"
 
     archived = tmp_path / q.archive_reference
     assert archived.is_file()

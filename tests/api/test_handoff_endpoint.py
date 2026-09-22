@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from corp.api.app import create_app
 from corp.core.models.creator import Creator
 from corp.core.models.dossier import Dossier, DossierEvidence, DossierStatus
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import ProblemCluster
 from corp.core.models.niche import Niche
 from corp.core.models.scoring import ConfidenceBand, OpportunityScore
@@ -67,6 +73,8 @@ async def _seed_approved_dossier(session: AsyncSession) -> Dossier:
         raw_text="I need a better widget",
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(evidence)
     await session.flush()

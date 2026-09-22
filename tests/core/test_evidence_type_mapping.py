@@ -5,7 +5,11 @@ that adapter actually implements."""
 
 import pytest
 
-from corp.core.models.evidence import EvidenceType, infer_evidence_type
+from corp.core.models.evidence import (
+    EvidenceType,
+    infer_evidence_type,
+    require_evidence_type,
+)
 from corp.workers.adapters.amazonreviews import AmazonReviewAdapter
 from corp.workers.adapters.appstore import AppStoreAdapter
 from corp.workers.adapters.crowdfunding import CrowdfundingAdapter
@@ -61,3 +65,9 @@ def test_lookup_is_case_insensitive() -> None:
 
 def test_unknown_platform_returns_none() -> None:
     assert infer_evidence_type("no_such_platform") is None
+
+
+def test_require_raises_for_unknown_platform_naming_it() -> None:
+    with pytest.raises(ValueError, match="no_such_platform"):
+        require_evidence_type("no_such_platform")
+    assert require_evidence_type("Reddit") is EvidenceType.PROBLEM

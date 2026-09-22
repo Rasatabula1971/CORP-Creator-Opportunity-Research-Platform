@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.creator import Creator, CreatorPlatformAccount
 from corp.core.models.creator_niche import CreatorNiche
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, EvidenceType
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -62,6 +68,8 @@ async def _seed(session: AsyncSession) -> tuple[Creator, ProblemCluster]:
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=run.id,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
         )
         session.add(evidence)
         await session.flush()
@@ -95,6 +103,8 @@ async def _seed(session: AsyncSession) -> tuple[Creator, ProblemCluster]:
         access_method=AccessMethod.OFFICIAL,
         compliance_status=ComplianceStatus.COMPLIANT,
         research_run_id=run.id,
+        origin=EvidenceOrigin.INFERENCE,
+        evidence_type=EvidenceType.PROBLEM,
     )
     session.add(signal_evidence)
     await session.flush()
@@ -316,6 +326,7 @@ async def test_t21_evidence_type_counts_flow_from_niche_runs(clean_db: AsyncSess
                 compliance_status=ComplianceStatus.COMPLIANT,
                 research_run_id=niche_run.id,
                 evidence_type=et,
+                origin=EvidenceOrigin.OBSERVATION,
             )
             session.add(ev)
     await session.flush()
