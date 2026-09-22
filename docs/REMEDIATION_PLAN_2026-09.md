@@ -35,7 +35,7 @@ R1 and is isolated to one file.
 | --- | --- | --- | --- | --- |
 | **R6** Scope dossier evidence via `CreatorNiche → ResearchRun.niche_id` ∪ creator runs | #2 | `dossier/generator.py` | Integration test: niche-discovery evidence → non-zero `demand_validation.signals`; "using global top" warning no longer fires for candidate-linked evidence | Done — ADR-0051 |
 | **R7** Surface persisted dossier content end-to-end | #12 | `web/src/api/types.ts`, `CreatorDetailPage.tsx`, `dossier.html.j2` | `audience_analysis`, `demand_validation`, `sample_evidence`, `comparable_products`, `component_scores` typed and rendered; template stubs retired; browser-verified | |
-| **R8** Re-scan scheduler robustness | #7 #8 | `scheduler/registry_rescan.py` | `next_recheck_at` advanced only on success; per-dossier savepoint; resurface to `PENDING_REVIEW` only when content hash changes | |
+| **R8** Re-scan scheduler robustness | #7 #8 | `scheduler/registry_rescan.py` | `next_recheck_at` advanced only on success; per-dossier savepoint; resurface to `PENDING_REVIEW` only when content hash changes | Done — ADR-0054 |
 
 ## Phase D — API/UI correctness and hygiene
 
@@ -45,11 +45,17 @@ R1 and is isolated to one file.
 | **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1` | |
 | **R11** Hygiene | #16 #20 static gates | models (`server_default`), `dossier.py` type, `pyproject.toml` mypy overrides, two stale test assertions | `ruff check` and `mypy --strict` clean project-wide; no behaviour change | |
 
+## Planned after this run (needs its own Stage 3/4 pass first)
+
+| Task | Why | Design questions |
+| --- | --- | --- |
+| **R12** Watch re-scan re-collects evidence | Decided at R8's gate (2026-09-21). Today the re-scan only re-renders from the current `OpportunityScore`; nothing re-runs research for a watched creator, so "resurface if the evidence strengthens" cannot trigger on its own. R8's savepoint + fingerprint are the foundation. | Chain `research_more` (niche) + creator research pipeline (collect → extract → cluster → intent → score) before regeneration; per-tick cost/LLM budget and max dossiers per tick; numeric definition of "strengthened" (score delta vs. new-evidence count); interaction with the weak-niche revisit state below. |
+
 ## Deliberately out of scope
 
 - **Weak-niche "revisit later" state** (3–6 month window OR renewed trend
-  signal) — undesigned; needs Stage 3/4 first.
+  signal) — undesigned; needs Stage 3/4 first. Likely designed together
+  with R12.
 - **T11 Pinterest / T12 Brave Search** — parked pending API access.
-- **Re-query sources on Watch re-scan** — product decision, raised at R8's gate.
 - **`str, Enum` → `StrEnum` (27 UP042 hits)** — style only; touch only if R11
   can do it without changing stored enum values.

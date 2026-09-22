@@ -8,9 +8,10 @@ evidence strengthens" (Stage 3). Re-scoring means regenerating the
 persisted dossier via T6's ``DossierGenerator.generate_and_persist``,
 which reads whatever is currently the latest ``OpportunityScore`` for
 that creator/niche and produces a fresh ``Dossier`` row (superseding the
-watched one, T6's existing latest-wins convention) defaulting back to
-``PENDING_REVIEW`` -- exactly "resurfacing" it into the human review
-queue if the underlying score changed. This module does not collect new
+watched one, T6's existing latest-wins convention). It resurfaces to
+``PENDING_REVIEW`` only when the regenerated content actually differs
+from the watched dossier's; identical content stays ``WATCHING`` (R8,
+ADR-0054). This module does not collect new
 evidence itself; that already happens on whatever cadence drives
 ``OpportunityScore``/``ResearchRun`` updates elsewhere. Its own job is
 narrower: notice a watched niche is due, regenerate its dossier from
@@ -27,9 +28,12 @@ shipping the tested logic before something else wires it in).
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -52,6 +56,23 @@ class RescanStats:
     checked: int = 0
     rescored: int = 0
     failed: int = 0
+    # Regenerated but content-identical to the watched dossier: kept
+    # WATCHING rather than resurfaced (counted inside ``rescored``).
+    unchanged: int = 0
+
+
+# Volatile keys that differ on every regeneration without the dossier's
+# substance changing; excluded from the fingerprint.
+_FINGERPRINT_IGNORE = frozenset({"generated_at"})
+
+
+def content_fingerprint(content: dict[str, Any]) -> str:
+    """Stable hash of a dossier's content, ignoring timestamps, so a re-scan
+    can tell "the evidence moved" from "nothing changed"."""
+    stable = {k: v for k, v in content.items() if k not in _FINGERPRINT_IGNORE}
+    return hashlib.sha256(
+        json.dumps(stable, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
 
 
 async def find_due_watched_dossiers(
@@ -80,13 +101,27 @@ async def rescan_watched_dossiers(
     *,
     now: datetime | None = None,
     recheck_days: int = 90,
+    retry_days: int = 1,
 ) -> RescanStats:
     """One re-scan pass. Regenerates the dossier for every due WATCHING
-    dossier and advances its niche's next_recheck_at so this same
-    dossier isn't picked up again on the very next tick. A single
-    dossier's failure is logged and skipped, never aborts the batch --
-    matching every other pipeline in this codebase (PipelineStats'
-    fail-and-continue convention).
+    dossier. A single dossier's failure is logged and skipped, never
+    aborts the batch -- matching every other pipeline in this codebase
+    (PipelineStats' fail-and-continue convention).
+
+    Per dossier (R8):
+    * The regeneration runs inside a SAVEPOINT, so a database error for
+      one dossier rolls back only that dossier and leaves the session
+      usable for the rest of the batch.
+    * The niche's recheck clock (``last_researched_at`` /
+      ``next_recheck_at``) advances only on success. On failure
+      ``next_recheck_at`` moves forward by ``retry_days`` -- soon enough
+      that a transient error is retried, far enough that a persistent one
+      does not log every tick -- instead of being silently deferred a
+      whole ``recheck_days``.
+    * If the regenerated content is identical to the watched dossier's
+      (``content_fingerprint``), the new row stays WATCHING: nothing new
+      for the human to see. Only changed content resurfaces to
+      PENDING_REVIEW (T10's open product question, resolved here).
 
     Does not commit -- the caller controls the transaction boundary,
     same as every other pure worker function in this codebase
@@ -96,30 +131,40 @@ async def rescan_watched_dossiers(
     due = await find_due_watched_dossiers(session, now=now)
     generator = DossierGenerator(session, rules_path=scoring_rules_path)
 
-    # Advance next_recheck_at optimistically so a concurrent tick does not
-    # pick up the same dossiers while this one is still processing.
-    for dossier in due:
-        niche = await session.get(Niche, dossier.niche_id)
-        if niche is not None:
-            niche.next_recheck_at = now + timedelta(days=recheck_days)
-    await session.flush()
-
     rescored = 0
     failed = 0
+    unchanged = 0
     for dossier in due:
+        previous = content_fingerprint(dossier.content)
+        is_unchanged = False
         try:
-            await generator.generate_and_persist(dossier.creator_id, dossier.niche_id)
-            niche = await session.get(Niche, dossier.niche_id)
-            if niche is not None:
-                niche.last_researched_at = now
+            async with session.begin_nested():
+                regenerated = await generator.generate_and_persist(
+                    dossier.creator_id, dossier.niche_id
+                )
+                is_unchanged = content_fingerprint(regenerated.content) == previous
+                if is_unchanged:
+                    regenerated.status = DossierStatus.WATCHING
+                niche = await session.get(Niche, dossier.niche_id)
+                if niche is not None:
+                    niche.last_researched_at = now
+                    niche.next_recheck_at = now + timedelta(days=recheck_days)
         except Exception as exc:  # noqa: BLE001 -- one bad dossier must not block the rest
             logger.warning("Registry re-scan failed for dossier %s: %s", dossier.id, exc)
             failed += 1
+            niche = await session.get(Niche, dossier.niche_id)
+            if niche is not None:
+                niche.next_recheck_at = now + timedelta(days=retry_days)
         else:
+            # Counted only once the savepoint has released cleanly, so a
+            # failure at release can't count a dossier as both unchanged
+            # and failed.
             rescored += 1
+            if is_unchanged:
+                unchanged += 1
 
     await session.flush()
-    return RescanStats(checked=len(due), rescored=rescored, failed=failed)
+    return RescanStats(checked=len(due), rescored=rescored, failed=failed, unchanged=unchanged)
 
 
 class RegistryRescanScheduler:
@@ -184,9 +229,10 @@ class RegistryRescanScheduler:
                 await session.commit()
                 if stats.checked:
                     logger.info(
-                        "Registry re-scan: checked=%d rescored=%d failed=%d",
+                        "Registry re-scan: checked=%d rescored=%d unchanged=%d failed=%d",
                         stats.checked,
                         stats.rescored,
+                        stats.unchanged,
                         stats.failed,
                     )
             self._consecutive_failures = 0

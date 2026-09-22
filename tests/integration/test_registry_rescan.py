@@ -336,3 +336,119 @@ async def test_one_failing_dossier_does_not_block_the_batch(clean_db: AsyncSessi
         await session.execute(select(Dossier).where(Dossier.creator_id == creator_b.id))
     ).scalars().all()
     assert len(b_rows) == 2  # creator B's dossier was regenerated despite A's failure
+
+
+# ---------- R8: clock only on success, savepoint per dossier, unchanged stays WATCHING ----------
+
+
+@pytest.mark.asyncio
+async def test_unchanged_content_stays_watching(clean_db: AsyncSession):
+    """First re-scan: fixture content differs from a real regeneration, so it
+    resurfaces. Second re-scan with nothing changed: identical content, the
+    new row stays WATCHING and is counted as unchanged."""
+    session = clean_db
+    creator = await _make_creator(session)
+    niche = await _make_niche(session, "Home Espresso", next_recheck_at=NOW - timedelta(days=1))
+    run = await _make_run(session, creator.id)
+    opp = await _make_scored_opportunity(session, creator, run)
+    await _make_watching_dossier(session, creator, niche, opp)
+
+    first = await rescan_watched_dossiers(session, RULES_PATH, now=NOW)
+    await session.commit()
+    assert (first.rescored, first.unchanged) == (1, 0)
+    latest = (await session.execute(
+        select(Dossier).where(Dossier.superseded_at.is_(None))
+    )).scalar_one()
+    assert latest.status == DossierStatus.PENDING_REVIEW
+
+    # Human parks it again; clock runs out again; evidence has not moved.
+    latest.status = DossierStatus.WATCHING
+    niche.next_recheck_at = NOW - timedelta(days=1)
+    await session.commit()
+    later = NOW + timedelta(days=1)
+
+    second = await rescan_watched_dossiers(session, RULES_PATH, now=later)
+    await session.commit()
+    assert (second.rescored, second.unchanged, second.failed) == (1, 1, 0)
+    newest = (await session.execute(
+        select(Dossier).where(Dossier.superseded_at.is_(None))
+    )).scalar_one()
+    assert newest.id != latest.id
+    assert newest.status == DossierStatus.WATCHING
+    await session.refresh(niche)
+    assert niche.next_recheck_at == later + timedelta(days=90)
+
+
+@pytest.mark.asyncio
+async def test_failed_dossier_is_retried_soon_not_deferred_a_quarter(clean_db: AsyncSession):
+    session = clean_db
+    creator = await _make_creator(session)
+    niche = await _make_niche(session, "Home Espresso", next_recheck_at=NOW - timedelta(days=1))
+    run = await _make_run(session, creator.id)
+    opp = await _make_scored_opportunity(session, creator, run)
+    await _make_watching_dossier(session, creator, niche, opp)
+    await supersede(session, OpportunityScore, OpportunityScore.creator_id == creator.id)
+    await session.commit()
+    before = niche.last_researched_at
+
+    stats = await rescan_watched_dossiers(session, RULES_PATH, now=NOW, retry_days=1)
+    await session.commit()
+
+    assert (stats.checked, stats.rescored, stats.failed) == (1, 0, 1)
+    await session.refresh(niche)
+    assert niche.last_researched_at == before  # not a successful scan
+    assert niche.next_recheck_at == NOW + timedelta(days=1)  # retry tomorrow, not in 90 days
+
+
+@pytest.mark.asyncio
+async def test_database_error_in_one_dossier_does_not_poison_the_batch(
+    clean_db: AsyncSession, monkeypatch
+):
+    """A DB-level failure (not just a Python exception before flush) inside
+    one dossier's regeneration must roll back only that dossier's savepoint
+    and leave the session usable for the next one and for the final commit."""
+    from corp.workers.dossier.generator import DossierGenerator
+
+    session = clean_db
+    creator_a = await _make_creator(session, "Creator A")
+    niche_a = await _make_niche(session, "Home Espresso A", next_recheck_at=NOW - timedelta(days=1))
+    run_a = await _make_run(session, creator_a.id)
+    opp_a = await _make_scored_opportunity(session, creator_a, run_a)
+    await _make_watching_dossier(session, creator_a, niche_a, opp_a)
+
+    creator_b = await _make_creator(session, "Creator B")
+    niche_b = await _make_niche(session, "Home Espresso B", next_recheck_at=NOW - timedelta(days=1))
+    run_b = await _make_run(session, creator_b.id)
+    opp_b = await _make_scored_opportunity(session, creator_b, run_b)
+    await _make_watching_dossier(session, creator_b, niche_b, opp_b)
+
+    original = DossierGenerator.generate_and_persist
+
+    async def flaky(self: DossierGenerator, creator_id: str, niche_id: str) -> Dossier:
+        if creator_id == creator_a.id:
+            # Foreign-key violation surfaces from the database at flush.
+            self._session.add(Dossier(
+                creator_id="no-such-creator", niche_id=niche_id,
+                opportunity_score_id="no-such-score", content={},
+            ))
+            await self._session.flush()
+        return await original(self, creator_id, niche_id)
+
+    monkeypatch.setattr(DossierGenerator, "generate_and_persist", flaky)
+
+    stats = await rescan_watched_dossiers(session, RULES_PATH, now=NOW)
+    await session.commit()  # session must still be usable after A's DB error
+
+    assert (stats.checked, stats.rescored, stats.failed) == (2, 1, 1)
+    a_rows = (await session.execute(
+        select(Dossier).where(Dossier.creator_id == creator_a.id)
+    )).scalars().all()
+    assert len(a_rows) == 1 and a_rows[0].superseded_at is None  # A untouched
+    b_rows = (await session.execute(
+        select(Dossier).where(Dossier.creator_id == creator_b.id)
+    )).scalars().all()
+    assert len(b_rows) == 2
+    await session.refresh(niche_a)
+    await session.refresh(niche_b)
+    assert niche_a.next_recheck_at == NOW + timedelta(days=1)
+    assert niche_b.next_recheck_at == NOW + timedelta(days=90)
