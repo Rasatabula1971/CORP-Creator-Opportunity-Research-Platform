@@ -33,7 +33,7 @@ R1 and is isolated to one file.
 
 | Task | Audit | Files | Acceptance | Status |
 | --- | --- | --- | --- | --- |
-| **R6** Scope dossier evidence via `CreatorNiche → ResearchRun.niche_id` ∪ creator runs | #2 | `dossier/generator.py` | Integration test: niche-discovery evidence → non-zero `demand_validation.signals`; "using global top" warning no longer fires in e2e test | |
+| **R6** Scope dossier evidence via `CreatorNiche → ResearchRun.niche_id` ∪ creator runs | #2 | `dossier/generator.py` | Integration test: niche-discovery evidence → non-zero `demand_validation.signals`; "using global top" warning no longer fires for candidate-linked evidence | Done — ADR-0051 |
 | **R7** Surface persisted dossier content end-to-end | #12 | `web/src/api/types.ts`, `CreatorDetailPage.tsx`, `dossier.html.j2` | `audience_analysis`, `demand_validation`, `sample_evidence`, `comparable_products`, `component_scores` typed and rendered; template stubs retired; browser-verified | |
 | **R8** Re-scan scheduler robustness | #7 #8 | `scheduler/registry_rescan.py` | `next_recheck_at` advanced only on success; per-dossier savepoint; resurface to `PENDING_REVIEW` only when content hash changes | |
 

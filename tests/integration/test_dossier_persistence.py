@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.core.models.campaign import Campaign
 from corp.core.models.creator import Creator
 from corp.core.models.dossier import Dossier, DossierEvidence
 from corp.core.models.evidence import (
@@ -17,6 +18,11 @@ from corp.core.models.evidence import (
 )
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.niche import Niche
+from corp.core.models.niche_candidate import (
+    NicheCandidate,
+    NicheCandidateEvidence,
+    NicheCandidateStatus,
+)
 from corp.core.models.product_idea import (
     ProductIdea,
     ProductIdeaComplexity,
@@ -80,6 +86,7 @@ async def _make_scored_opportunity(
     aggregate_score: float = 0.75,
     confidence_band: ConfidenceBand = ConfidenceBand.HIGH,
     label: str = "Grinder confusion",
+    with_creator_score: bool = True,
 ) -> tuple[ProblemCluster, OpportunityScore, Evidence]:
     cluster = ProblemCluster(
         creator_id=creator.id, label=label, frequency=3, evidence_strength=0.8
@@ -102,17 +109,19 @@ async def _make_scored_opportunity(
     )
     await session.flush()
 
-    session.add(
-        CreatorScore(
-            creator_id=creator.id,
-            component_scores={"frequency": aggregate_score},
-            aggregate_score=aggregate_score,
-            computed_hash="hash1",
-            confidence_band=confidence_band,
-            rule_version="v1.0.0",
-            model_version="fixture",
+    if with_creator_score:
+        # One active CreatorScore per creator (partial unique index).
+        session.add(
+            CreatorScore(
+                creator_id=creator.id,
+                component_scores={"frequency": aggregate_score},
+                aggregate_score=aggregate_score,
+                computed_hash="hash1",
+                confidence_band=confidence_band,
+                rule_version="v1.0.0",
+                model_version="fixture",
+            )
         )
-    )
     opp = OpportunityScore(
         creator_id=creator.id,
         problem_cluster_id=cluster.id,
@@ -483,3 +492,162 @@ async def test_niche_not_found_raises(clean_db: AsyncSession):
     gen = DossierGenerator(session, rules_path=RULES_PATH)
     with pytest.raises(ValueError, match="Niche not found"):
         await gen.generate_and_persist(creator.id, "does-not-exist")
+
+
+# ---------- R6: niche-scoped demand validation ----------
+
+
+async def _niche_evidence(
+    session: AsyncSession, run_id: str | None, platform: str, ev_type: EvidenceType, text: str
+) -> Evidence:
+    evidence = Evidence(
+        source_type="post",
+        source_id=f"{platform}_{text[:16]}",
+        source_platform=platform,
+        raw_text=text,
+        access_method=AccessMethod.OPEN,
+        compliance_status=ComplianceStatus.COMPLIANT,
+        research_run_id=run_id,
+        origin=EvidenceOrigin.OBSERVATION,
+        evidence_type=ev_type,
+    )
+    session.add(evidence)
+    await session.flush()
+    return evidence
+
+
+async def _promoted_candidate(
+    session: AsyncSession, campaign: Campaign, run: ResearchRun, niche: Niche, *evidence: Evidence
+) -> NicheCandidate:
+    candidate = NicheCandidate(
+        campaign_id=campaign.id,
+        research_run_id=run.id,
+        label=niche.canonical_name,
+        naming_method="llm",
+        evidence_count=len(evidence),
+        source_count=len({e.source_platform for e in evidence}),
+        author_count=0,
+        status=NicheCandidateStatus.PROMOTED,
+        niche_id=niche.id,
+    )
+    session.add(candidate)
+    await session.flush()
+    for ev in evidence:
+        session.add(NicheCandidateEvidence(candidate_id=candidate.id, evidence_id=ev.id))
+    await session.flush()
+    return candidate
+
+
+@pytest.mark.asyncio
+async def test_demand_validation_counts_niche_drill_and_research_more_evidence(
+    clean_db: AsyncSession, caplog: pytest.LogCaptureFixture
+):
+    """Niche-level demand evidence is never on a creator run: the depth-0
+    drill links it to the promoted NicheCandidate, research_more tags the
+    run with niche_id. The dossier must see both, and only for ITS niche."""
+    session = clean_db
+    creator = await _make_creator(session)
+    niche = await _make_niche(session, "Home Espresso")
+    other = await _make_niche(session, "Sourdough")
+    campaign = Campaign(name="R6")
+    session.add(campaign)
+    await session.flush()
+
+    # Creator-level research run (no niche_id) backing the scored opportunity.
+    creator_run = await _make_run(session, creator.id)
+    await _make_scored_opportunity(session, creator, creator_run)
+
+    # Depth-0 drill run: creator_id NULL, niche_id NULL; evidence reaches the
+    # niche only through NicheCandidateEvidence.
+    drill_run = ResearchRun(creator_id=None, status="completed", campaign_id=campaign.id)
+    session.add(drill_run)
+    await session.flush()
+    trend = await _niche_evidence(
+        session, drill_run.id, "googletrends", EvidenceType.TREND, "espresso rising"
+    )
+    txn = await _niche_evidence(
+        session, drill_run.id, "marketplace", EvidenceType.TRANSACTION, "espresso guide $19"
+    )
+    await _promoted_candidate(session, campaign, drill_run, niche, trend, txn)
+
+    # research_more-style run tagged with the niche directly.
+    rm_run = ResearchRun(
+        creator_id=None, status="completed", campaign_id=campaign.id, niche_id=niche.id
+    )
+    session.add(rm_run)
+    await session.flush()
+    await _niche_evidence(
+        session, rm_run.id, "patreon_substack", EvidenceType.MONETISATION, "espresso newsletter"
+    )
+
+    # Another niche's drill evidence must NOT leak into this dossier.
+    other_ev = await _niche_evidence(
+        session, drill_run.id, "crowdfunding", EvidenceType.TRANSACTION, "sourdough kit"
+    )
+    await _promoted_candidate(session, campaign, drill_run, other, other_ev)
+    await session.commit()
+
+    gen = DossierGenerator(session, rules_path=RULES_PATH)
+    with caplog.at_level("WARNING", logger="corp.workers.dossier.generator"):
+        dossier = await gen.generate_and_persist(creator.id, niche.id)
+    await session.commit()
+
+    dv = dossier.content["demand_validation"]
+    assert dv["signals"]["trend"] == 1
+    assert dv["signals"]["transaction"] == 1  # marketplace only; crowdfunding is Sourdough's
+    assert dv["signals"]["monetisation"] == 1
+    assert dv["evidence_by_platform"] == {
+        "youtube": 1, "googletrends": 1, "marketplace": 1, "patreon_substack": 1,
+    }
+    assert dv["platform_highlights"]["crowdfunding_signals"] == 0
+    assert dv["platform_highlights"]["patreon_substack_indicators"] == 1
+    assert dv["platform_highlights"]["marketplace_competition"] == 1
+    assert dv["platform_highlights"]["google_trends"] == 1
+    assert dv["evidence_by_type"]["problem"] == 1
+
+    audience = dossier.content["audience_analysis"]
+    assert audience["recurring_themes"][0]["label"] == "Grinder confusion"
+    assert audience["engagement_quality"]["total_audience_observations"] == 1
+
+
+@pytest.mark.asyncio
+async def test_niche_filter_uses_candidate_evidence_not_only_run_niche_id(
+    clean_db: AsyncSession, caplog: pytest.LogCaptureFixture
+):
+    """An opportunity whose observation evidence was collected by the drill
+    (linked via the promoted candidate) counts as niche-relevant, so the
+    'using global top' fallback is not taken."""
+    session = clean_db
+    creator = await _make_creator(session)
+    niche = await _make_niche(session, "Home Espresso")
+    campaign = Campaign(name="R6b")
+    session.add(campaign)
+    await session.flush()
+
+    other = await _make_niche(session, "Sourdough")
+
+    drill_run = ResearchRun(creator_id=None, status="completed", campaign_id=campaign.id)
+    session.add(drill_run)
+    await session.flush()
+    _, opp, evidence = await _make_scored_opportunity(
+        session, creator, drill_run, aggregate_score=0.55, label="Grinder confusion"
+    )
+    await _promoted_candidate(session, campaign, drill_run, niche, evidence)
+
+    # A HIGHER-scored opportunity whose evidence belongs to the sibling niche:
+    # the global-top fallback would pick this one.
+    _, other_opp, other_ev = await _make_scored_opportunity(
+        session, creator, drill_run, aggregate_score=0.95, label="Sourdough starter",
+        with_creator_score=False,
+    )
+    await _promoted_candidate(session, campaign, drill_run, other, other_ev)
+    await session.commit()
+
+    gen = DossierGenerator(session, rules_path=RULES_PATH)
+    with caplog.at_level("WARNING", logger="corp.workers.dossier.generator"):
+        dossier = await gen.generate_and_persist(creator.id, niche.id)
+    await session.commit()
+
+    assert dossier.opportunity_score_id == opp.id
+    assert dossier.opportunity_score_id != other_opp.id
+    assert "using global top" not in caplog.text

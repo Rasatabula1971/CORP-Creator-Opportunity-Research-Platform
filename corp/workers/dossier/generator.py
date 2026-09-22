@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor
@@ -36,6 +36,11 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.niche import Niche
+from corp.core.models.niche_candidate import (
+    NicheCandidate,
+    NicheCandidateEvidence,
+    NicheCandidateStatus,
+)
 from corp.core.models.product_idea import ProductIdea, ProductIdeaEvidence
 from corp.core.models.scoring import CreatorScore, OpportunityScore
 from corp.core.models.workflow import ResearchRun
@@ -251,7 +256,7 @@ class DossierGenerator:
                 "competitor_count": data.data_coverage.competitor_count,
             },
             "audience_analysis": self._build_audience_analysis(data.opportunities),
-            "demand_validation": await self._build_demand_validation(creator_id),
+            "demand_validation": await self._build_demand_validation(creator_id, niche_id),
             "niche_path": path,
             "recommendation": recommendation,
             "generated_at": data.generated_at,
@@ -564,19 +569,45 @@ class DossierGenerator:
             },
         }
 
+    @staticmethod
+    def _niche_evidence_clause(niche_id: str) -> ColumnElement[bool]:
+        """Evidence that belongs to a niche. Two sources, because the niche
+        pipeline links evidence differently at each stage: the depth-0 drill
+        (T3) records evidence on the NicheCandidate that later became the
+        niche (PROMOTED) or was folded into it (MERGED), while research_more
+        and creator onboarding tag their ResearchRun with niche_id directly.
+        Creator-level research runs carry no niche_id at all, so a
+        creator-only scope misses every TREND/TRANSACTION/MONETISATION row."""
+        niche_runs = select(ResearchRun.id).where(ResearchRun.niche_id == niche_id)
+        candidate_evidence = (
+            select(NicheCandidateEvidence.evidence_id)
+            .join(NicheCandidate, NicheCandidate.id == NicheCandidateEvidence.candidate_id)
+            .where(
+                NicheCandidate.niche_id == niche_id,
+                NicheCandidate.status.in_(
+                    [NicheCandidateStatus.PROMOTED, NicheCandidateStatus.MERGED]
+                ),
+            )
+        )
+        return or_(
+            Evidence.research_run_id.in_(niche_runs),
+            Evidence.id.in_(candidate_evidence),
+        )
+
     async def _build_demand_validation(
-        self, creator_id: str,
+        self, creator_id: str, niche_id: str,
     ) -> dict[str, Any]:
         creator_runs = select(ResearchRun.id).where(
             ResearchRun.creator_id == creator_id
         )
+        in_scope = or_(
+            Evidence.research_run_id.in_(creator_runs),
+            self._niche_evidence_clause(niche_id),
+        )
 
         type_result = await self._session.execute(
             select(Evidence.evidence_type, func.count())
-            .where(
-                Evidence.research_run_id.in_(creator_runs),
-                Evidence.evidence_type.isnot(None),
-            )
+            .where(in_scope)
             .group_by(Evidence.evidence_type)
         )
         by_type: dict[str, int] = {}
@@ -586,7 +617,7 @@ class DossierGenerator:
 
         platform_result = await self._session.execute(
             select(Evidence.source_platform, func.count())
-            .where(Evidence.research_run_id.in_(creator_runs))
+            .where(in_scope)
             .group_by(Evidence.source_platform)
         )
         by_platform: dict[str, int] = {
@@ -604,38 +635,38 @@ class DossierGenerator:
                 "monetisation": by_type.get("monetisation", 0),
                 "dissatisfaction": by_type.get("dissatisfaction", 0),
             },
+            # Keys are the source_platform strings the adapters emit
+            # (registry.KNOWN_PLATFORMS): Kickstarter+Indiegogo share
+            # "crowdfunding", Patreon+Substack share "patreon_substack",
+            # Gumroad/Etsy/Udemy share "marketplace".
             "platform_highlights": {
                 "reddit_discussions": by_platform.get("reddit", 0),
+                "search_demand": by_platform.get("searchdemand", 0),
+                "google_trends": by_platform.get("googletrends", 0),
+                # No Pinterest adapter yet (T11 parked); stays 0 until it lands.
                 "pinterest_activity": by_platform.get("pinterest", 0),
-                "crowdfunding_signals": (
-                    by_platform.get("kickstarter", 0)
-                    + by_platform.get("indiegogo", 0)
-                    + by_platform.get("crowdfunding", 0)
-                ),
-                "patreon_indicators": by_platform.get("patreon", 0),
-                "substack_indicators": by_platform.get("substack", 0),
-                "marketplace_competition": (
-                    by_platform.get("gumroad", 0)
-                    + by_platform.get("etsy", 0)
-                    + by_platform.get("udemy", 0)
-                    + by_platform.get("marketplace", 0)
-                ),
+                "crowdfunding_signals": by_platform.get("crowdfunding", 0),
+                "patreon_substack_indicators": by_platform.get("patreon_substack", 0),
+                "marketplace_competition": by_platform.get("marketplace", 0),
+                "amazon_reviews": by_platform.get("amazon_reviews", 0),
+                "app_store_reviews": by_platform.get("appstore", 0),
             },
         }
 
     async def _filter_niche_opportunities(
         self, opportunities: list[OpportunityContext], niche_id: str
     ) -> list[OpportunityContext]:
-        """Return only opportunities whose evidence traces to research runs
-        for this niche, preserving the existing sort order. Falls back to
-        empty if no evidence links exist (caller picks global top)."""
+        """Return only opportunities whose evidence belongs to this niche
+        (see _niche_evidence_clause), preserving the existing sort order.
+        Falls back to empty if no evidence links exist (caller picks global
+        top)."""
         all_ev_ids = {obs.evidence_id for o in opportunities for obs in o.observations}
         if not all_ev_ids:
             return []
         result = await self._session.execute(
-            select(Evidence.id)
-            .join(ResearchRun, ResearchRun.id == Evidence.research_run_id)
-            .where(Evidence.id.in_(all_ev_ids), ResearchRun.niche_id == niche_id)
+            select(Evidence.id).where(
+                Evidence.id.in_(all_ev_ids), self._niche_evidence_clause(niche_id)
+            )
         )
         niche_ev_ids = set(result.scalars().all())
         if not niche_ev_ids:
