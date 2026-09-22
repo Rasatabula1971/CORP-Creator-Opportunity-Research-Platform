@@ -8,8 +8,8 @@ appear in the cluster's evidence, exactly the same grounding mechanism
 T3's niche synthesis uses (``niche_naming.check_grounding``, reused
 unchanged) -- an idea that fails grounding is dropped, never given a
 fabricated rationale. See ``corp.core.models.product_idea`` for why this
-traces provenance via ``ProductIdeaEvidence`` rather than an
-``Evidence.origin`` field (removed in T0, ADR-0030).
+traces provenance via ``ProductIdeaEvidence`` back to the observation rows
+rather than writing a separate ``origin = inference`` Evidence row.
 """
 
 from __future__ import annotations

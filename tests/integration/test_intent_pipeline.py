@@ -5,7 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.creator import Creator
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -157,6 +163,8 @@ async def test_intent_pipeline_creates_evidence(clean_db: AsyncSession):
     evidence = ev_result.scalar_one()
     assert evidence.source_type == "intent_classification"
     assert evidence.source_id == cluster.id
+    assert evidence.origin is EvidenceOrigin.INFERENCE
+    assert evidence.evidence_type is EvidenceType.PROBLEM
 
 
 @pytest.mark.asyncio

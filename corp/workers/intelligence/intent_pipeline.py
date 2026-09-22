@@ -5,7 +5,13 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -116,6 +122,10 @@ class IntentPipeline:
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=research_run_id,
+            # An inference about the cluster's problem, so it inherits the
+            # cluster's evidence type rather than a commercial one.
+            evidence_type=EvidenceType.PROBLEM,
+            origin=EvidenceOrigin.INFERENCE,
         )
         self._session.add(evidence)
         await self._session.flush()

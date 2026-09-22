@@ -6,16 +6,17 @@ not imagination" invariant Stage 3 sets for niche discovery (T3) and the
 same grounding mechanism this codebase already established for niche
 naming (``niche_naming.check_grounding``, reused here unchanged).
 
-The frozen T5 acceptance criterion originally read "traces to an
-Evidence.origin = inference row for provenance" — that field does not
-exist; T0 (ADR-0030) deliberately removed it, since Evidence rows are raw
-source data by construction and provenance-of-inference is tracked per
-derived artifact instead (``ProblemObservation.is_inferred``,
-``NicheCandidate.naming_method``). This model follows that same
-established convention: `generation_method`/`generation_prompt_version`/
-`generation_model_version` record how the idea was produced, and
-`ProductIdeaEvidence` (mirroring `NicheCandidateEvidence`) is the real,
-queryable evidence trail back to the raw `Evidence` rows that grounded it.
+The frozen T5 acceptance criterion read "traces to an Evidence.origin =
+inference row for provenance". ``Evidence.origin`` exists (added by the
+T0-gap migration a7b8c9d0e1f2 and set to ``inference`` by the intent and
+competitive pipelines, which persist an LLM claim as its own Evidence row),
+but a product idea is not itself evidence — it is a proposal grounded in
+observation rows. So no synthetic inference row is written here; instead
+`generation_method`/`generation_prompt_version`/`generation_model_version`
+record how the idea was produced, and `ProductIdeaEvidence` (mirroring
+`NicheCandidateEvidence`) is the real, queryable evidence trail back to the
+raw `origin = observation` rows that grounded it. This is a disclosed
+deviation from the literal T5 wording, recorded in the R2 ADR.
 """
 
 import enum

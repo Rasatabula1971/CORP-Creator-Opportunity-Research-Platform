@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from corp.core.models.competitive import Competitor, CompetitorStrength, CompetitorType
 from corp.core.models.content import ContentItem
-from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence
+from corp.core.models.evidence import (
+    AccessMethod,
+    ComplianceStatus,
+    Evidence,
+    EvidenceOrigin,
+    EvidenceType,
+)
 from corp.core.models.intelligence import (
     ProblemCluster,
     ProblemClusterMember,
@@ -202,6 +208,8 @@ class CompetitivePipeline:
             access_method=AccessMethod.OFFICIAL,
             compliance_status=ComplianceStatus.COMPLIANT,
             research_run_id=research_run_id,
+            evidence_type=EvidenceType.SOLUTION,
+            origin=EvidenceOrigin.INFERENCE,
         )
         self._session.add(evidence)
         await self._session.flush()

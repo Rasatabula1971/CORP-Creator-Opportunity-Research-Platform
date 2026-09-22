@@ -18,11 +18,11 @@ async def create_evidence(
     raw_text: str,
     access_method: AccessMethod,
     compliance_status: ComplianceStatus,
+    evidence_type: EvidenceType,
+    origin: EvidenceOrigin,
     author_handle: str | None = None,
     source_url: str | None = None,
     research_run_id: str | None = None,
-    evidence_type: EvidenceType | None = None,
-    origin: EvidenceOrigin | None = None,
 ) -> Evidence:
     evidence = Evidence(
         source_type=source_type,

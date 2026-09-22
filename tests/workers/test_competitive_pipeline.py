@@ -3,7 +3,7 @@
 import pytest
 
 from corp.core.models.competitive import Competitor
-from corp.core.models.evidence import Evidence
+from corp.core.models.evidence import Evidence, EvidenceOrigin, EvidenceType
 from corp.core.models.intelligence import ProblemCluster
 from corp.workers.intelligence import competitive_pipeline
 from corp.workers.intelligence.competitive_pipeline import (
@@ -79,7 +79,10 @@ async def test_discover_writes_competitors_for_well_formed_reply():
     assert [c.name for c in competitors] == ["Notion", "Excel"]
     assert competitors[0].url == "https://notion.so"
     assert competitors[1].url is None  # non-http scheme dropped at write time
-    assert sum(isinstance(e, Evidence) for e in added) == 1
+    evidence = [e for e in added if isinstance(e, Evidence)]
+    assert len(evidence) == 1
+    assert evidence[0].origin is EvidenceOrigin.INFERENCE
+    assert evidence[0].evidence_type is EvidenceType.SOLUTION
 
 
 @pytest.mark.parametrize(
