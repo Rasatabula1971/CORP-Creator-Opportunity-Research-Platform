@@ -49,7 +49,7 @@ R1 and is isolated to one file.
 
 | Task | Why | Design questions |
 | --- | --- | --- |
-| **R12** Watch re-scan re-collects evidence | Decided at R8's gate (2026-09-21). Today the re-scan only re-renders from the current `OpportunityScore`; nothing re-runs research for a watched creator, so "resurface if the evidence strengthens" cannot trigger on its own. R8's savepoint + fingerprint are the foundation. | Chain `research_more` (niche) + creator research pipeline (collect → extract → cluster → intent → score) before regeneration; per-tick cost/LLM budget and max dossiers per tick; numeric definition of "strengthened" (score delta vs. new-evidence count); interaction with the weak-niche revisit state below. |
+| **R12** Watch re-scan re-collects evidence — **design frozen 2026-09-22**, see `docs/design/R12_watch_rescan_recollect.md` | Decided at R8's gate (2026-09-21). Design also found that Research More never completes (no updated dossier is ever produced). | Frozen: R12b creator status mirrors the dossier gate → R12a Research More completes via a shared `WatchRescanner` → R12c Watch re-scan re-collects with score/evidence-delta resurfacing and per-tick limits → R12d UI. |
 
 ## Deliberately out of scope
 
