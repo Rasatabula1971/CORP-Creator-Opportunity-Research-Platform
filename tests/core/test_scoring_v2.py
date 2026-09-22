@@ -26,7 +26,12 @@ def test_rules_v2_weights_sum_to_one_and_cover_ten_components():
     # Both saturation signals ship side by side after the integration merge.
     assert {"competition_saturation", "competitor_saturation"} <= set(weights)
     # T7/T21 evidence-type components.
-    t7_new = {"external_demand_strength", "solution_saturation", "purchase_intent", "audience_dissatisfaction"}
+    t7_new = {
+        "external_demand_strength",
+        "solution_saturation",
+        "purchase_intent",
+        "audience_dissatisfaction",
+    }
     assert t7_new <= set(weights)
 
 
@@ -84,7 +89,8 @@ def test_v2_aggregate_uses_all_weights():
     ones = {k: 1.0 for k in rules["weights"]}
     assert compute_score(ones, rules["weights"]) == pytest.approx(1.0)
     half = dict(ones, commercial_intent_strength=0.0)
-    assert compute_score(half, rules["weights"]) == pytest.approx(1.0 - rules["weights"]["commercial_intent_strength"])
+    expected = 1.0 - rules["weights"]["commercial_intent_strength"]
+    assert compute_score(half, rules["weights"]) == pytest.approx(expected)
 
 
 def test_tokens_strip_stopwords_and_lowercase():

@@ -103,7 +103,9 @@ class ProductIdea(TimestampMixin, Base):
     # naming_confidence exactly (see module docstring).
     evidence_terms: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     evidence_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    generation_method: Mapped[str] = mapped_column(String(50), nullable=False, default="llm")
+    generation_method: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="llm", server_default="llm"
+    )
     generation_prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
     generation_model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)

@@ -28,7 +28,7 @@ async_test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_c
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     async with async_test_session() as session:
         yield session
         await session.rollback()

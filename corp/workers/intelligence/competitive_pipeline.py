@@ -1,7 +1,7 @@
 """Competitive discovery pipeline — clusters + descriptions → Competitor rows."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,7 +97,7 @@ class CompetitivePipeline:
         run = ResearchRun(
             creator_id=creator_id,
             status="running",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             config_snapshot={
                 "pipeline": "competitive",
                 "provider": self._provider.model_name,
@@ -122,11 +122,11 @@ class CompetitivePipeline:
             run.record_step("discover_competitors", "completed")
 
             run.status = "completed"
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:2000]
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
             logger.exception("Competitive pipeline failed for creator %s", creator_id)
             raise
         finally:

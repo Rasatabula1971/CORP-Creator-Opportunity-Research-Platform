@@ -165,8 +165,9 @@ async def test_unexpected_construction_error_returns_200_with_error_block(client
     assert body["provider"] is None
     assert body["kind"] is None
     assert body["error"]["code"] == "construction_failed"
-    assert "TypeError" in body["error"]["detail"]
-    assert "env_file" in body["error"]["detail"]
+    # Only the exception type is exposed (hardened in the adversarial-audit
+    # commit 5d239e2); the kwarg name in the message stays in the server log.
+    assert body["error"]["detail"] == "TypeError"
 
 
 async def test_ping_exception_is_reported_not_raised_and_still_closes(client, monkeypatch):

@@ -71,7 +71,9 @@ async def _create_candidate(
     session.add(campaign)
     await session.flush()
 
-    run = ResearchRun(run_type=RunType.NICHE_DISCOVERY.value, campaign_id=campaign.id, status="running")
+    run = ResearchRun(
+        run_type=RunType.NICHE_DISCOVERY.value, campaign_id=campaign.id, status="running"
+    )
     session.add(run)
     await session.flush()
 
@@ -177,7 +179,12 @@ async def _create_dossier_prereqs(session: AsyncSession) -> tuple[Creator, Niche
     session.add(niche)
     await session.flush()
 
-    cluster = ProblemCluster(creator_id=creator.id, label="Suspension setup confusion", frequency=3, evidence_strength=0.7)
+    cluster = ProblemCluster(
+        creator_id=creator.id,
+        label="Suspension setup confusion",
+        frequency=3,
+        evidence_strength=0.7,
+    )
     session.add(cluster)
     await session.flush()
 
@@ -389,7 +396,9 @@ async def test_every_niche_candidate_status_round_trips(
 @pytest.mark.asyncio
 async def test_every_decision_type_round_trips(clean_db: AsyncSession, decision_type: DecisionType):
     session = clean_db
-    creator = Creator(name=f"Creator {decision_type.value}", niche="tech", discovery_source="manual")
+    creator = Creator(
+        name=f"Creator {decision_type.value}", niche="tech", discovery_source="manual"
+    )
     session.add(creator)
     await session.flush()
 

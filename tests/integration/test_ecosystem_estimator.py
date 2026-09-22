@@ -352,7 +352,7 @@ async def test_channel_shared_across_niches_enriched_once(clean_db: AsyncSession
         EcoConfig(min_followers=10_000, max_followers=200_000),
         enricher=enricher,
     )
-    run = await estimator.estimate(campaign.id)
+    await estimator.estimate(campaign.id)
 
     assert enricher.call_count == 1
     assert sorted(enricher.called_with) == sorted([shared, "UCotherotherotherotherot"])

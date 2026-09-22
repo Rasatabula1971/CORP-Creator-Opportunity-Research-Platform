@@ -95,7 +95,9 @@ async def test_extract_observations_clamps_confidence():
     provider = FakeProvider(
         {"observations": [{"text": "X", "confidence": 5.0, "category": "problem"}]}
     )
-    obs = await extract_observations(provider=provider, comment_text="X", author=None, content_title=None)
+    obs = await extract_observations(
+        provider=provider, comment_text="X", author=None, content_title=None
+    )
     assert obs[0].confidence == 1.0
 
 
@@ -103,7 +105,9 @@ async def test_extract_observations_negative_confidence():
     provider = FakeProvider(
         {"observations": [{"text": "Y", "confidence": -0.5, "category": "problem"}]}
     )
-    obs = await extract_observations(provider=provider, comment_text="Y", author=None, content_title=None)
+    obs = await extract_observations(
+        provider=provider, comment_text="Y", author=None, content_title=None
+    )
     assert obs[0].confidence == 0.0
 
 
@@ -124,7 +128,9 @@ async def test_extract_observations_provider_failure_raises():
 async def test_extract_observations_text_truncation():
     long_text = "A" * 5000
     provider = FakeProvider({"observations": [{"text": long_text, "category": "problem"}]})
-    obs = await extract_observations(provider=provider, comment_text=long_text, author=None, content_title=None)
+    obs = await extract_observations(
+        provider=provider, comment_text=long_text, author=None, content_title=None
+    )
     assert len(obs[0].text) == 500
 
 
@@ -136,8 +142,15 @@ async def test_prompt_version_constant():
 async def test_is_inferred_flag_preserved():
     provider = FakeProvider({
         "observations": [
-            {"text": "Inferred insight", "category": "problem", "is_inferred": True, "confidence": 0.6}
+            {
+                "text": "Inferred insight",
+                "category": "problem",
+                "is_inferred": True,
+                "confidence": 0.6,
+            }
         ]
     })
-    obs = await extract_observations(provider=provider, comment_text="x", author=None, content_title=None)
+    obs = await extract_observations(
+        provider=provider, comment_text="x", author=None, content_title=None
+    )
     assert obs[0].is_inferred is True

@@ -97,7 +97,10 @@ async def test_registry_records_failure_without_raising():
 
     await reg.execute(job, work)
     assert job.status == JobStatus.FAILED
-    assert "provider down" in job.error
+    # Only the exception type is stored (hardened in the adversarial-audit
+    # commit 5d239e2 so internal messages never leak to the API); the full
+    # message goes to the log via logger.exception.
+    assert job.error == "RuntimeError"
     assert job.result is None
 
 

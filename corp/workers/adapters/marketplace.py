@@ -222,7 +222,10 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
                 "search": query,
                 "page_size": min(limit, 20),
                 "ordering": "relevance",
-                "fields[course]": "title,headline,url,price,avg_rating,num_reviews,num_subscribers,visible_instructors",
+                "fields[course]": (
+                    "title,headline,url,price,avg_rating,num_reviews,"
+                    "num_subscribers,visible_instructors"
+                ),
             },
         )
         return _parse_udemy_response(data, query)[:limit]

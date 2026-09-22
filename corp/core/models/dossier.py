@@ -68,7 +68,10 @@ class Dossier(TimestampMixin, Base):
     # corp.core.schemas.dossier.DossierResponse's fields.
     content: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[DossierStatus] = mapped_column(
-        Enum(DossierStatus), default=DossierStatus.PENDING_REVIEW, nullable=False
+        Enum(DossierStatus),
+        default=DossierStatus.PENDING_REVIEW,
+        server_default=DossierStatus.PENDING_REVIEW.name,
+        nullable=False,
     )
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -77,7 +80,8 @@ class Dossier(TimestampMixin, Base):
     # replaces this one. Same latest-wins convention as CreatorScore /
     # OpportunityScore / NicheCandidate. Rows are never deleted.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    niche_path: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Root-to-leaf list of {id, canonical_name, depth} (DossierGenerator._niche_path).
+    niche_path: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
 
     evidence: Mapped[list["DossierEvidence"]] = relationship(
         back_populates="dossier", cascade="all, delete-orphan"

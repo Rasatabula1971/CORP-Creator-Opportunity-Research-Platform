@@ -48,14 +48,23 @@ class ResearchQuery(TimestampMixin, Base):
         nullable=False,
     )
 
-    results_seen: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    new_results: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    duplicate_results: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    results_seen: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    new_results: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    duplicate_results: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     # Pointer into bulk storage (§24) for the raw payload; never the payload itself.
     archive_reference: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[ResearchQueryStatus] = mapped_column(
-        Enum(ResearchQueryStatus), default=ResearchQueryStatus.SUCCEEDED, nullable=False
+        Enum(ResearchQueryStatus),
+        default=ResearchQueryStatus.SUCCEEDED,
+        server_default=ResearchQueryStatus.SUCCEEDED.name,
+        nullable=False,
     )
     error: Mapped[str | None] = mapped_column(Text)
 

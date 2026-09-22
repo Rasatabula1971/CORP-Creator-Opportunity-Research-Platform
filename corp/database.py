@@ -43,6 +43,6 @@ class _LazySessionmaker:
 async_session: async_sessionmaker[AsyncSession] = _LazySessionmaker()  # type: ignore[assignment]
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     async with async_session() as session:
         yield session

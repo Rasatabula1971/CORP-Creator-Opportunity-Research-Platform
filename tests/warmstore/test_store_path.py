@@ -1,7 +1,7 @@
 """WarmStore path-safety: never fabricate a missing parent tree."""
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Table, text
+from sqlalchemy import Column, MetaData, String, Table
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from corp.warmstore.store import WarmStore

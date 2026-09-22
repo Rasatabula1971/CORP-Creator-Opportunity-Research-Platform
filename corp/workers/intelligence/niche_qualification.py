@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
+from corp.core.models.campaign_niche import CampaignNicheStatus
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.scoring.niche_qualification import (

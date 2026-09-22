@@ -59,10 +59,16 @@ class Niche(TimestampMixin, Base):
     parent_niche_id: Mapped[str | None] = mapped_column(ForeignKey("niches.id"))
     depth: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     policy_class: Mapped[NichePolicyClass] = mapped_column(
-        Enum(NichePolicyClass), default=NichePolicyClass.STANDARD, nullable=False
+        Enum(NichePolicyClass),
+        default=NichePolicyClass.STANDARD,
+        server_default=NichePolicyClass.STANDARD.name,
+        nullable=False,
     )
     lifecycle_status: Mapped[NicheLifecycleStatus] = mapped_column(
-        Enum(NicheLifecycleStatus), default=NicheLifecycleStatus.CANDIDATE, nullable=False
+        Enum(NicheLifecycleStatus),
+        default=NicheLifecycleStatus.CANDIDATE,
+        server_default=NicheLifecycleStatus.CANDIDATE.name,
+        nullable=False,
     )
     first_discovered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

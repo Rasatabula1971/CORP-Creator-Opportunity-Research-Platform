@@ -32,6 +32,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -93,7 +94,9 @@ class NicheCandidate(TimestampMixin, Base):
     naming_confidence: Mapped[float | None] = mapped_column(Float)
     # ADR-007: a broad domain ("Cars") may seed discovery but is not a niche.
     # Recorded here; acted on by qualification (Slice 12).
-    is_broad_domain: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_broad_domain: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
     # Evidence diversity (§18): count and independence are separate numbers.
     evidence_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -108,7 +111,10 @@ class NicheCandidate(TimestampMixin, Base):
     naming_model_version: Mapped[str | None] = mapped_column(String(100))
 
     status: Mapped[NicheCandidateStatus] = mapped_column(
-        Enum(NicheCandidateStatus), default=NicheCandidateStatus.STAGED, nullable=False
+        Enum(NicheCandidateStatus),
+        default=NicheCandidateStatus.STAGED,
+        server_default=NicheCandidateStatus.STAGED.name,
+        nullable=False,
     )
     niche_id: Mapped[str | None] = mapped_column(ForeignKey("niches.id"))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

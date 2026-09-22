@@ -263,7 +263,11 @@ def _parse_trends_rss(xml_text: str, geo: str) -> list[NormalizedContent]:
         traffic = traffic_el.text if traffic_el is not None else None
 
         pub_date_el = item.find("pubDate")
-        timestamp = _parse_rss_date(pub_date_el.text) if pub_date_el is not None and pub_date_el.text else now
+        timestamp = (
+            _parse_rss_date(pub_date_el.text)
+            if pub_date_el is not None and pub_date_el.text
+            else now
+        )
 
         news_items = []
         for ni in item.findall("ht:news_item", ns):

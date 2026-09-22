@@ -75,8 +75,18 @@ def test_max_segment_chars_forces_split():
 
 def test_segment_timestamps_round_trip():
     snippets = [
-        _snip("Intro material with enough words to exceed the minimum segment character threshold easily", 0.0, 3.0),
-        _snip("Gap content also long enough to stand alone as a separate meaningful segment in the output", 8.0, 4.0),
+        _snip(
+            "Intro material with enough words to exceed the minimum segment character "
+            "threshold easily",
+            0.0,
+            3.0,
+        ),
+        _snip(
+            "Gap content also long enough to stand alone as a separate meaningful segment "
+            "in the output",
+            8.0,
+            4.0,
+        ),
     ]
     segs = _segment_snippets(snippets, pause_gap=2.0)
     assert len(segs) == 2
@@ -110,7 +120,10 @@ def _mock_fetched_transcript(snippets, language_code="en", is_generated=True):
             return iter(self.snippets)
 
         def to_raw_data(self):
-            return [{"text": s.text, "start": s.start, "duration": s.duration} for s in self.snippets]
+            return [
+                {"text": s.text, "start": s.start, "duration": s.duration}
+                for s in self.snippets
+            ]
 
     mock_snippets = [MockSnippet(**s) for s in snippets]
     return MockTranscript(

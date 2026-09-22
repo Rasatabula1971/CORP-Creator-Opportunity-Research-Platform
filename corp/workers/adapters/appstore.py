@@ -215,7 +215,9 @@ def _parse_review_feed(
         title = title_data.get("label", "") if isinstance(title_data, dict) else str(title_data)
 
         content_data = entry.get("content", {})
-        body = content_data.get("label", "") if isinstance(content_data, dict) else str(content_data)
+        body = (
+            content_data.get("label", "") if isinstance(content_data, dict) else str(content_data)
+        )
 
         text = f"{title}\n\n{body}".strip() if body else title
         if not text:
@@ -230,10 +232,17 @@ def _parse_review_feed(
 
         author_data = entry.get("author", {})
         author_name = author_data.get("name", {})
-        author = author_name.get("label") if isinstance(author_name, dict) else str(author_name) if author_name else None
+        if isinstance(author_name, dict):
+            author = author_name.get("label")
+        else:
+            author = str(author_name) if author_name else None
 
         review_id_data = entry.get("id", {})
-        review_id = review_id_data.get("label", "") if isinstance(review_id_data, dict) else str(review_id_data)
+        review_id = (
+            review_id_data.get("label", "")
+            if isinstance(review_id_data, dict)
+            else str(review_id_data)
+        )
         ext_id = f"as_{review_id}" if review_id else stable_id("as_", text)
 
         link_data = entry.get("link", {})

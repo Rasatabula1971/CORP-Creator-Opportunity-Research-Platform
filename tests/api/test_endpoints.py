@@ -191,7 +191,7 @@ async def test_list_creators_filter_status(clean_db: AsyncSession):
 @pytest.mark.asyncio
 async def test_list_creators_filter_min_score(clean_db: AsyncSession):
     session = clean_db
-    creator = await _seed(session)
+    await _seed(session)
     async with _make_client(session) as client:
         resp = await client.get("/creators", params={"min_score": 0.5})
     assert resp.status_code == 200
@@ -362,7 +362,7 @@ async def test_create_decision_invalid_state(clean_db: AsyncSession):
 @pytest.mark.asyncio
 async def test_list_research_runs(clean_db: AsyncSession):
     session = clean_db
-    creator = await _seed(session)
+    await _seed(session)
     async with _make_client(session) as client:
         resp = await client.get("/research-runs")
     assert resp.status_code == 200

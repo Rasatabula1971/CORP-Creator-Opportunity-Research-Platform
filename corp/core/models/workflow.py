@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, func
@@ -155,7 +155,7 @@ class ResearchRun(TimestampMixin, Base):
         # SQLAlchemy's change tracking, so updates after the first flush would
         # silently not persist. Rebuilding the list and reassigning the
         # attribute makes every call a tracked set.
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         steps = [dict(step) for step in (self.steps or [])]
         for step in steps:
             if step["name"] == name:

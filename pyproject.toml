@@ -56,11 +56,34 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+# UP042 (str, Enum -> StrEnum): 27 model/API enums. StrEnum changes str(member)
+# from "Cls.NAME" to "value". No current site stringifies a member without
+# .value/.name (Stage 8 check, ADR-0058), so the rewrite would be safe today;
+# ignored so a future --fix can't flip that silently. Revisit deliberately.
+ignore = ["UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic-generated files: long op.create_table lines are the generator's style.
+"migrations/versions/*" = ["E501"]
+# env.py must set sqlalchemy.url from settings before importing the models.
+"migrations/env.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
+
+# Third-party packages that ship no type information; nothing to fix on our side.
+[[tool.mypy.overrides]]
+module = [
+    "umap.*",
+    "hdbscan.*",
+    "fair.*",
+    "googleapiclient.*",
+    "pytrends.*",
+    "yt_dlp.*",
+]
+ignore_missing_imports = true
 
 [tool.importlinter]
 root_packages = ["corp"]

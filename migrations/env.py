@@ -1,9 +1,8 @@
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 
@@ -24,8 +23,8 @@ if not db_url:
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 
-from corp.core.models.base import Base
 import corp.core.models  # noqa: F401 — registers all models with Base.metadata
+from corp.core.models.base import Base
 
 target_metadata = Base.metadata
 
@@ -35,6 +34,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        compare_server_default=True,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -49,7 +49,12 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            # Models declare server_default too (ADR-0058); let `alembic check` see drift.
+            compare_server_default=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

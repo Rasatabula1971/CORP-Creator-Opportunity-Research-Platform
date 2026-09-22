@@ -1,6 +1,6 @@
 # CORP1 Remediation Plan — Spec Alignment (September 2026)
 
-**Status:** Accepted 2026-09-21 (Stage 5 decomposition; each R-task runs Stages 6–10)
+**Status:** COMPLETE 2026-09-22 — all eleven R-tasks accepted and committed (ADR-0048 … ADR-0058). Follow-ups: R12 and the items under "Deliberately out of scope".
 **Source:** Whole-app audit against `CORP1_Product_Spec_Build_Plan.pdf` (three
 independent review passes: backend pipeline, API/frontend, schema) plus a
 project-wide static-gate run. Full findings list is in the session that
@@ -43,7 +43,7 @@ R1 and is isolated to one file.
 | --- | --- | --- | --- | --- |
 | **R9** Gate A returns 422 on invalid decision / foreign score id | #5 | `corp/api/routes.py`, test | Route-level `ValueError` → 422 (same pattern the persisted-dossier and handoff routes already use); no 500 path | Done — ADR-0055 |
 | **R10** Frontend fixes | #13 #14 #15 #17 #18 #19 #21 | `hooks.ts`, `types.ts`, `CreatorDetailPage.tsx`, `CampaignDetailPage.tsx`, `RunsPage.tsx`, `SettingsPanel.tsx`, `routes.py` | Pagination + `X-Total-Count`; nullable `started_at`; hook errors surfaced; handoff link on Approve; Gate A panel only in `human_review`; `Decision` type fixed; `limit ge=1`; Gate A request schema restricted to approve/reject/watch (R9 follow-up); printable dossier per niche — `GET /creators/{id}/dossier?niche_id=` defaulting to the creator's only niche, with a per-niche link in the UI when there are several (R7 follow-up, user decision 2026-09-21) | Done — ADR-0057 |
-| **R11** Hygiene | #16 #20 static gates | models (`server_default`), `dossier.py` type, `pyproject.toml` mypy overrides, two stale test assertions | `ruff check` and `mypy --strict` clean project-wide; no behaviour change | |
+| **R11** Hygiene | #16 #20 static gates | models (`server_default`), `dossier.py` type, `pyproject.toml` mypy overrides, two stale test assertions | `ruff check` and `mypy --strict` clean project-wide; no behaviour change | Done — ADR-0058 |
 
 ## Planned after this run (needs its own Stage 3/4 pass first)
 
@@ -57,5 +57,11 @@ R1 and is isolated to one file.
   signal) — undesigned; needs Stage 3/4 first. Likely designed together
   with R12.
 - **T11 Pinterest / T12 Brave Search** — parked pending API access.
-- **`str, Enum` → `StrEnum` (27 UP042 hits)** — style only; touch only if R11
-  can do it without changing stored enum values.
+- **`str, Enum` → `StrEnum` (27 UP042 hits)** — R11 chose to ignore the
+  rule in config rather than rewrite: `StrEnum` changes `str(member)`
+  output, which reaches logs/f-strings; stored labels would be unchanged.
+- **Five pre-existing test failures** predating this plan
+  (`tests/workers/test_intelligence_worker.py` ×2,
+  `tests/integration/test_collector.py`, `test_dossier_pipeline.py`,
+  `test_campaign_pipeline_e2e.py`) — still deselected; need their own
+  triage task.

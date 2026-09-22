@@ -18,7 +18,12 @@ from corp.workers.adapters.health import SourceHealthTracker
 
 
 class FakeAdapter(SourceAdapter):
-    def __init__(self, name: str, items: list[NormalizedContent] | None = None, error: Exception | None = None):
+    def __init__(
+        self,
+        name: str,
+        items: list[NormalizedContent] | None = None,
+        error: Exception | None = None,
+    ):
         self._name = name
         self._items = items or []
         self._error = error
@@ -149,7 +154,7 @@ async def test_discover_fans_out(
         platforms=("hackernews", "wikipedia"),
         health_tracker=tracker,
     )
-    result = await disco.discover("camp-1", "python")
+    await disco.discover("camp-1", "python")
 
     assert mock_start.called
     assert mock_finish.called

@@ -165,7 +165,7 @@ class EcosystemEstimator:
             niches = await verified_niches(self._session, campaign_id)
 
             # Pass 1 — search every niche (yt-dlp; no reliable subscriber counts).
-            niche_channels: list[tuple[Niche, dict[str, dict]]] = [
+            niche_channels: list[tuple[Niche, dict[str, dict[str, Any]]]] = [
                 (niche, await self._search_niche_channels(niche)) for _, niche in niches
             ]
 
@@ -211,7 +211,7 @@ class EcosystemEstimator:
             )
             raise
 
-    async def _search_niche_channels(self, niche: Niche) -> dict[str, dict]:
+    async def _search_niche_channels(self, niche: Niche) -> dict[str, dict[str, Any]]:
         """Search one niche and return every unique channel, uncorrected
         subscriber counts (yt-dlp only). Enrichment happens once, campaign-wide,
         in :meth:`_enrich_all` — not here — so a channel found in several
@@ -242,7 +242,7 @@ class EcosystemEstimator:
         return seen_channels
 
     async def _enrich_all(
-        self, niche_channels: list[tuple[Niche, dict[str, dict]]],
+        self, niche_channels: list[tuple[Niche, dict[str, dict[str, Any]]]],
     ) -> None:
         """One deduplicated, batched subscriber-count lookup for the whole
         campaign, applied back into every niche's channel dict in place.
@@ -279,7 +279,7 @@ class EcosystemEstimator:
             "Enriched %d/%d channels with subscriber counts", len(counts), len(ids),
         )
 
-    def _summarize_niche(self, niche: Niche, channels: dict[str, dict]) -> NicheEcoResult:
+    def _summarize_niche(self, niche: Niche, channels: dict[str, dict[str, Any]]) -> NicheEcoResult:
         total = len(channels)
         in_band = 0
         channels_out: list[dict[str, Any]] = []

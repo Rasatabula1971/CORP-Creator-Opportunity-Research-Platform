@@ -1,7 +1,7 @@
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from corp.core.models.base import Base, TimestampMixin, generate_uuid
@@ -48,13 +48,20 @@ class CampaignNiche(TimestampMixin, Base):
     confidence: Mapped[float | None] = mapped_column(Float)
     research_completeness: Mapped[float | None] = mapped_column(Float)
 
-    creator_count_observed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    creator_count_observed: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     target_band_creator_count: Mapped[int | None] = mapped_column(Integer)
 
     status: Mapped[CampaignNicheStatus] = mapped_column(
-        Enum(CampaignNicheStatus), default=CampaignNicheStatus.DISCOVERED, nullable=False
+        Enum(CampaignNicheStatus),
+        default=CampaignNicheStatus.DISCOVERED,
+        server_default=CampaignNicheStatus.DISCOVERED.name,
+        nullable=False,
     )
-    selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    selected: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     rationale: Mapped[str | None] = mapped_column(Text)
 
     campaign: Mapped["Campaign"] = relationship(back_populates="campaign_niches")
