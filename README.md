@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 # Install PostgreSQL 16 + the pgvector extension, create the `corp` role/db
 cp .env.example .env          # set DATABASE_URL(_SYNC), an LLM key, warm-store path
 alembic upgrade head
-uvicorn corp.api.app:app --reload   # or on Windows: start_corp.bat
+uvicorn corp.api.app:app --reload --port 8010   # or on Windows: start_corp.bat
 cd web && npm install && npm run dev
 ```
 

@@ -154,7 +154,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     api_host: str = "0.0.0.0"
-    api_port: int = Field(default=8000)
+    # 8010, matching start_corp.bat and the dashboard's default API base URL
+    # (web/src/api/client.ts). Note that nothing in the app reads this: the
+    # server is launched by the uvicorn CLI, so uvicorn's own --port decides
+    # what it binds. start_corp.bat reads API_PORT out of .env and passes it
+    # through; a manual `uvicorn ...` run must pass --port itself or it will
+    # silently bind uvicorn's default 8000 and the dashboard will not find it.
+    api_port: int = Field(default=8010)
     # When set, every endpoint except /health requires header X-Api-Key to match.
     api_key: str = ""
     # Comma-separated origins for CORS. Defaults to the local Vite dev server;

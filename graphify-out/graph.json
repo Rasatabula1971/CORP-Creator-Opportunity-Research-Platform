@@ -43181,7 +43181,7 @@
       "node_kind": "heading",
       "norm_label": "common commands",
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L173"
+      "source_location": "L184"
     },
     {
       "id": "docs_running_local_flash_drive_notes",
@@ -43193,7 +43193,7 @@
       "node_kind": "heading",
       "norm_label": "flash-drive notes",
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L156"
+      "source_location": "L167"
     },
     {
       "id": "docs_running_local_how_the_hot_warm_split_actually_works",
@@ -43205,7 +43205,7 @@
       "node_kind": "heading",
       "norm_label": "how the hot/warm split actually works",
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L127"
+      "source_location": "L138"
     },
     {
       "id": "docs_running_local_keeping_postgres_bounded",
@@ -43217,7 +43217,7 @@
       "node_kind": "heading",
       "norm_label": "keeping postgres bounded",
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L138"
+      "source_location": "L149"
     },
     {
       "id": "docs_running_local_prerequisites",
@@ -43253,7 +43253,7 @@
       "node_kind": "heading",
       "norm_label": "warm store utilities",
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L165"
+      "source_location": "L176"
     },
     {
       "id": "corp_database",
@@ -165644,7 +165644,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L138",
+      "source_location": "L149",
       "weight": 1.0
     },
     {
@@ -165666,18 +165666,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L127",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_running_local_running_corp_locally_laptop_flash_drive",
-      "target": "docs_running_local_flash_drive_notes",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L156",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -165693,13 +165682,24 @@
     },
     {
       "source": "docs_running_local_running_corp_locally_laptop_flash_drive",
+      "target": "docs_running_local_flash_drive_notes",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/RUNNING_LOCAL.md",
+      "source_location": "L167",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_running_local_running_corp_locally_laptop_flash_drive",
       "target": "docs_running_local_warm_store_utilities",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L165",
+      "source_location": "L176",
       "weight": 1.0
     },
     {
@@ -165710,7 +165710,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/RUNNING_LOCAL.md",
-      "source_location": "L173",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -226388,5 +226388,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "5bc1a83e45a5a1ac73c2a81bc6f11550a1d97936"
+  "built_at_commit": "1c44f0db89f5531a30996ea5535569991186196f"
 }

@@ -90,7 +90,7 @@ if exist fair.env (
   echo [corp] No fair.env found. FAIR will run with just GEMINI_API_KEY / GROQ_API_KEY from .env.
 )
 
-REM -- Pick the API port: API_PORT from .env, else 8000 --------------
+REM -- Pick the API port: API_PORT from .env, else 8010 --------------
 set "API_PORT=8010"
 if exist .env (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (

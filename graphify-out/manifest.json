@@ -30,9 +30,9 @@
     "semantic_hash": ""
   },
   "corp/config.py": {
-    "mtime": 1790131341.8794796,
-    "seen": 1790133377.0448573,
-    "ast_hash": "4466c1ec7f04cc6fb8e7a53e0581d1f4",
+    "mtime": 1790137018.4394844,
+    "seen": 1790137374.138089,
+    "ast_hash": "9f8e114d649c3a225969196de09fe07d",
     "semantic_hash": ""
   },
   "corp/core/__init__.py": {
@@ -1902,9 +1902,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1790132975.1765807,
-    "seen": 1790133377.0451875,
-    "ast_hash": "062e5f14dab8ee68e344db9e1742fbca",
+    "mtime": 1790137030.8949318,
+    "seen": 1790137374.1384282,
+    "ast_hash": "c651d918728c7aa60a0471df1383a473",
     "semantic_hash": ""
   },
   "docs/DECISIONS/0001-slice-1-campaign-persistence.md": {
@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "docs/RUNNING_LOCAL.md": {
-    "mtime": 1790132975.178719,
-    "seen": 1790133377.0452368,
-    "ast_hash": "121b16af9fe23bb8a151e0954c7f6815",
+    "mtime": 1790137030.8951,
+    "seen": 1790137374.138484,
+    "ast_hash": "202e278dbc7f753a91b2825b8caa5ab9",
     "semantic_hash": ""
   },
   "docs/design/R12_watch_rescan_recollect.md": {

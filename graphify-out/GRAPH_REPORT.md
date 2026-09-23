@@ -1,7 +1,7 @@
 # Graph Report - CORP-Creator-Opportunity-Research-Platform  (2026-09-23)
 
 ## Corpus Check
-- 382 files · ~227,323 words
+- 382 files · ~227,507 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 13 file(s) not represented in the graph (top: (none) 5, .example 2, .ini 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5bc1a83e`
+- Built from commit: `1c44f0db`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
