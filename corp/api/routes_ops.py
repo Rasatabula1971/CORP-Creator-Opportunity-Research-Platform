@@ -1,8 +1,8 @@
 """Write endpoints, background jobs, and the reads the review console needs."""
 
 import logging
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,6 +16,7 @@ from corp.api.jobs import (
     JobResponse,
     registry,
     run_campaign_pipeline,
+    run_discovery_scan,
     run_pipeline,
     run_research,
 )
@@ -30,6 +31,7 @@ from corp.core.models.intelligence import (
     ProblemObservation,
 )
 from corp.core.models.intent import CommercialSignal
+from corp.core.models.micro_niche import MicroNicheStatus, MicroNicheSuggestion
 from corp.core.models.scoring import OpportunityScore
 from corp.core.models.workflow import DecisionType, Gate, HumanDecision, ResearchRun
 from corp.core.schemas.campaign import CampaignCreate, CampaignResponse
@@ -40,6 +42,7 @@ from corp.core.schemas.creator import (
     PlatformAccountResponse,
 )
 from corp.core.schemas.intelligence import ProblemClusterResponse, ProblemObservationResponse
+from corp.core.schemas.micro_niche import MicroNicheResponse
 from corp.core.schemas.scoring import OpportunityScoreResponse
 from corp.core.schemas.workflow import DecisionResponse, ResearchRunResponse
 from corp.core.state.gates import mirror_creator_status
@@ -48,6 +51,9 @@ from corp.workers.handoff.corp2_export import build_handoff_package
 from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.factory import ProviderConfigError, build_provider
 from corp.workers.providers.fair import FairProvider
+
+if TYPE_CHECKING:
+    from corp.workers.intelligence.micro_niches import MicroNicheSeeder
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +377,359 @@ async def start_campaign_pipeline(
     work = lambda: run_campaign_pipeline(stage, campaign_id, source=source, query=query)  # noqa: E731
     background.add_task(registry.execute, job, work)
     return job
+
+
+# ── Autonomous discovery (CORP1 Step 1, Level 0) ─────────────────────
+
+
+class DiscoveryRunRequest(BaseModel):
+    """Both entry points the spec freezes, on one endpoint.
+
+    No body (or an empty one) is the autonomous pass: the trend scan picks
+    the topics. Supplying ``topics`` is the user-suggested alternate entry
+    point — the same drill engine, the same evidence and lineage, just a
+    seed you chose instead of one Google Trends ranked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    topics: list[str] | None = Field(
+        default=None,
+        description="Seed topics to drill instead of running the trend scan.",
+        max_length=25,
+    )
+    topics_per_pass: int | None = Field(
+        default=None,
+        ge=1,
+        le=25,
+        description="Override how many scanned topics this pass drills.",
+    )
+    campaign_id: str | None = Field(
+        default=None,
+        description="Attach to this campaign instead of the standing autonomous one.",
+    )
+
+
+@router.get("/discovery/status")
+async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Is the crawler actually crawling, and what would it do next?
+
+    The scheduler's own startup line is a logger.info, which uvicorn's
+    default log config does not print, so "is it on?" is otherwise
+    unanswerable without reading .env. CORP is a pull-based dashboard by
+    design (Stage 4: "no push-notification/attention engine"), so the
+    honest place for this is an endpoint you can check.
+    """
+    from corp.workers.intelligence.trend_scan import TrendScanConfig, TrendScanner
+    from corp.workers.scheduler.discovery_scan import (
+        AUTONOMOUS_CAMPAIGN_NAME,
+        momentum_readiness,
+    )
+
+    # trend_provider=None: this is a cheap status read, so it must not make
+    # a live Trends call. Ordering here is rotation-only and indicative.
+    # Construction is inside the try as well: an unreadable or malformed
+    # catalogue raises in TrendScanner.__init__, and a status endpoint that
+    # 500s exactly when the thing it reports on is broken is useless.
+    cfg = None
+    try:
+        scanner = TrendScanner(
+            session,
+            trend_provider=None,
+            config=TrendScanConfig.from_rules(settings.broad_topics_path),
+        )
+        cfg = scanner.config
+        due, scan_stats = await scanner.scan(
+            settings.discovery_topics_per_pass or cfg.topics_per_pass
+        )
+        next_topics = [s.topic for s in due]
+        scan = scan_stats.as_dict()
+        error = None
+    except Exception:  # noqa: BLE001 — a status read never 500s
+        # Fixed text only, never the exception: an arbitrary error's message
+        # can carry internal detail (paths, connection strings) that must not
+        # reach an API caller. The full traceback is in the server log.
+        logger.exception("Discovery status: preview scan failed")
+        next_topics, scan, error = [], {}, "preview scan failed; details in the server log"
+
+    provider_ready = True
+    provider_detail: str | None = None
+    try:
+        probe = build_provider()
+    except ProviderConfigError:
+        # Not str(exc) either: ProviderConfigError can wrap an arbitrary
+        # underlying exception (LLM_PROVIDER=fair). /providers/health is the
+        # dedicated diagnostic endpoint for the full reason.
+        provider_ready = False
+        logger.warning("Discovery status: no usable LLM provider", exc_info=True)
+        provider_detail = (
+            "no usable LLM provider configured (check LLM_PROVIDER, GEMINI_API_KEY, "
+            "GROQ_API_KEY); GET /providers/health gives the reason"
+        )
+    except Exception:  # noqa: BLE001
+        provider_ready = False
+        logger.exception("Discovery status: building the LLM provider failed")
+        provider_detail = "building the LLM provider failed; details in the server log"
+    else:
+        close = getattr(probe, "close", None)
+        if callable(close):
+            await close()
+
+    momentum_source, momentum_available, momentum_detail = momentum_readiness(settings)
+
+    result = await session.execute(
+        select(Campaign.id).where(
+            func.lower(Campaign.name) == AUTONOMOUS_CAMPAIGN_NAME.lower()
+        ).limit(1)
+    )
+    return {
+        "enabled": settings.discovery_enabled,
+        "interval_seconds": settings.discovery_interval_seconds,
+        "topics_per_pass": settings.discovery_topics_per_pass
+        or (cfg.topics_per_pass if cfg else None),
+        "catalogue_size": len(cfg.topics) if cfg else None,
+        "geo": cfg.geo if cfg else None,
+        # A pass needs an LLM to drill with; without one it fails immediately.
+        "can_run": provider_ready,
+        "provider_detail": provider_detail,
+        # Whether topics will be ranked by live momentum or just rotated
+        # through. Checks prerequisites only; no call is made to the source.
+        "momentum_source": momentum_source,
+        "momentum_available": momentum_available,
+        "momentum_detail": momentum_detail,
+        "autonomous_campaign_id": result.scalar_one_or_none(),
+        # Rotation order: previewing momentum would spend quota on a status read.
+        "next_topics": next_topics,
+        "scan": scan,
+        "error": error,
+        "active_job": (job.id if (job := registry.active_of_kind("discovery")) else None),
+    }
+
+
+@router.post("/discovery/run", response_model=JobResponse, status_code=202)
+async def start_discovery_scan(
+    background: BackgroundTasks,
+    body: DiscoveryRunRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> JobResponse:
+    """Run one discovery pass now, whether or not the scheduler is enabled."""
+    topics = [t.strip() for t in (body.topics or [])] if body else []
+    topics = [t for t in topics if t]
+    if body and body.topics is not None and not topics:
+        raise HTTPException(status_code=422, detail="topics must not be blank")
+
+    campaign_id = body.campaign_id if body else None
+    if campaign_id is not None:
+        if await session.get(Campaign, campaign_id) is None:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if (active := registry.active_for_campaign(campaign_id)) is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A job is already running for this campaign: {active.id}",
+            )
+
+    per_pass = body.topics_per_pass if body else None
+    job = registry.create("discovery", campaign_id=campaign_id)
+    work = lambda: run_discovery_scan(  # noqa: E731
+        topics=topics or None, topics_per_pass=per_pass, campaign_id=campaign_id
+    )
+    background.add_task(registry.execute, job, work)
+    return job
+
+
+# ── Micro-niches: creator-first discovery, approval first ─────────────
+
+
+class MicroNicheSuggestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    creator_id: str | None = Field(
+        default=None, description="Only this creator's clusters; default is every creator."
+    )
+
+
+class MicroNicheApproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topic: str | None = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "What to drill, if not the suggestion's own label. Cluster labels are "
+            "problem-shaped; rewording one into a searchable niche is often better."
+        ),
+    )
+    note: str | None = Field(default=None, max_length=2000)
+    decided_by: str | None = Field(default=None, max_length=255)
+    campaign_id: str | None = Field(
+        default=None,
+        description="Attach the drill to this campaign instead of the standing autonomous one.",
+    )
+
+
+class MicroNicheRejectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=2000)
+    decided_by: str | None = Field(default=None, max_length=255)
+
+
+class MicroNicheDecisionResponse(BaseModel):
+    suggestion: MicroNicheResponse
+    job: JobResponse | None = None
+
+
+def _micro_niche_seeder(session: AsyncSession) -> "MicroNicheSeeder":
+    from corp.workers.intelligence.micro_niches import MicroNicheSeeder
+
+    return MicroNicheSeeder(
+        session,
+        min_frequency=settings.micro_niche_min_frequency,
+        min_followers=settings.micro_niche_min_followers,
+        max_followers=settings.micro_niche_max_followers,
+    )
+
+
+@router.get("/micro-niches", response_model=list[MicroNicheResponse])
+async def list_micro_niches(
+    response: Response,
+    status: MicroNicheStatus | None = Query(
+        default=MicroNicheStatus.PENDING, description="Omit the value to list every status."
+    ),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[MicroNicheResponse]:
+    """The approval queue, strongest evidence first: problems seen across
+    the most creators' audiences, then the most often."""
+    base = select(MicroNicheSuggestion)
+    if status is not None:
+        base = base.where(MicroNicheSuggestion.status == status)
+    total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar()
+    rows = (
+        await session.execute(
+            base.order_by(
+                MicroNicheSuggestion.source_creator_count.desc(),
+                MicroNicheSuggestion.total_frequency.desc(),
+                MicroNicheSuggestion.created_at.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+    ).scalars().all()
+    response.headers["X-Total-Count"] = str(total or 0)
+    return [MicroNicheResponse.model_validate(r) for r in rows]
+
+
+@router.post("/micro-niches/suggest")
+async def suggest_micro_niches(
+    body: MicroNicheSuggestRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Refresh the queue from researched creators' audience clusters.
+
+    Database reads only — no LLM, no API quota — so it runs inline. It also
+    runs automatically after each creator research job.
+    """
+    creator_id = body.creator_id if body else None
+    if creator_id is not None and await session.get(Creator, creator_id) is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+    stats = await _micro_niche_seeder(session).suggest(creator_id=creator_id)
+    await session.commit()
+    return stats.as_dict()
+
+
+@router.post(
+    "/micro-niches/{suggestion_id}/approve",
+    response_model=MicroNicheDecisionResponse,
+    status_code=202,
+)
+async def approve_micro_niche(
+    suggestion_id: str,
+    background: BackgroundTasks,
+    body: MicroNicheApproveRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> MicroNicheDecisionResponse:
+    """Approve a suggestion and start drilling it — the only point where a
+    micro-niche costs anything."""
+    from corp.workers.intelligence.niche_discovery import DiscoveryConfig, matched_exclusion
+
+    body = body or MicroNicheApproveRequest()
+    row = await session.get(MicroNicheSuggestion, suggestion_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Micro-niche suggestion not found")
+    if row.status != MicroNicheStatus.PENDING:
+        raise HTTPException(
+            status_code=409, detail=f"Suggestion is already {row.status.value}"
+        )
+
+    topic = " ".join((body.topic if body.topic is not None else row.label).split())
+    if not topic:
+        raise HTTPException(status_code=422, detail="topic must not be blank")
+    # A reworded topic gets the same deterministic Stage 3 check the
+    # original label passed: excluded niches are never drilled.
+    rules = DiscoveryConfig.from_rules("rules/niche_discovery_prompt.yaml")
+    if (category := matched_exclusion(topic, rules.exclusions)) is not None:
+        raise HTTPException(
+            status_code=422, detail=f"topic matches the {category!r} exclusion rule"
+        )
+
+    campaign_id = body.campaign_id
+    if campaign_id is not None:
+        if await session.get(Campaign, campaign_id) is None:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if (active := registry.active_for_campaign(campaign_id)) is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A job is already running for this campaign: {active.id}",
+            )
+
+    # Fail before recording the decision: approving with no LLM configured
+    # would mark the suggestion approved behind a job that can never run,
+    # and an approved suggestion cannot be approved again.
+    probe = build_provider()  # ProviderConfigError → 503 via the error handler
+    close = getattr(probe, "close", None)
+    if callable(close):
+        await close()
+
+    job = registry.create("discovery", campaign_id=campaign_id)
+    row.status = MicroNicheStatus.APPROVED
+    row.decided_at = datetime.now(UTC)
+    row.decided_by = body.decided_by
+    row.decision_note = body.note
+    row.approved_topic = topic
+    row.discovery_job_id = job.id
+    await session.commit()
+    await session.refresh(row)
+
+    work = lambda: run_discovery_scan(topics=[topic], campaign_id=campaign_id)  # noqa: E731
+    background.add_task(registry.execute, job, work)
+    return MicroNicheDecisionResponse(suggestion=MicroNicheResponse.model_validate(row), job=job)
+
+
+@router.post("/micro-niches/{suggestion_id}/reject", response_model=MicroNicheDecisionResponse)
+async def reject_micro_niche(
+    suggestion_id: str,
+    body: MicroNicheRejectRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> MicroNicheDecisionResponse:
+    """Reject a suggestion. It stays rejected: later suggestion runs skip
+    the same label rather than re-queueing it."""
+    body = body or MicroNicheRejectRequest()
+    row = await session.get(MicroNicheSuggestion, suggestion_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Micro-niche suggestion not found")
+    if row.status != MicroNicheStatus.PENDING:
+        raise HTTPException(
+            status_code=409, detail=f"Suggestion is already {row.status.value}"
+        )
+    row.status = MicroNicheStatus.REJECTED
+    row.decided_at = datetime.now(UTC)
+    row.decided_by = body.decided_by
+    row.decision_note = body.note
+    await session.commit()
+    await session.refresh(row)
+    return MicroNicheDecisionResponse(suggestion=MicroNicheResponse.model_validate(row))
 
 
 # ── Reads the console needs ──────────────────────────────────────────

@@ -14,6 +14,10 @@ import type {
   DossierDecisionResult,
   DossierJson,
   Job,
+  MicroNiche,
+  MicroNicheDecision,
+  MicroNicheStatus,
+  MicroNicheSuggestStats,
   PersistedDossier,
   ProblemObservation,
   ResearchRun,
@@ -296,5 +300,44 @@ export function useWatchingDossiers() {
   return useQuery({
     queryKey: ["dossiers", "watching"],
     queryFn: () => api.get<WatchingDossier[]>(`/dossiers/watching?limit=${LIST_LIMIT}`),
+  });
+}
+
+// ── Micro-niches (creator-first discovery, approval first) ──────────
+
+export function useMicroNiches(status: MicroNicheStatus) {
+  return useQuery({
+    queryKey: ["micro-niches", status],
+    queryFn: () =>
+      api.getWithCount<MicroNiche>(`/micro-niches?status=${status}&limit=${LIST_LIMIT}`),
+  });
+}
+
+export function useSuggestMicroNiches() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<MicroNicheSuggestStats>("/micro-niches/suggest", {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["micro-niches"] }),
+  });
+}
+
+export function useApproveMicroNiche() {
+  const qc = useQueryClient();
+  return useMutation({
+    // topic is only sent when the reviewer reworded the label.
+    mutationFn: ({ id, topic }: { id: string; topic?: string }) =>
+      api.post<MicroNicheDecision>(`/micro-niches/${id}/approve`, topic ? { topic } : {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["micro-niches"] });
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
+
+export function useRejectMicroNiche() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<MicroNicheDecision>(`/micro-niches/${id}/reject`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["micro-niches"] }),
   });
 }

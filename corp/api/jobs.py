@@ -122,6 +122,19 @@ class JobRegistry:
                 return job
         return None
 
+    def active_of_kind(self, kind: str) -> JobResponse | None:
+        """The in-flight job of a given kind, if any. Campaign-less jobs
+        (an autonomous discovery pass attaches to no campaign until it
+        picks one) are invisible to active_for_campaign, so this is how
+        the status endpoint reports one as running."""
+        for job in self._jobs.values():
+            if job.kind == kind and job.status in (
+                JobStatus.QUEUED,
+                JobStatus.RUNNING,
+            ):
+                return job
+        return None
+
     async def execute(
         self, job: JobResponse, work: Callable[[], Awaitable[dict[str, Any]]]
     ) -> None:
@@ -191,6 +204,28 @@ def _embedder_factory() -> "Callable[[], SentenceTransformerEmbedder]":
     return _singleton
 
 
+async def _refresh_micro_niches(creator_id: str | None = None) -> dict[str, int] | None:
+    """Queue micro-niche suggestions from freshly researched audience
+    clusters. Best-effort: database reads only, and a failure here must
+    never fail the research job that just succeeded."""
+    from corp.database import async_session
+    from corp.workers.intelligence.micro_niches import MicroNicheSeeder
+
+    try:
+        async with async_session() as session:
+            stats = await MicroNicheSeeder(
+                session,
+                min_frequency=settings.micro_niche_min_frequency,
+                min_followers=settings.micro_niche_min_followers,
+                max_followers=settings.micro_niche_max_followers,
+            ).suggest(creator_id=creator_id)
+            await session.commit()
+        return stats.as_dict()
+    except Exception:
+        logger.exception("Refreshing micro-niche suggestions failed (research is unaffected)")
+        return None
+
+
 async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str, Any]:
     from corp.database import async_session
     from corp.workers.orchestrator import ResearchOrchestrator
@@ -202,7 +237,7 @@ async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str,
             report = await ResearchOrchestrator(session, provider, _embedder_factory()).run(
                 creator_id, skip_collect=skip_collect
             )
-        return {
+        result: dict[str, Any] = {
             "final_status": report.final_status,
             "runs": [
                 {
@@ -215,6 +250,8 @@ async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str,
         }
     finally:
         await _close(provider)
+    result["micro_niche_suggestions"] = await _refresh_micro_niches(creator_id)
+    return result
 
 
 async def run_pipeline(
@@ -302,6 +339,62 @@ async def run_pipeline(
 
 
 # ── Campaign pipeline work functions ──────────────────────────────
+
+
+async def run_discovery_scan(
+    topics: list[str] | None = None,
+    topics_per_pass: int | None = None,
+    campaign_id: str | None = None,
+) -> dict[str, Any]:
+    """One autonomous discovery pass (CORP1 Step 1, Level 0 onwards).
+
+    With no arguments this is the crawler entry point: the trend scan
+    picks the topics. With ``topics`` it is the spec's user-suggested
+    alternate entry point, taking the same path through the drill engine
+    so a hand-picked niche yields the same evidence and lineage.
+    """
+    from corp.database import async_session
+    from corp.workers.intelligence.trend_scan import TrendScanConfig
+    from corp.workers.providers.capabilities import TrendProvider
+    from corp.workers.providers.factory import build_provider
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        run_discovery_pass,
+    )
+
+    provider = build_provider()
+    # The momentum signal is optional: a missing or broken source downgrades
+    # ranking to rotation rather than failing the pass. User-supplied topics
+    # skip the scan entirely, so they need no momentum source at all.
+    trend_provider: TrendProvider | None = None
+    if not topics:
+        try:
+            region = TrendScanConfig.from_rules(settings.broad_topics_path).geo
+            trend_provider = build_momentum_provider(settings, region)
+        except Exception as exc:  # noqa: BLE001 — ranking only
+            logger.info("Discovery scan: no momentum source (%s); ranking by rotation", exc)
+
+    try:
+        async with async_session() as session:
+            try:
+                stats = await run_discovery_pass(
+                    session,
+                    provider,
+                    trend_provider=trend_provider,
+                    topics_per_pass=topics_per_pass,
+                    campaign_id=campaign_id,
+                    topics=topics,
+                    broad_topics_path=settings.broad_topics_path,
+                )
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
+    finally:
+        await _close(provider)
+        if trend_provider is not None:
+            await _close(trend_provider)
+    return stats.as_dict()
 
 
 async def run_campaign_pipeline(
@@ -487,6 +580,11 @@ async def run_campaign_pipeline(
                     raise
         finally:
             await _close(provider)
-        return {"run_id": run.id, "status": run.status, "stats": run.stats}
+        return {
+            "run_id": run.id,
+            "status": run.status,
+            "stats": run.stats,
+            "micro_niche_suggestions": await _refresh_micro_niches(),
+        }
 
     raise ValueError(f"Unknown campaign pipeline {kind!r}; known: {', '.join(CAMPAIGN_PIPELINES)}")

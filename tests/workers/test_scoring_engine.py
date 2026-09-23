@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 from corp.core.models.competitive import CompetitorStrength
 from corp.core.models.intent import SignalLevel
 from corp.core.scoring.engine import (
@@ -354,7 +356,30 @@ async def test_new_dimensions_compute_score_with_existing_components():
         "commercial_intent_strength": 0.9,
     }
     score = compute_score(components, weights)
-    assert 0.0 <= score <= 1.0
+    present = sum(weights[k] for k in components)
+    expected = sum(components[k] * weights[k] for k in components) / present
+    # Pinned exactly: a bare 0.0 <= score <= 1.0 passed just as happily while
+    # compute_score divided by all fourteen weights and capped this at 0.2774.
+    assert score == pytest.approx(expected)
+    assert score == pytest.approx(0.81111111)
+
+
+async def test_partial_components_can_reach_full_marks():
+    """Perfect scores on a subset must aggregate to 1.0, not to the subset's
+    share of the weights table."""
+    from corp.core.scoring.engine import load_scoring_rules
+
+    weights = load_scoring_rules("rules/scoring.yaml")["weights"]
+    perfect = dict.fromkeys(
+        ("audience_problem_frequency", "recency_trend", "commercial_intent_strength"), 1.0
+    )
+    assert compute_score(perfect, weights) == pytest.approx(1.0)
+
+
+async def test_components_with_no_matching_weight_are_ignored_entirely():
+    """An unweighted component must not dilute the mean from the denominator."""
+    assert compute_score({"a": 1.0, "unknown": 0.0}, {"a": 0.5}) == pytest.approx(1.0)
+    assert compute_score({"unknown": 1.0}, {"a": 0.5}) == 0.0
 
 
 async def test_new_dimensions_compute_score_with_all_fourteen():

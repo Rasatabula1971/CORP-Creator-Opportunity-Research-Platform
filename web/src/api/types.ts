@@ -402,3 +402,50 @@ export interface PersistedDossier {
 }
 
 
+
+// Creator-first discovery: an audience problem cluster proposed as a niche
+// seed, held for approval before anything is drilled.
+export type MicroNicheStatus = "pending" | "approved" | "rejected";
+
+export interface MicroNicheSource {
+  cluster_id: string;
+  creator_id: string;
+  label: string;
+  frequency: number;
+}
+
+export interface MicroNiche {
+  id: string;
+  label: string;
+  status: MicroNicheStatus;
+  problem_cluster_id: string | null;
+  creator_id: string | null;
+  creator_niche: string | null;
+  follower_count: number | null;
+  total_frequency: number;
+  source_creator_count: number;
+  sources: MicroNicheSource[];
+  decided_at: string | null;
+  decided_by: string | null;
+  decision_note: string | null;
+  approved_topic: string | null;
+  discovery_job_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MicroNicheDecision {
+  suggestion: MicroNiche;
+  job: Job | null;
+}
+
+export interface MicroNicheSuggestStats {
+  clusters_seen: number;
+  created: number;
+  updated: number;
+  skipped_low_frequency: number;
+  skipped_out_of_band: number;
+  skipped_excluded: number;
+  skipped_registry_fresh: number;
+  skipped_already_decided: number;
+}

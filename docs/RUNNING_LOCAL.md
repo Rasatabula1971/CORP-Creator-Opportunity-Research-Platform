@@ -15,7 +15,7 @@ Flash  ──> SQLite warm store (warm.db)      ← mirrored bulk (evidence, emb
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.13+**
 - **PostgreSQL 16** installed natively, plus the **pgvector** extension
   (Windows: the EDB installer for Postgres, then the prebuilt pgvector release
   from https://github.com/pgvector/pgvector/releases copied into the Postgres
@@ -106,17 +106,28 @@ pgvector, so this works against a clean database with no extra steps.
 
 ## 5. Run the app
 
-API (defaults to port 8000; set `API_PORT` in `.env` to move it):
+API — pass `--port 8010` explicitly. The dashboard calls
+`http://localhost:8010` by default, and uvicorn binds its own default of 8000
+unless told otherwise, so omitting the flag leaves the console showing
+"TypeError: Failed to fetch" against an API that is running perfectly well on
+the wrong port:
 
 ```
-uvicorn corp.api.app:app --reload
+uvicorn corp.api.app:app --reload --port 8010
 ```
+
+`API_PORT` in `.env` does **not** move a manually launched server: nothing in
+the app reads it, because uvicorn's CLI is what binds the socket. It is read by
+`start_corp.bat`, which passes it through as `--port`. To use a different port,
+change both the `--port` flag and the dashboard's API base URL (Settings → API
+base URL, or `web/src/api/client.ts`).
 
 On Windows, `start_corp.bat` does steps 2, 4 and 5 in one go: it checks
-Postgres, applies migrations, reads `API_PORT` from `.env`, refuses to start if
-that port is already taken, and launches uvicorn.
+Postgres, applies migrations, reads `API_PORT` from `.env` (default 8010),
+refuses to start if that port is already taken, and launches uvicorn.
 
-Dashboard (defaults to calling `http://localhost:8000`; no config needed):
+Dashboard (defaults to calling `http://localhost:8010`; override it in
+Settings → API base URL if you moved the API):
 
 ```
 cd web

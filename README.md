@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 # Install PostgreSQL 16 + the pgvector extension, create the `corp` role/db
 cp .env.example .env          # set DATABASE_URL(_SYNC), an LLM key, warm-store path
 alembic upgrade head
-uvicorn corp.api.app:app --reload   # or on Windows: start_corp.bat
+uvicorn corp.api.app:app --reload --port 8010   # or on Windows: start_corp.bat
 cd web && npm install && npm run dev
 ```
 
@@ -54,6 +54,6 @@ mypy corp                     # type check
 lint-imports                  # module-boundary contracts
 ```
 
-Tech stack: Python 3.12+, FastAPI (async), SQLAlchemy 2.0 + asyncpg, PostgreSQL +
+Tech stack: Python 3.13+, FastAPI (async), SQLAlchemy 2.0 + asyncpg, PostgreSQL +
 pgvector, Pydantic v2, sentence-transformers / HDBSCAN for clustering, React +
 Vite + TypeScript for the dashboard.

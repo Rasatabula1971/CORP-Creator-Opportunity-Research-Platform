@@ -1,4 +1,6 @@
-from pydantic import Field
+from typing import Literal
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -144,6 +146,46 @@ class Settings(BaseSettings):
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
     niche_qualification_rules_path: str = "rules/niche_qualification.yaml"
+    broad_topics_path: str = "rules/broad_topics.yaml"
+
+    # CORP1 Step 1 Level 0 — the autonomous discovery crawler. Off by
+    # default: enabling it means unattended LLM spend on every tick, so
+    # that is an explicit opt-in, not something installing CORP turns on.
+    # POST /discovery/run triggers a pass by hand either way.
+    discovery_enabled: bool = False
+    discovery_interval_seconds: int = 86_400
+    # None = use topics_per_pass from rules/broad_topics.yaml.
+    discovery_topics_per_pass: int | None = None
+    # Where Level 0 momentum comes from. "youtube" is the official Data API
+    # (needs YOUTUBE_API_KEY; ~15-30 quota units per pass). "googletrends" is
+    # the RSS/pytrends path the Google Trends adapter labels "tolerated/
+    # undocumented". "none" ranks purely by least-recently-researched. A
+    # source whose prerequisites are missing degrades to that same rotation.
+    discovery_momentum_source: Literal["youtube", "googletrends", "none"] = "youtube"
+
+    # Creator-first discovery: a researched creator's audience problem
+    # clusters become micro-niche suggestions, held for approval before
+    # anything is drilled. A cluster needs this many observations to count,
+    # and its creator's known follower count must sit inside the band
+    # (the spec's 10K-200K partnership range).
+    micro_niche_min_frequency: int = 3
+    micro_niche_min_followers: int = 10_000
+    micro_niche_max_followers: int = 200_000
+
+    @field_validator("discovery_topics_per_pass", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, v: object) -> object:
+        """Treat DISCOVERY_TOPICS_PER_PASS= (blank) as unset.
+
+        .env files carry everything as strings, and a commented-out
+        "leave blank for the default" line is exactly how someone
+        expresses "no override". Without this, copying .env.example and
+        leaving the value empty crashes the app at import with an
+        int_parsing error before anything logs.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # A run whose per-item failure rate exceeds this is marked "partial", not "completed".
     pipeline_max_failure_rate: float = 0.2
@@ -154,7 +196,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     api_host: str = "0.0.0.0"
-    api_port: int = Field(default=8000)
+    # 8010, matching start_corp.bat and the dashboard's default API base URL
+    # (web/src/api/client.ts). Note that nothing in the app reads this: the
+    # server is launched by the uvicorn CLI, so uvicorn's own --port decides
+    # what it binds. start_corp.bat reads API_PORT out of .env and passes it
+    # through; a manual `uvicorn ...` run must pass --port itself or it will
+    # silently bind uvicorn's default 8000 and the dashboard will not find it.
+    api_port: int = Field(default=8010)
     # When set, every endpoint except /health requires header X-Api-Key to match.
     api_key: str = ""
     # Comma-separated origins for CORS. Defaults to the local Vite dev server;

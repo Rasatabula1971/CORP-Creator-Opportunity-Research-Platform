@@ -26,7 +26,21 @@ def load_scoring_rules(rules_path: str) -> dict[str, Any]:
 def compute_score(
     component_scores: dict[str, float], weights: dict[str, float]
 ) -> float:
-    total_weight = sum(weights.values())
+    """Weighted mean of the components actually supplied.
+
+    Normalise over the weight *present* in ``component_scores``, not over
+    ``sum(weights.values())``. A component the caller did not supply abstains;
+    dividing by the full weights table instead scored it as a hard zero, so a
+    partial dict could never exceed the sum of its own weights however
+    perfect its values were -- three perfect components out of the fourteen
+    in rules/scoring.yaml capped at 0.342 rather than 1.0. The live pipeline
+    always passes all fourteen keys, so this was latent there, but it made
+    every partial caller (and the documented contract) silently wrong.
+
+    A component with no matching weight contributes nothing, to numerator and
+    denominator alike. Zero total applicable weight scores 0.0.
+    """
+    total_weight = sum(weights.get(k, 0.0) for k in component_scores)
     if total_weight == 0:
         return 0.0
     return sum(
