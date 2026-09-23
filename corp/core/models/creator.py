@@ -37,6 +37,7 @@ class Creator(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_creators_status", "status"),
         Index("ix_creators_niche", "niche"),
+        Index("ix_creators_archived_at", "archived_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
@@ -47,6 +48,11 @@ class Creator(TimestampMixin, Base):
         Enum(CreatorStatus), default=CreatorStatus.DISCOVERED, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    # Reversible "hide from the working list" for test/demo/mistaken entries.
+    # Independent of `status` (the state machine's terminal states) and of
+    # the append-only evidence trail: archiving never deletes anything,
+    # so a creator with real research history can still be tidied away.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     platform_accounts: Mapped[list["CreatorPlatformAccount"]] = relationship(
         back_populates="creator", cascade="all, delete-orphan"

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCreateCreator, useCreators } from "../api/hooks";
+import { useArchivedCreators, useCreateCreator, useCreators } from "../api/hooks";
 import { Button, Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
-import type { PlatformAccountCreateInput } from "../api/types";
+import type { Creator, PlatformAccountCreateInput } from "../api/types";
 
 export function CreatorsPage() {
   const { data, isLoading, error } = useCreators();
   const [showForm, setShowForm] = useState(false);
   const navigate = useNavigate();
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: archivedData } = useArchivedCreators(showArchived);
 
   return (
     <div className="space-y-6">
@@ -18,9 +20,14 @@ export function CreatorsPage() {
             ? ` (${data.items.length} of ${data.totalCount})`
             : ""}
         </h1>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Add Creator"}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? "Hide archived" : "Show archived"}
+          </Button>
+          <Button onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "Add Creator"}
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -35,41 +42,68 @@ export function CreatorsPage() {
       {isLoading && <Spinner />}
       {error && <ErrorBanner error={error} />}
 
-      {data && data.items.length === 0 && (
+      {data && data.items.length === 0 && !showArchived && (
         <EmptyState>No creators yet. Add one to get started.</EmptyState>
       )}
 
       {data && data.items.length > 0 && (
-        <Card className="p-0">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-neutral-200 text-xs uppercase text-neutral-500 dark:border-neutral-800">
-              <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Niche</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => navigate(`/creators/${c.id}`)}
-                  className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-800/50"
-                >
-                  <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                  <td className="px-4 py-2.5 text-neutral-500">{c.niche ?? "—"}</td>
-                  <td className="px-4 py-2.5">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="px-4 py-2.5 text-neutral-500">{c.discovery_source ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <CreatorTable creators={data.items} onOpen={(id) => navigate(`/creators/${id}`)} />
+      )}
+
+      {showArchived && (
+        <div>
+          <h2 className="mb-2 text-sm font-medium text-neutral-500">Archived</h2>
+          {archivedData && archivedData.items.length === 0 && (
+            <EmptyState>Nothing archived.</EmptyState>
+          )}
+          {archivedData && archivedData.items.length > 0 && (
+            <CreatorTable
+              creators={archivedData.items}
+              onOpen={(id) => navigate(`/creators/${id}`)}
+            />
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+function CreatorTable({
+  creators,
+  onOpen,
+}: {
+  creators: Creator[];
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <Card className="p-0">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-neutral-200 text-xs uppercase text-neutral-500 dark:border-neutral-800">
+          <tr>
+            <th className="px-4 py-2 font-medium">Name</th>
+            <th className="px-4 py-2 font-medium">Niche</th>
+            <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-4 py-2 font-medium">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {creators.map((c) => (
+            <tr
+              key={c.id}
+              onClick={() => onOpen(c.id)}
+              className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-800/50"
+            >
+              <td className="px-4 py-2.5 font-medium">{c.name}</td>
+              <td className="px-4 py-2.5 text-neutral-500">{c.niche ?? "—"}</td>
+              <td className="px-4 py-2.5">
+                <StatusBadge status={c.status} />
+              </td>
+              <td className="px-4 py-2.5 text-neutral-500">{c.discovery_source ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 

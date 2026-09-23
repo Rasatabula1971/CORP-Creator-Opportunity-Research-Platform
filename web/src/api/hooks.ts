@@ -31,11 +31,37 @@ export function useCreators() {
   });
 }
 
+export function useArchivedCreators(enabled: boolean) {
+  return useQuery({
+    queryKey: ["creators", "archived"],
+    queryFn: () =>
+      api.getWithCount<Creator>(`/creators?include_archived=true&limit=${LIST_LIMIT}`).then((r) => ({
+        ...r,
+        items: r.items.filter((c) => c.archived_at != null),
+      })),
+    enabled,
+  });
+}
+
 export function useCreator(id: string | undefined) {
   return useQuery({
     queryKey: ["creators", id],
     queryFn: () => api.get<CreatorDetail>(`/creators/${id}`),
     enabled: !!id,
+  });
+}
+
+// Reversible hide-from-the-list for test/demo/mistaken entries; never
+// touches evidence or any other row (append-only Provenance Invariant, R3).
+export function useArchiveCreator(creatorId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (archive: boolean) =>
+      api.post<CreatorDetail>(`/creators/${creatorId}/${archive ? "archive" : "unarchive"}`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["creators", creatorId] });
+      qc.invalidateQueries({ queryKey: ["creators"], exact: true });
+    },
   });
 }
 

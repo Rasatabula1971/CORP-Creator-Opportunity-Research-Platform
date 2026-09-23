@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
+  useArchiveCreator,
   useClusters,
   useClusterObservations,
   useCreator,
@@ -34,10 +35,13 @@ export function CreatorDetailPage() {
   const [activeJobId, setActiveJobId] = useState<string | undefined>();
   const { data: job } = useJob(activeJobId, { pollUntilDone: true });
   const [expandedCluster, setExpandedCluster] = useState<string | null>(null);
+  const archive = useArchiveCreator(id ?? "");
 
   if (isLoading) return <Spinner />;
   if (error) return <ErrorBanner error={error} />;
   if (!creator) return null;
+
+  const isArchived = creator.archived_at != null;
 
   return (
     <div className="space-y-6">
@@ -47,23 +51,48 @@ export function CreatorDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold">{creator.name}</h1>
             <StatusBadge status={creator.status} />
+            {isArchived && (
+              <span
+                className="inline-block rounded-full bg-neutral-200 px-2.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                title={`Archived ${new Date(creator.archived_at!).toLocaleString()}`}
+              >
+                archived
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-neutral-500">
             {creator.niche ?? "No niche set"} · {creator.discovery_source ?? "manual"}
           </p>
         </div>
-        <Button
-          onClick={() =>
-            startResearch.mutate(creator.id, {
-              onSuccess: (j) => setActiveJobId(j.id),
-            })
-          }
-          disabled={startResearch.isPending || job?.status === "queued" || job?.status === "running"}
-        >
-          {startResearch.isPending ? "Starting…" : "Start Research"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => archive.mutate(!isArchived)}
+            disabled={archive.isPending}
+          >
+            {archive.isPending ? "…" : isArchived ? "Unarchive" : "Archive"}
+          </Button>
+          <Button
+            onClick={() =>
+              startResearch.mutate(creator.id, {
+                onSuccess: (j) => setActiveJobId(j.id),
+              })
+            }
+            disabled={startResearch.isPending || job?.status === "queued" || job?.status === "running"}
+          >
+            {startResearch.isPending ? "Starting…" : "Start Research"}
+          </Button>
+        </div>
       </div>
 
+      {isArchived && (
+        <div className="rounded-md bg-neutral-100 px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+          This creator is archived — hidden from the main Creators list. Nothing about its
+          research, evidence, or dossier was deleted.
+        </div>
+      )}
+
+      {archive.error && <ErrorBanner error={archive.error} />}
       {startResearch.error && <ErrorBanner error={startResearch.error} />}
       {/* A failing sub-request must never masquerade as "no data yet". */}
       {dossierError && <ErrorBanner error={dossierError} />}

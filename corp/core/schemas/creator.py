@@ -32,6 +32,7 @@ class CreatorResponse(BaseModel):
     discovery_source: str | None
     status: CreatorStatus
     notes: str | None
+    archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -22,6 +22,7 @@ export interface Creator {
   discovery_source: string | null;
   status: CreatorStatus;
   notes: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }

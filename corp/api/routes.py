@@ -156,11 +156,15 @@ async def list_creators(
     response: Response,
     status: CreatorStatus | None = None,
     min_score: float | None = None,
+    include_archived: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[CreatorResponse]:
     query = select(Creator)
+
+    if not include_archived:
+        query = query.where(Creator.archived_at.is_(None))
 
     if status is not None:
         query = query.where(Creator.status == status)
@@ -201,6 +205,41 @@ async def get_creator(
     resp = CreatorDetailResponse.model_validate(creator)
     resp.platform_accounts = accounts
     return resp
+
+
+@router.post("/creators/{creator_id}/archive", response_model=CreatorResponse)
+async def archive_creator(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> CreatorResponse:
+    """Reversible hide-from-the-list, for test/demo/mistaken entries. Never
+    touches evidence, dossiers, or any other row — those stay exactly as the
+    append-only Provenance Invariant requires (R3); only this timestamp is
+    written. Idempotent: archiving an already-archived creator keeps its
+    original `archived_at`."""
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+    if creator.archived_at is None:
+        creator.archived_at = datetime.now(UTC)
+        await session.commit()
+        await session.refresh(creator)
+    return CreatorResponse.model_validate(creator)
+
+
+@router.post("/creators/{creator_id}/unarchive", response_model=CreatorResponse)
+async def unarchive_creator(
+    creator_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> CreatorResponse:
+    creator = await session.get(Creator, creator_id)
+    if creator is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+    if creator.archived_at is not None:
+        creator.archived_at = None
+        await session.commit()
+        await session.refresh(creator)
+    return CreatorResponse.model_validate(creator)
 
 
 # ── Dossier ──────────────────────────────────────────────────────────
