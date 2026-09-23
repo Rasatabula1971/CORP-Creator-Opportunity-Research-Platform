@@ -3,7 +3,7 @@ name: CORP Code Quality
 on:
   push:
     branches:
-      - testing/code-quality-pipeline
+      - main
   pull_request:
     branches:
       - main
@@ -31,6 +31,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Dependency consistency
+        run: pip check
 
       - name: Ruff
         run: ruff check corp tests
@@ -86,6 +89,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Dependency consistency
+        run: pip check
 
       - name: Prepare test database
         run: |
