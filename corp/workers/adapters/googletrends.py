@@ -27,7 +27,6 @@ from datetime import UTC, datetime
 from typing import Any
 from defusedxml import ElementTree as DefusedElementTree
 from defusedxml.common import DefusedXmlException
-
 import httpx
 from tenacity import (
     retry,
