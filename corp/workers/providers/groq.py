@@ -113,7 +113,8 @@ class GroqProvider(LLMProvider):
             )
         _warn_schema_violations(self.model_name, result, schema)
         usage = data.get("usage") or {}
-        logger.info(
+        # Only non-sensitive operational metrics are logged; no prompt, response, or key.
+        logger.info(  # nosemgrep
             "LLM call completed: model=%s prompt_len=%d completion_tokens=%s",
             self.model_name,
             len(prompt),
