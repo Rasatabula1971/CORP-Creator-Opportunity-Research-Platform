@@ -36,9 +36,11 @@ jobs:
         run: ruff check corp tests
 
       - name: Mypy strict
+        if: always()
         run: mypy corp
 
       - name: Import architecture contracts
+        if: always()
         run: lint-imports
 
   python-tests:
