@@ -122,6 +122,19 @@ class JobRegistry:
                 return job
         return None
 
+    def active_of_kind(self, kind: str) -> JobResponse | None:
+        """The in-flight job of a given kind, if any. Campaign-less jobs
+        (an autonomous discovery pass attaches to no campaign until it
+        picks one) are invisible to active_for_campaign, so this is how
+        the status endpoint reports one as running."""
+        for job in self._jobs.values():
+            if job.kind == kind and job.status in (
+                JobStatus.QUEUED,
+                JobStatus.RUNNING,
+            ):
+                return job
+        return None
+
     async def execute(
         self, job: JobResponse, work: Callable[[], Awaitable[dict[str, Any]]]
     ) -> None:
@@ -302,6 +315,61 @@ async def run_pipeline(
 
 
 # ── Campaign pipeline work functions ──────────────────────────────
+
+
+async def run_discovery_scan(
+    topics: list[str] | None = None,
+    topics_per_pass: int | None = None,
+    campaign_id: str | None = None,
+) -> dict[str, Any]:
+    """One autonomous discovery pass (CORP1 Step 1, Level 0 onwards).
+
+    With no arguments this is the crawler entry point: the trend scan
+    picks the topics. With ``topics`` it is the spec's user-suggested
+    alternate entry point, taking the same path through the drill engine
+    so a hand-picked niche yields the same evidence and lineage.
+    """
+    from corp.database import async_session
+    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.providers.capabilities import TrendProvider
+    from corp.workers.providers.factory import build_provider
+    from corp.workers.scheduler.discovery_scan import run_discovery_pass
+
+    provider = build_provider()
+    # The momentum signal is optional: a missing or broken Trends adapter
+    # downgrades ranking to rotation rather than failing the pass.
+    trend_provider: TrendProvider | None = None
+    if not topics:
+        try:
+            candidate = build_adapter("googletrends")
+        except Exception as exc:  # noqa: BLE001 — ranking only
+            logger.info("Discovery scan: no Google Trends adapter (%s); ranking by rotation", exc)
+        else:
+            if isinstance(candidate, TrendProvider):
+                trend_provider = candidate
+            else:
+                await _close(candidate)
+
+    try:
+        async with async_session() as session:
+            try:
+                stats = await run_discovery_pass(
+                    session,
+                    provider,
+                    trend_provider=trend_provider,
+                    topics_per_pass=topics_per_pass,
+                    campaign_id=campaign_id,
+                    topics=topics,
+                )
+                await session.commit()
+            except Exception:
+                await _commit_or_rollback(session)
+                raise
+    finally:
+        await _close(provider)
+        if trend_provider is not None:
+            await _close(trend_provider)
+    return stats.as_dict()
 
 
 async def run_campaign_pipeline(

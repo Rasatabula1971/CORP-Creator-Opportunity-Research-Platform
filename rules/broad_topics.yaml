@@ -1,0 +1,119 @@
+version: "1.0.0"
+
+# CORP1 Step 1, Level 0 — the broad-topic catalogue the autonomous trend
+# scan draws from.
+#
+# Why a catalogue at all, when the spec says "autonomous topic discovery
+# from Google Trends"? Because Google Trends' trending feed answers a
+# different question than the one Level 0 asks. `trending:US` returns
+# what spiked in the last 24 hours — breaking news, sports results,
+# celebrities, product launches. The spec's own Level 0 examples are
+# "small business", "home organization", "personal finance": durable
+# areas a digital product can be built for. A news spike is not a niche
+# tree worth drilling, and drilling it costs a full recursive LLM pass.
+#
+# So the division of labour is: this file bounds the universe of topics
+# worth drilling, and Google Trends decides which of them have momentum
+# right now and therefore go first. Trends still drives ordering and
+# timing on every pass — it just cannot nominate "Lakers score" as a
+# niche to research.
+#
+# The registry (Niche.next_recheck_at, frozen at 90 days) does the rest:
+# a topic drilled recently is skipped, so the scanner rotates through the
+# catalogue on its own rather than re-drilling the same tree.
+#
+# Editing: add a topic as a plain lowercase phrase. Anything matching the
+# Stage 3 exclusion rules in niche_discovery_prompt.yaml is dropped at
+# scan time regardless of what is written here — that check is
+# deterministic and is never an LLM judgment call.
+
+scan:
+  # Topics handed to the drill engine per pass. Each one costs a full
+  # recursive discovery pass, so this is the main cost lever.
+  topics_per_pass: 3
+  # Geo passed to Google Trends when scoring momentum.
+  geo: "US"
+  # A momentum lookup that fails (no pytrends, no network, rate limit)
+  # must not stop the pass: the scanner falls back to least-recently-
+  # researched ordering so the crawler keeps rotating through the
+  # catalogue regardless. Set false to require a live momentum signal.
+  allow_rotation_fallback: true
+
+topics:
+  # Home and living
+  - home organization
+  - home renovation
+  - interior design
+  - gardening
+  - homesteading
+  - van life
+
+  # Money and work
+  - personal finance
+  - small business
+  - freelancing
+  - side hustles
+  - real estate investing
+  - e-commerce
+
+  # Craft and making
+  - woodworking
+  - 3d printing
+  - sewing
+  - knitting
+  - pottery
+  - leatherworking
+  - electronics projects
+
+  # Outdoors and sport
+  - hiking
+  - camping
+  - cycling
+  - running
+  - climbing
+  - fishing
+  - strength training
+  - yoga
+
+  # Vehicles
+  - automotive
+  - motorcycles
+  - car detailing
+  - overlanding
+
+  # Food
+  - home cooking
+  - baking
+  - meal prep
+  - coffee
+  - home brewing
+  - food preservation
+
+  # Creative and media
+  - photography
+  - videography
+  - music production
+  - graphic design
+  - creative writing
+  - podcasting
+
+  # Technology and learning
+  - software development
+  - data analysis
+  - home automation
+  - cybersecurity
+  - language learning
+  - studying and productivity
+
+  # Family and pets
+  - parenting
+  - homeschooling
+  - dog training
+  - aquariums
+  - beekeeping
+
+  # Craft hobbies with strong marketplace demand
+  - miniature painting
+  - board games
+  - model building
+  - collecting

@@ -168,6 +168,38 @@ def matched_exclusion(text: str, exclusions: dict[str, list[str]]) -> str | None
     return None
 
 
+async def registry_fresh(
+    session: AsyncSession, keyword: str, *, now: datetime | None = None
+) -> bool:
+    """True when ``keyword`` already matches a canonical Niche (or alias)
+    whose next_recheck_at has not passed yet -- skip re-researching it.
+    This is the CORP1 Stage 3 research registry check, frozen at 90 days.
+    A niche with no next_recheck_at set (never scanned by a stage that
+    populates it) is always treated as due.
+
+    Exact case-insensitive match via func.lower(...) == keyword.lower(),
+    not ilike(keyword) -- ilike treats unescaped '%'/'_' in the keyword
+    as SQL wildcards, which could turn an exact-match lookup into an
+    unintended pattern match on a raw topic string (Stage 8 review
+    finding). This mirrors the exact mechanism the functional
+    case-insensitive uniqueness index on Niche.canonical_name already
+    uses (docs/DECISIONS/0002).
+    """
+    now = now or datetime.now(UTC)
+    lowered = keyword.lower()
+    result = await session.execute(
+        select(Niche.next_recheck_at)
+        .outerjoin(NicheAlias, NicheAlias.niche_id == Niche.id)
+        .where(
+            (func.lower(Niche.canonical_name) == lowered)
+            | (func.lower(NicheAlias.alias) == lowered),
+        )
+        .limit(1)
+    )
+    next_recheck_at = result.scalar_one_or_none()
+    return next_recheck_at is not None and next_recheck_at > now
+
+
 async def synthesize_niches(
     provider: LLMProvider,
     topic: str,
@@ -576,31 +608,10 @@ class RecursiveNicheDiscovery:
     # ── Registry check (CORP1 Stage 3 research registry) ────────────────
 
     async def _is_registry_fresh(self, keyword: str) -> bool:
-        """True when ``keyword`` already matches a canonical Niche (or
-        alias) whose next_recheck_at has not passed yet -- skip re-drilling
-        it. A niche with no next_recheck_at set (never scanned by a stage
-        that populates it) is always treated as due.
-
-        Exact case-insensitive match via func.lower(...) == keyword.lower(),
-        not ilike(keyword) -- ilike treats unescaped '%'/'_' in the keyword
-        as SQL wildcards, which could turn an exact-match lookup into an
-        unintended pattern match on a raw topic string (Stage 8 review
-        finding). This mirrors the exact mechanism the functional
-        case-insensitive uniqueness index on Niche.canonical_name already
-        uses (docs/DECISIONS/0002)."""
-        now = datetime.now(UTC)
-        lowered = keyword.lower()
-        result = await self._session.execute(
-            select(Niche.next_recheck_at)
-            .outerjoin(NicheAlias, NicheAlias.niche_id == Niche.id)
-            .where(
-                (func.lower(Niche.canonical_name) == lowered)
-                | (func.lower(NicheAlias.alias) == lowered),
-            )
-            .limit(1)
-        )
-        next_recheck_at = result.scalar_one_or_none()
-        return next_recheck_at is not None and next_recheck_at > now
+        """See :func:`registry_fresh` -- the drill engine and the Level 0
+        trend scan must agree on what "already researched" means, so both
+        go through the one implementation."""
+        return await registry_fresh(self._session, keyword)
 
     # ── Evidence collection: capability fan-out ─────────────────────────
 

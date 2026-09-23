@@ -16,6 +16,7 @@ from corp.api.jobs import (
     JobResponse,
     registry,
     run_campaign_pipeline,
+    run_discovery_scan,
     run_pipeline,
     run_research,
 )
@@ -369,6 +370,138 @@ async def start_campaign_pipeline(
         raise HTTPException(status_code=422, detail="discover requires query")
     job = registry.create(stage, campaign_id=campaign_id)
     work = lambda: run_campaign_pipeline(stage, campaign_id, source=source, query=query)  # noqa: E731
+    background.add_task(registry.execute, job, work)
+    return job
+
+
+# ── Autonomous discovery (CORP1 Step 1, Level 0) ─────────────────────
+
+
+class DiscoveryRunRequest(BaseModel):
+    """Both entry points the spec freezes, on one endpoint.
+
+    No body (or an empty one) is the autonomous pass: the trend scan picks
+    the topics. Supplying ``topics`` is the user-suggested alternate entry
+    point — the same drill engine, the same evidence and lineage, just a
+    seed you chose instead of one Google Trends ranked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    topics: list[str] | None = Field(
+        default=None,
+        description="Seed topics to drill instead of running the trend scan.",
+        max_length=25,
+    )
+    topics_per_pass: int | None = Field(
+        default=None,
+        ge=1,
+        le=25,
+        description="Override how many scanned topics this pass drills.",
+    )
+    campaign_id: str | None = Field(
+        default=None,
+        description="Attach to this campaign instead of the standing autonomous one.",
+    )
+
+
+@router.get("/discovery/status")
+async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Is the crawler actually crawling, and what would it do next?
+
+    The scheduler's own startup line is a logger.info, which uvicorn's
+    default log config does not print, so "is it on?" is otherwise
+    unanswerable without reading .env. CORP is a pull-based dashboard by
+    design (Stage 4: "no push-notification/attention engine"), so the
+    honest place for this is an endpoint you can check.
+    """
+    from corp.workers.intelligence.trend_scan import TrendScanner
+    from corp.workers.scheduler.discovery_scan import AUTONOMOUS_CAMPAIGN_NAME
+
+    # trend_provider=None: this is a cheap status read, so it must not make
+    # a live Trends call. Ordering here is rotation-only and indicative.
+    # Construction is inside the try as well: an unreadable or malformed
+    # catalogue raises in TrendScanner.__init__, and a status endpoint that
+    # 500s exactly when the thing it reports on is broken is useless.
+    cfg = None
+    try:
+        scanner = TrendScanner(session, trend_provider=None)
+        cfg = scanner.config
+        due, scan_stats = await scanner.scan(
+            settings.discovery_topics_per_pass or cfg.topics_per_pass
+        )
+        next_topics = [s.topic for s in due]
+        scan = scan_stats.as_dict()
+        error = None
+    except Exception as exc:  # noqa: BLE001 — a status read never 500s
+        logger.exception("Discovery status: preview scan failed")
+        next_topics, scan, error = [], {}, f"{type(exc).__name__}: {exc}"
+
+    provider_ready = True
+    provider_detail: str | None = None
+    try:
+        probe = build_provider()
+    except ProviderConfigError as exc:
+        provider_ready = False
+        provider_detail = str(exc)
+    except Exception as exc:  # noqa: BLE001
+        provider_ready = False
+        provider_detail = f"{type(exc).__name__}: {exc}"
+    else:
+        close = getattr(probe, "close", None)
+        if callable(close):
+            await close()
+
+    result = await session.execute(
+        select(Campaign.id).where(
+            func.lower(Campaign.name) == AUTONOMOUS_CAMPAIGN_NAME.lower()
+        ).limit(1)
+    )
+    return {
+        "enabled": settings.discovery_enabled,
+        "interval_seconds": settings.discovery_interval_seconds,
+        "topics_per_pass": settings.discovery_topics_per_pass
+        or (cfg.topics_per_pass if cfg else None),
+        "catalogue_size": len(cfg.topics) if cfg else None,
+        "geo": cfg.geo if cfg else None,
+        # A pass needs an LLM to drill with; without one it fails immediately.
+        "can_run": provider_ready,
+        "provider_detail": provider_detail,
+        "autonomous_campaign_id": result.scalar_one_or_none(),
+        "next_topics": next_topics,
+        "scan": scan,
+        "error": error,
+        "active_job": (job.id if (job := registry.active_of_kind("discovery")) else None),
+    }
+
+
+@router.post("/discovery/run", response_model=JobResponse, status_code=202)
+async def start_discovery_scan(
+    background: BackgroundTasks,
+    body: DiscoveryRunRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> JobResponse:
+    """Run one discovery pass now, whether or not the scheduler is enabled."""
+    topics = [t.strip() for t in (body.topics or [])] if body else []
+    topics = [t for t in topics if t]
+    if body and body.topics is not None and not topics:
+        raise HTTPException(status_code=422, detail="topics must not be blank")
+
+    campaign_id = body.campaign_id if body else None
+    if campaign_id is not None:
+        if await session.get(Campaign, campaign_id) is None:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if (active := registry.active_for_campaign(campaign_id)) is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A job is already running for this campaign: {active.id}",
+            )
+
+    per_pass = body.topics_per_pass if body else None
+    job = registry.create("discovery", campaign_id=campaign_id)
+    work = lambda: run_discovery_scan(  # noqa: E731
+        topics=topics or None, topics_per_pass=per_pass, campaign_id=campaign_id
+    )
     background.add_task(registry.execute, job, work)
     return job
 

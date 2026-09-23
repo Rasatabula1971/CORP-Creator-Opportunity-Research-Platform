@@ -19,6 +19,7 @@ from corp.config import settings
 from corp.core.models.workflow import ResearchRun, RunStatus
 from corp.database import async_session
 from corp.workers.providers.registry import LLMProvider
+from corp.workers.scheduler.discovery_scan import DiscoveryHandle, DiscoveryScanScheduler
 from corp.workers.scheduler.registry_rescan import (
     RegistryRescanScheduler,
     RescanDeferredError,
@@ -89,6 +90,90 @@ class RescanProviders:
             await close()
 
 
+class DiscoveryProviders:
+    """The discovery crawler's LLM + Trends providers, built once and kept
+    for the scheduler's lifetime. Same reasoning as RescanProviders: a
+    per-tick pool would start with an empty cooldown table, so "every
+    provider is cooling" could never be observed. Closed at shutdown."""
+
+    def __init__(self) -> None:
+        self._provider: LLMProvider | None = None
+        self._trend: object | None = None
+        self._unconfigured = False
+
+    async def factory(self) -> "DiscoveryHandle | None":
+        from corp.workers.adapters.registry import build_adapter
+        from corp.workers.providers.capabilities import TrendProvider
+        from corp.workers.providers.factory import ProviderConfigError, build_provider
+        from corp.workers.scheduler.discovery_scan import (
+            DiscoveryDeferredError,
+            DiscoveryHandle,
+        )
+
+        if self._unconfigured:
+            return None
+        if self._provider is None:
+            try:
+                self._provider = build_provider()
+            except ProviderConfigError as exc:
+                self._unconfigured = True
+                logger.warning("Discovery crawler disabled (no LLM provider): %s", exc)
+                return None
+        provider = self._provider
+
+        available = getattr(provider, "available", None)
+        if callable(available) and not available():
+            raise DiscoveryDeferredError("every LLM provider is in cooldown")
+
+        if self._trend is None:
+            try:
+                candidate = build_adapter("googletrends")
+            except Exception as exc:  # noqa: BLE001 — ranking signal only
+                logger.info(
+                    "Discovery crawler: no Google Trends adapter (%s); ranking by rotation",
+                    exc,
+                )
+            else:
+                if isinstance(candidate, TrendProvider):
+                    self._trend = candidate
+                else:
+                    await _close_quietly(candidate)
+
+        trend = self._trend if isinstance(self._trend, TrendProvider) else None
+        # Providers outlive the tick, so releasing one here would defeat the
+        # cooldown state this class exists to preserve. aclose() at shutdown.
+        return DiscoveryHandle(provider=provider, trend_provider=trend, aclose=_noop_close)
+
+    async def aclose(self) -> None:
+        provider, self._provider = self._provider, None
+        trend, self._trend = self._trend, None
+        for obj in (provider, trend):
+            await _close_quietly(obj)
+
+
+async def _close_quietly(obj: object | None) -> None:
+    if obj is None:
+        return
+    close = getattr(obj, "close", None)
+    if callable(close):
+        try:
+            await close()
+        except Exception:  # noqa: BLE001
+            logger.exception("Closing %s failed", type(obj).__name__)
+
+
+def _discovery_busy() -> bool:
+    """Stand the crawler down while the console is already running a
+    campaign job, so an unattended pass never races a human-initiated one
+    for the same LLM quota."""
+    from corp.api.jobs import JobStatus, registry
+
+    return any(
+        j.campaign_id is not None and j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+        for j in registry.list(limit=500)
+    )
+
+
 def _job_busy(campaign_id: str | None, creator_id: str) -> bool:
     """A job queued/running for the campaign or the creator: the scheduler
     must not re-research a creator the console is already researching."""
@@ -140,6 +225,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception(
             "Registry re-scan scheduler failed to start — API continues without auto-rescan",
         )
+    discovery: DiscoveryScanScheduler | None = None
+    discovery_providers = DiscoveryProviders()
+    if settings.discovery_enabled:
+        try:
+            discovery = DiscoveryScanScheduler(
+                async_session,
+                discovery_providers.factory,
+                interval_seconds=settings.discovery_interval_seconds,
+                topics_per_pass=settings.discovery_topics_per_pass,
+                qualification_rules_path=settings.niche_qualification_rules_path,
+                is_busy=_discovery_busy,
+            )
+            discovery.start()
+            logger.info(
+                "Autonomous discovery crawler started (every %ds)",
+                settings.discovery_interval_seconds,
+            )
+        except Exception:
+            logger.exception(
+                "Discovery crawler failed to start — API continues without it",
+            )
+    else:
+        logger.info(
+            "Autonomous discovery crawler is off "
+            "(set DISCOVERY_ENABLED=true; POST /discovery/run runs one pass by hand)",
+        )
+
     try:
         yield
     finally:
@@ -151,6 +263,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if scheduler is not None:
             await scheduler.stop()
             logger.info("Registry re-scan scheduler stopped")
+        if discovery is not None:
+            await discovery.stop()
+            logger.info("Discovery crawler stopped")
+        try:
+            await discovery_providers.aclose()
+        except Exception:
+            logger.exception("Closing the discovery providers failed")
         try:
             await providers.aclose()
         except Exception:

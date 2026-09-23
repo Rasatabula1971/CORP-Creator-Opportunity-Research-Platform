@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -144,6 +144,31 @@ class Settings(BaseSettings):
     scoring_rules_path: str = "rules/scoring.yaml"
     intent_rules_path: str = "rules/intent.yaml"
     niche_qualification_rules_path: str = "rules/niche_qualification.yaml"
+    broad_topics_path: str = "rules/broad_topics.yaml"
+
+    # CORP1 Step 1 Level 0 — the autonomous discovery crawler. Off by
+    # default: enabling it means unattended LLM spend on every tick, so
+    # that is an explicit opt-in, not something installing CORP turns on.
+    # POST /discovery/run triggers a pass by hand either way.
+    discovery_enabled: bool = False
+    discovery_interval_seconds: int = 86_400
+    # None = use topics_per_pass from rules/broad_topics.yaml.
+    discovery_topics_per_pass: int | None = None
+
+    @field_validator("discovery_topics_per_pass", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, v: object) -> object:
+        """Treat DISCOVERY_TOPICS_PER_PASS= (blank) as unset.
+
+        .env files carry everything as strings, and a commented-out
+        "leave blank for the default" line is exactly how someone
+        expresses "no override". Without this, copying .env.example and
+        leaving the value empty crashes the app at import with an
+        int_parsing error before anything logs.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # A run whose per-item failure rate exceeds this is marked "partial", not "completed".
     pipeline_max_failure_rate: float = 0.2
