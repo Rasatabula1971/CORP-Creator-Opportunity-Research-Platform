@@ -104,14 +104,19 @@ async def test_blank_topics_per_pass_env_does_not_crash_startup(monkeypatch):
 # ── GET /discovery/status ────────────────────────────────────────────
 
 
-async def test_status_reports_the_crawler_as_off_by_default(client, clean_db):
+async def test_status_reports_the_crawler_as_off_by_default(client, clean_db, monkeypatch):
+    # Force no usable provider, regardless of keys present in a developer's
+    # own .env — this assertion is about the crawler's default state, not
+    # about whichever LLM_PROVIDER happens to be configured locally.
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    monkeypatch.setattr(settings, "groq_api_key", "")
+    monkeypatch.setattr(settings, "fair_enabled", False)
     resp = await client.get("/discovery/status")
     assert resp.status_code == 200
     body = resp.json()
     assert body["enabled"] is False
     assert body["catalogue_size"] > 0
     assert body["topics_per_pass"] >= 1
-    # No LLM key in the test environment, so a pass could not actually run.
     assert body["can_run"] is False
     assert body["provider_detail"]
 
