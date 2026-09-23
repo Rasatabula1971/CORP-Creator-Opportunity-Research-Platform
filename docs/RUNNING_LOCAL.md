@@ -15,7 +15,7 @@ Flash  ──> SQLite warm store (warm.db)      ← mirrored bulk (evidence, emb
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.13+**
 - **PostgreSQL 16** installed natively, plus the **pgvector** extension
   (Windows: the EDB installer for Postgres, then the prebuilt pgvector release
   from https://github.com/pgvector/pgvector/releases copied into the Postgres

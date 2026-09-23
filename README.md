@@ -54,6 +54,6 @@ mypy corp                     # type check
 lint-imports                  # module-boundary contracts
 ```
 
-Tech stack: Python 3.12+, FastAPI (async), SQLAlchemy 2.0 + asyncpg, PostgreSQL +
+Tech stack: Python 3.13+, FastAPI (async), SQLAlchemy 2.0 + asyncpg, PostgreSQL +
 pgvector, Pydantic v2, sentence-transformers / HDBSCAN for clustering, React +
 Vite + TypeScript for the dashboard.

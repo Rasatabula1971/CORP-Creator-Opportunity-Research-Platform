@@ -2,9 +2,15 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
-ALEMBIC_CMD = ["alembic"]
+# Invoke Alembic through the interpreter running the tests, not the bare
+# "alembic" console script: that script is only on PATH when the project's
+# virtualenv happens to be activated, so `.venv/bin/python -m pytest` (or any
+# tox/CI runner that calls the interpreter directly) failed here with
+# FileNotFoundError rather than a migration error.
+ALEMBIC_CMD = [sys.executable, "-m", "alembic"]
 ENV = {
     **os.environ,
     "DATABASE_URL_SYNC": "postgresql://corp:corp@localhost:5433/corp_test",
