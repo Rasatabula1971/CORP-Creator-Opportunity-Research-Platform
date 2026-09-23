@@ -263,6 +263,20 @@ export interface DossierJson {
   generated_at: string;
 }
 
+// R12d — the last re-research outcome for a watched dossier (design §3.5).
+// A resurfaced (or Research More) version is WATCHING again once the
+// reviewer parks it, so all three outcomes can appear.
+export interface LastRescan {
+  outcome: "unchanged" | "resurfaced" | "failed";
+  trigger: "watch" | "research_more" | null;
+  at: string;
+  reason: string | null;
+  score_delta: number | null;
+  new_evidence_count: number | null;
+  error: string | null;
+  run_id: string | null;
+}
+
 // Re-scan schedule visibility — watching dossiers with niche recheck info.
 export interface WatchingDossier {
   id: string;
@@ -273,6 +287,20 @@ export interface WatchingDossier {
   status: string;
   generated_at: string;
   next_recheck_at: string | null;
+  last_rescan: LastRescan | null;
+}
+
+// R12a — written by WatchRescanner on every dossier version it produces
+// (Watch re-scan or Research More); explains why this version exists.
+export interface DossierRescanBlock {
+  trigger: "watch" | "research_more";
+  previous_dossier_id: string;
+  resurfaced: boolean;
+  reason: string;
+  score_delta: number | null;
+  new_evidence_count: number;
+  run_id: string;
+  at: string;
 }
 
 // CORP1 Stage 5, T8 — the dossier-level four-state decision gate.
@@ -367,6 +395,7 @@ export interface PersistedDossier {
       risks: string[];
       next_steps: string[];
     };
+    rescan?: DossierRescanBlock;
     [key: string]: unknown;
   };
 }

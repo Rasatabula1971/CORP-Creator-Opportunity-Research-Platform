@@ -1,7 +1,7 @@
 """Pydantic schemas for the structured JSON dossier endpoint."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -90,6 +90,25 @@ class PersistedDossierResponse(BaseModel):
     content: dict[str, Any]
 
 
+class LastRescanResponse(BaseModel):
+    """R12d: the most recent re-research outcome for a watched dossier
+    (design §3.5). ``unchanged``/``resurfaced`` come from the dossier's own
+    ``rescan`` block (it is the version the re-research produced; a
+    resurfaced or Research More version is WATCHING again once the reviewer
+    parks it); ``failed`` from the latest failed ``watch_rescan`` run that
+    targeted it. ``trigger`` says which path ran: the automatic Watch
+    re-scan or a reviewer's Research More."""
+
+    outcome: Literal["unchanged", "resurfaced", "failed"]
+    trigger: Literal["watch", "research_more"] | None = None
+    at: datetime
+    reason: str | None = None
+    score_delta: float | None = None
+    new_evidence_count: int | None = None
+    error: str | None = None
+    run_id: str | None = None
+
+
 class WatchingDossierResponse(BaseModel):
     """Summary of a dossier in WATCHING status, joined with creator and
     niche data for the re-scan schedule visibility page."""
@@ -102,3 +121,4 @@ class WatchingDossierResponse(BaseModel):
     status: str
     generated_at: datetime
     next_recheck_at: datetime | None = None
+    last_rescan: LastRescanResponse | None = None

@@ -1,6 +1,6 @@
 # R12 — Watch re-scan re-collects evidence (and Research More completes)
 
-**Stage:** 3 (product spec) + 4 (architecture) — **FROZEN 2026-09-22** (user accepted all five §6 recommendations as written: C for §3.3 with 0.05 / 10; §3.4 limits incl. `recollect_creator`; §4.2 Option A; Research More always resurfaces; order R12b → R12a → R12c → R12d)
+**Stage:** 3 (product spec) + 4 (architecture) — **FROZEN 2026-09-22; COMPLETE 2026-09-22 (ADR-0060 … ADR-0063)** (user accepted all five §6 recommendations as written: C for §3.3 with 0.05 / 10; §3.4 limits incl. `recollect_creator`; §4.2 Option A; Research More always resurfaces; order R12b → R12a → R12c → R12d)
 **Origin:** ADR-0054 (R8) gate decision; `docs/REMEDIATION_PLAN_2026-09.md`
 "Planned after this run".
 **Spec basis:** CORP1 Product Spec & Build Plan — Watch: "parked.
@@ -244,7 +244,7 @@ More: the dossier is returned to `PENDING_REVIEW` (never stuck).
 | **R12a** Research More completes — **done, ADR-0061** | `WatchRescanner` core (`research_more` → orchestrator → ideation → `generate_and_persist`), called from `_run_research_more`; dossier never stuck; ideation also wired into `POST …/dossier/generate` (best-effort); tests §3.7-4,6,7 | §4.2 decision |
 | **R12b** Creator status mirrors dossier gate — **done, ADR-0060 (b7c8b81)** | Dossier gate Watch/Approve/Reject move the creator via the state machine; backfill; tests | — (can precede R12a) |
 | **R12c** Watch re-scan uses the rescanner — **done, ADR-0062** | Scheduler calls `WatchRescanner` with §3.3 decision, §3.4 limits, `content["rescan"]`; tests §3.7-1,2,3,5 | R12a, R12b |
-| **R12d** Surface it | R7 panel shows the rescan block; `/rescan` page shows last outcome | R12c |
+| **R12d** Surface it — **done, ADR-0063** | R7 panel shows the rescan block; `/rescan` page shows last outcome | R12c |
 
 Estimated: R12b small; R12a medium; R12c medium; R12d small.
 

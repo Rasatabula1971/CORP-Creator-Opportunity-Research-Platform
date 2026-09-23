@@ -19,6 +19,7 @@ import type {
   ClusterDetail,
   Competitor,
   DossierDecisionType,
+  DossierRescanBlock,
   PersistedDossier,
 } from "../api/types";
 
@@ -481,6 +482,37 @@ function SentimentPill({
   return <span className={`rounded px-1 py-0.5 font-medium ${cls}`}>{value}</span>;
 }
 
+// R12d (design §3.5): why this dossier version exists. "Resurfaced from
+// Watch — reason" for a re-scan that strengthened; "Updated by Research
+// More"; or "re-scanned <date>, unchanged" for one still parked.
+function RescanLine({ rescan }: { rescan: DossierRescanBlock }) {
+  const when = new Date(rescan.at).toLocaleDateString();
+  const delta =
+    rescan.score_delta == null
+      ? "n/a"
+      : `${rescan.score_delta >= 0 ? "+" : ""}${rescan.score_delta.toFixed(2)}`;
+  const facts = `score ${delta} / ${rescan.new_evidence_count} new evidence rows`;
+  if (rescan.trigger === "research_more") {
+    return (
+      <p className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        Updated by Research More on {when} — {facts}
+      </p>
+    );
+  }
+  if (rescan.resurfaced) {
+    return (
+      <p className="rounded-md bg-green-50 px-3 py-2 text-xs text-green-900 dark:bg-green-950/40 dark:text-green-200">
+        <span className="font-medium">Resurfaced from Watch</span> on {when} — {rescan.reason}
+      </p>
+    );
+  }
+  return (
+    <p className="rounded-md bg-neutral-100 px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+      Re-scanned {when}, unchanged — {facts}
+    </p>
+  );
+}
+
 function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
   const { data: persisted, isLoading, error } = usePersistedDossier(creatorId);
   const generate = useGeneratePersistedDossier();
@@ -541,6 +573,8 @@ function PersistedDossierPanel({ creatorId }: { creatorId: string }) {
               {persisted.content.niche_path.map((n) => n.canonical_name).join(" → ")}
             </p>
           )}
+
+          {persisted.content.rescan && <RescanLine rescan={persisted.content.rescan} />}
 
           {persisted.content.recommendation && (
             <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">

@@ -1,5 +1,30 @@
 import { useWatchingDossiers } from "../api/hooks";
+import type { LastRescan } from "../api/types";
 import { Card, EmptyState, ErrorBanner, Spinner, StatusBadge } from "../components/ui";
+
+// R12d (design §3.5): the last re-research outcome per watched dossier —
+// the automatic Watch re-scan or a reviewer's Research More.
+function LastRescanCell({ last }: { last: LastRescan | null }) {
+  if (!last) return <span className="text-neutral-400">never</span>;
+  const when = new Date(last.at);
+  const detail = last.outcome === "failed" ? last.error : last.reason;
+  return (
+    <div className="flex flex-col gap-0.5" title={detail ?? undefined}>
+      <span className="flex items-center gap-2">
+        <StatusBadge status={last.outcome} />
+        <span className="text-neutral-500" title={when.toLocaleString()}>
+          {when.toLocaleDateString()}
+        </span>
+        {last.trigger === "research_more" && (
+          <span className="text-xs text-neutral-400">via Research More</span>
+        )}
+      </span>
+      {detail && (
+        <span className="max-w-xs truncate text-xs text-neutral-500">{detail}</span>
+      )}
+    </div>
+  );
+}
 
 function isOverdue(nextRecheckAt: string | null): boolean {
   if (!nextRecheckAt) return false;
@@ -55,6 +80,7 @@ export function RescanPage() {
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Last Generated</th>
                 <th className="px-4 py-2 font-medium">Next Re-scan</th>
+                <th className="px-4 py-2 font-medium">Last Re-scan</th>
               </tr>
             </thead>
             <tbody>
@@ -90,6 +116,9 @@ export function RescanPage() {
                       ) : (
                         <span className="text-neutral-400">--</span>
                       )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <LastRescanCell last={d.last_rescan} />
                     </td>
                   </tr>
                 );

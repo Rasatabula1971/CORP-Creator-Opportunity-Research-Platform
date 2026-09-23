@@ -1,8 +1,11 @@
 """API routes — CORP Step 8 endpoints."""
 
 import logging
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,7 +22,7 @@ from corp.core.models.intelligence import ProblemObservation
 from corp.core.models.intent import CommercialSignal
 from corp.core.models.niche import Niche
 from corp.core.models.scoring import CreatorScore, OpportunityScore
-from corp.core.models.workflow import ResearchRun
+from corp.core.models.workflow import ResearchRun, RunStatus, RunType
 from corp.core.schemas.campaign import CampaignResponse
 from corp.core.schemas.campaign_niche import CampaignNicheDetailResponse
 from corp.core.schemas.competitive import CompetitorResponse
@@ -36,6 +39,7 @@ from corp.core.schemas.dossier import (
     DossierResponse,
     DossierScoreResponse,
     DossierSignalResponse,
+    LastRescanResponse,
     PersistedDossierResponse,
     WatchingDossierResponse,
 )
@@ -399,6 +403,7 @@ async def list_watching_dossiers(
             Niche.canonical_name.label("niche_name"),
             Dossier.status,
             Dossier.generated_at,
+            Dossier.content,
             Niche.next_recheck_at,
         )
         .join(Creator, Creator.id == Dossier.creator_id)
@@ -411,6 +416,8 @@ async def list_watching_dossiers(
         .offset(offset)
         .limit(limit)
     )
+    rows = result.all()
+    failed_runs = await _latest_failed_rescans(session, [row.id for row in rows])
     return [
         WatchingDossierResponse(
             id=row.id,
@@ -421,9 +428,88 @@ async def list_watching_dossiers(
             status=row.status.value if hasattr(row.status, "value") else row.status,
             generated_at=row.generated_at,
             next_recheck_at=row.next_recheck_at,
+            last_rescan=_last_rescan(row.content or {}, failed_runs.get(row.id)),
         )
-        for row in result.all()
+        for row in rows
     ]
+
+
+async def _latest_failed_rescans(
+    session: AsyncSession, dossier_ids: list[str]
+) -> dict[str, ResearchRun]:
+    """R12d: the newest failed ``watch_rescan`` run per targeted dossier
+    (either trigger). The run's ``config_snapshot.dossier_id`` names the
+    dossier it re-researched (which stays active on failure, ADR-0061).
+    ``DISTINCT ON`` keeps this one row per dossier however many retries
+    have failed."""
+    if not dossier_ids:
+        return {}
+    target = ResearchRun.config_snapshot["dossier_id"].astext
+    runs = (
+        await session.execute(
+            select(ResearchRun)
+            .distinct(target)
+            .where(
+                ResearchRun.run_type == RunType.WATCH_RESCAN.value,
+                ResearchRun.status == RunStatus.FAILED.value,
+                target.in_(dossier_ids),
+            )
+            .order_by(
+                target,
+                ResearchRun.completed_at.desc().nulls_last(),
+                ResearchRun.started_at.desc().nulls_last(),
+            )
+        )
+    ).scalars()
+    return {str((run.config_snapshot or {}).get("dossier_id")): run for run in runs}
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _trigger(value: object) -> Literal["watch", "research_more"] | None:
+    if value == "watch":
+        return "watch"
+    if value == "research_more":
+        return "research_more"
+    return None
+
+
+def _last_rescan(
+    content: dict[str, Any], failed: ResearchRun | None
+) -> LastRescanResponse | None:
+    """Whichever is newer: the dossier's own rescan block (unchanged, or
+    resurfaced and since re-parked by the reviewer) or the latest failed
+    re-research that targeted it."""
+    produced: LastRescanResponse | None = None
+    block = content.get("rescan")
+    if isinstance(block, dict) and block.get("at"):
+        try:
+            produced = LastRescanResponse(
+                outcome="resurfaced" if block.get("resurfaced") else "unchanged",
+                trigger=_trigger(block.get("trigger")),
+                at=_as_utc(datetime.fromisoformat(str(block["at"]))),
+                reason=block.get("reason"),
+                score_delta=block.get("score_delta"),
+                new_evidence_count=block.get("new_evidence_count"),
+                run_id=block.get("run_id"),
+            )
+        except (ValueError, TypeError, ValidationError):
+            produced = None
+    failure: LastRescanResponse | None = None
+    failed_at = (failed.completed_at or failed.started_at) if failed is not None else None
+    if failed is not None and failed_at is not None:
+        failure = LastRescanResponse(
+            outcome="failed",
+            trigger=_trigger((failed.config_snapshot or {}).get("trigger")),
+            at=_as_utc(failed_at),
+            error=failed.error_message,
+            run_id=failed.id,
+        )
+    if produced and failure:
+        return failure if failure.at >= produced.at else produced
+    return produced or failure
 
 
 # ── Evidence ─────────────────────────────────────────────────────────

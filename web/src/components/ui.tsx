@@ -41,6 +41,8 @@ const badgeColors: Record<string, string> = {
   running: "bg-blue-100 text-blue-800",
   completed: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
+  unchanged: "bg-neutral-200 text-neutral-700",
+  resurfaced: "bg-green-100 text-green-800",
   partial: "bg-amber-100 text-amber-800",
   draft: "bg-neutral-200 text-neutral-700",
   active: "bg-blue-100 text-blue-800",
