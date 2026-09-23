@@ -163,6 +163,15 @@ class Settings(BaseSettings):
     # source whose prerequisites are missing degrades to that same rotation.
     discovery_momentum_source: Literal["youtube", "googletrends", "none"] = "youtube"
 
+    # Creator-first discovery: a researched creator's audience problem
+    # clusters become micro-niche suggestions, held for approval before
+    # anything is drilled. A cluster needs this many observations to count,
+    # and its creator's known follower count must sit inside the band
+    # (the spec's 10K-200K partnership range).
+    micro_niche_min_frequency: int = 3
+    micro_niche_min_followers: int = 10_000
+    micro_niche_max_followers: int = 200_000
+
     @field_validator("discovery_topics_per_pass", mode="before")
     @classmethod
     def _blank_means_unset(cls, v: object) -> object:

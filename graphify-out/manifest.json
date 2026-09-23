@@ -30,9 +30,9 @@
     "semantic_hash": ""
   },
   "corp/config.py": {
-    "mtime": 1790172202.1250165,
-    "seen": 1790173391.3214445,
-    "ast_hash": "91c4474d62fcd95af6b12adecedddb2d",
+    "mtime": 1790175069.7803776,
+    "seen": 1790175713.7819407,
+    "ast_hash": "d22d74284dba1f1324b8976e0ec76147",
     "semantic_hash": ""
   },
   "corp/core/__init__.py": {
@@ -66,9 +66,9 @@
     "semantic_hash": ""
   },
   "corp/core/models/__init__.py": {
-    "mtime": 1790131341.880512,
-    "seen": 1790133377.0448656,
-    "ast_hash": "36938810b695194577f4d609ba799df9",
+    "mtime": 1790174960.77069,
+    "seen": 1790175713.78195,
+    "ast_hash": "ff09493ca4806e43d125c07aa344a57e",
     "semantic_hash": ""
   },
   "corp/core/models/base.py": {
@@ -756,15 +756,15 @@
     "semantic_hash": ""
   },
   "corp/api/jobs.py": {
-    "mtime": 1790172241.6536446,
-    "seen": 1790173391.321439,
-    "ast_hash": "394d95265899222b79c64654d0037f81",
+    "mtime": 1790175120.78438,
+    "seen": 1790175713.7819335,
+    "ast_hash": "a20b0e14104c5de8c18c3c61f0eb1e1b",
     "semantic_hash": ""
   },
   "corp/api/routes_ops.py": {
-    "mtime": 1790172262.479627,
-    "seen": 1790173391.3214433,
-    "ast_hash": "fdc9163b30955e99f75f42f5afe42dca",
+    "mtime": 1790175101.984477,
+    "seen": 1790175713.781939,
+    "ast_hash": "55b857fbd9bcbd1061bbdf8247b74b62",
     "semantic_hash": ""
   },
   "corp/core/models/campaign.py": {
@@ -1776,9 +1776,9 @@
     "semantic_hash": ""
   },
   "web/src/App.tsx": {
-    "mtime": 1790131341.9488366,
-    "seen": 1790133377.0451624,
-    "ast_hash": "1cba2e7f6b2de2ec26364740c1c67d82",
+    "mtime": 1790175314.9241173,
+    "seen": 1790175713.782228,
+    "ast_hash": "0b2f8d8c34dead2a92225777c5c228f4",
     "semantic_hash": ""
   },
   "web/src/api/client.ts": {
@@ -1788,15 +1788,15 @@
     "semantic_hash": ""
   },
   "web/src/api/hooks.ts": {
-    "mtime": 1790131341.9490461,
-    "seen": 1790133377.0451643,
-    "ast_hash": "e5f51fb2bbbef7661449737c336e00bc",
+    "mtime": 1790175284.5320094,
+    "seen": 1790175713.7822294,
+    "ast_hash": "09a9c5f30eb844d813c6e53db6b4094c",
     "semantic_hash": ""
   },
   "web/src/api/types.ts": {
-    "mtime": 1790131341.9490461,
-    "seen": 1790133377.0451648,
-    "ast_hash": "fce2c8c947a42ae8aedadad32b43ce5e",
+    "mtime": 1790175284.5318394,
+    "seen": 1790175713.7822304,
+    "ast_hash": "397fd07f5c68eaf614f83ae538e936a9",
     "semantic_hash": ""
   },
   "web/src/components/ErrorBoundary.tsx": {
@@ -1806,9 +1806,9 @@
     "semantic_hash": ""
   },
   "web/src/components/Layout.tsx": {
-    "mtime": 1790131341.94955,
-    "seen": 1790133377.0451663,
-    "ast_hash": "bf8fe328799838a5df0f4146ee0368c5",
+    "mtime": 1790175314.924264,
+    "seen": 1790175713.7822316,
+    "ast_hash": "7eb7ced51b6a76e3cae85b09cd200e06",
     "semantic_hash": ""
   },
   "web/src/components/SettingsPanel.tsx": {
@@ -1818,9 +1818,9 @@
     "semantic_hash": ""
   },
   "web/src/components/ui.tsx": {
-    "mtime": 1790131341.94955,
-    "seen": 1790133377.0451677,
-    "ast_hash": "04d82409402d6348a013ede6188eb94f",
+    "mtime": 1790175284.5315413,
+    "seen": 1790175713.782233,
+    "ast_hash": "ed0e10fa4132faf4a3a4e77c92b29d67",
     "semantic_hash": ""
   },
   "web/src/main.tsx": {
@@ -2403,6 +2403,48 @@
     "mtime": 1790173075.8453865,
     "seen": 1790173391.3217304,
     "ast_hash": "d4415a8459bab384f9cca6ae1f502c8c",
+    "semantic_hash": ""
+  },
+  "corp/core/models/micro_niche.py": {
+    "mtime": 1790174952.7033536,
+    "seen": 1790175713.7819707,
+    "ast_hash": "4d4be360458f490676683fbb35918875",
+    "semantic_hash": ""
+  },
+  "corp/core/schemas/micro_niche.py": {
+    "mtime": 1790175069.7858837,
+    "seen": 1790175713.7820013,
+    "ast_hash": "a34126fccd7c8d612668fd3915eccdaa",
+    "semantic_hash": ""
+  },
+  "corp/workers/intelligence/micro_niches.py": {
+    "mtime": 1790175058.1560998,
+    "seen": 1790175713.7820747,
+    "ast_hash": "5f13f35b3faefe49d02a1954df4215a7",
+    "semantic_hash": ""
+  },
+  "migrations/versions/3793497b0a24_micro_niche_suggestions_approval_queue_.py": {
+    "mtime": 1790174990.0538807,
+    "seen": 1790175713.7821062,
+    "ast_hash": "2186cfca97c0738c0ebda573cb0ec5a8",
+    "semantic_hash": ""
+  },
+  "tests/api/test_micro_niche_endpoints.py": {
+    "mtime": 1790175238.2627754,
+    "seen": 1790175713.782143,
+    "ast_hash": "3fdda2dc9dd63f9edde043c4c781a14a",
+    "semantic_hash": ""
+  },
+  "tests/workers/test_micro_niches.py": {
+    "mtime": 1790175159.727366,
+    "seen": 1790175713.7822053,
+    "ast_hash": "40a0b1440449ebff86f9f636806f2b2b",
+    "semantic_hash": ""
+  },
+  "web/src/pages/MicroNichesPage.tsx": {
+    "mtime": 1790175393.969642,
+    "seen": 1790175713.7822394,
+    "ast_hash": "aaa19e481b0d03939e102546085d4340",
     "semantic_hash": ""
   }
 }

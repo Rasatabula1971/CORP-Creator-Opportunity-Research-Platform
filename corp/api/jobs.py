@@ -204,6 +204,28 @@ def _embedder_factory() -> "Callable[[], SentenceTransformerEmbedder]":
     return _singleton
 
 
+async def _refresh_micro_niches(creator_id: str | None = None) -> dict[str, int] | None:
+    """Queue micro-niche suggestions from freshly researched audience
+    clusters. Best-effort: database reads only, and a failure here must
+    never fail the research job that just succeeded."""
+    from corp.database import async_session
+    from corp.workers.intelligence.micro_niches import MicroNicheSeeder
+
+    try:
+        async with async_session() as session:
+            stats = await MicroNicheSeeder(
+                session,
+                min_frequency=settings.micro_niche_min_frequency,
+                min_followers=settings.micro_niche_min_followers,
+                max_followers=settings.micro_niche_max_followers,
+            ).suggest(creator_id=creator_id)
+            await session.commit()
+        return stats.as_dict()
+    except Exception:
+        logger.exception("Refreshing micro-niche suggestions failed (research is unaffected)")
+        return None
+
+
 async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str, Any]:
     from corp.database import async_session
     from corp.workers.orchestrator import ResearchOrchestrator
@@ -215,7 +237,7 @@ async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str,
             report = await ResearchOrchestrator(session, provider, _embedder_factory()).run(
                 creator_id, skip_collect=skip_collect
             )
-        return {
+        result: dict[str, Any] = {
             "final_status": report.final_status,
             "runs": [
                 {
@@ -228,6 +250,8 @@ async def run_research(creator_id: str, skip_collect: bool = False) -> dict[str,
         }
     finally:
         await _close(provider)
+    result["micro_niche_suggestions"] = await _refresh_micro_niches(creator_id)
+    return result
 
 
 async def run_pipeline(
@@ -556,6 +580,11 @@ async def run_campaign_pipeline(
                     raise
         finally:
             await _close(provider)
-        return {"run_id": run.id, "status": run.status, "stats": run.stats}
+        return {
+            "run_id": run.id,
+            "status": run.status,
+            "stats": run.stats,
+            "micro_niche_suggestions": await _refresh_micro_niches(),
+        }
 
     raise ValueError(f"Unknown campaign pipeline {kind!r}; known: {', '.join(CAMPAIGN_PIPELINES)}")

@@ -27,6 +27,12 @@ export function Layout() {
                 Research Runs
               </NavLink>
               <NavLink
+                to="/micro-niches"
+                className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ""}`}
+              >
+                Micro-niches
+              </NavLink>
+              <NavLink
                 to="/campaigns"
                 className={({ isActive }) => `${navItem} ${isActive ? navItemActive : ""}`}
               >

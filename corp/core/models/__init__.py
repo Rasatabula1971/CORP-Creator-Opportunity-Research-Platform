@@ -10,6 +10,7 @@ from corp.core.models.evidence import AccessMethod, ComplianceStatus, Evidence, 
 from corp.core.models.intelligence import ProblemCluster, ProblemClusterMember, ProblemObservation
 from corp.core.models.intent import CommercialSignal, SignalLevel
 from corp.core.models.metrics import MetricsSnapshot
+from corp.core.models.micro_niche import MicroNicheStatus, MicroNicheSuggestion
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus, NichePolicyClass
 from corp.core.models.niche_candidate import (
     NicheCandidate,
@@ -55,6 +56,8 @@ __all__ = [
     "ProblemCluster",
     "ProblemClusterMember",
     "CommercialSignal",
+    "MicroNicheStatus",
+    "MicroNicheSuggestion",
     "SignalLevel",
     "CreatorScore",
     "OpportunityScore",
