@@ -331,6 +331,8 @@ class DiscoveryScanScheduler:
         try:
             await self._task
         except asyncio.CancelledError:
+            # Expected, not an error: cancel() above is how stop() ends the
+            # loop, and awaiting a cancelled task re-raises CancelledError.
             pass
         self._task = None
 

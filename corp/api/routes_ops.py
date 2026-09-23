@@ -445,20 +445,31 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
         next_topics = [s.topic for s in due]
         scan = scan_stats.as_dict()
         error = None
-    except Exception as exc:  # noqa: BLE001 — a status read never 500s
+    except Exception:  # noqa: BLE001 — a status read never 500s
+        # Fixed text only, never the exception: an arbitrary error's message
+        # can carry internal detail (paths, connection strings) that must not
+        # reach an API caller. The full traceback is in the server log.
         logger.exception("Discovery status: preview scan failed")
-        next_topics, scan, error = [], {}, f"{type(exc).__name__}: {exc}"
+        next_topics, scan, error = [], {}, "preview scan failed; details in the server log"
 
     provider_ready = True
     provider_detail: str | None = None
     try:
         probe = build_provider()
-    except ProviderConfigError as exc:
+    except ProviderConfigError:
+        # Not str(exc) either: ProviderConfigError can wrap an arbitrary
+        # underlying exception (LLM_PROVIDER=fair). /providers/health is the
+        # dedicated diagnostic endpoint for the full reason.
         provider_ready = False
-        provider_detail = str(exc)
-    except Exception as exc:  # noqa: BLE001
+        logger.warning("Discovery status: no usable LLM provider", exc_info=True)
+        provider_detail = (
+            "no usable LLM provider configured (check LLM_PROVIDER, GEMINI_API_KEY, "
+            "GROQ_API_KEY); GET /providers/health gives the reason"
+        )
+    except Exception:  # noqa: BLE001
         provider_ready = False
-        provider_detail = f"{type(exc).__name__}: {exc}"
+        logger.exception("Discovery status: building the LLM provider failed")
+        provider_detail = "building the LLM provider failed; details in the server log"
     else:
         close = getattr(probe, "close", None)
         if callable(close):

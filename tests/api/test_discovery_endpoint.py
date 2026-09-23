@@ -150,20 +150,20 @@ async def test_status_hides_topics_already_inside_their_recheck_window(client, c
 
 
 async def test_status_never_500s_when_the_preview_scan_breaks(client, clean_db, monkeypatch):
-    """A status read is for diagnosing trouble, so it must survive it."""
-
-    class _Broken:
-        def __init__(self, *a, **kw):
-            raise RuntimeError("catalogue is unreadable")
-
+    """A status read is for diagnosing trouble, so it must survive it — and
+    must not hand the caller the exception's own text (CodeQL: information
+    exposure through an exception)."""
     monkeypatch.setattr(
         "corp.workers.intelligence.trend_scan.TrendScanner.__init__",
-        lambda self, *a, **kw: (_ for _ in ()).throw(RuntimeError("catalogue unreadable")),
+        lambda self, *a, **kw: (_ for _ in ()).throw(
+            RuntimeError("catalogue unreadable at /srv/secret/path.yaml")
+        ),
     )
     resp = await client.get("/discovery/status")
     assert resp.status_code == 200
     body = resp.json()
-    assert "catalogue unreadable" in body["error"]
+    assert body["error"] and "server log" in body["error"]
+    assert "/srv/secret" not in resp.text and "catalogue unreadable" not in resp.text
     assert body["next_topics"] == []
     # The settings half still answers, which is the part you check first.
     assert body["enabled"] is False
@@ -193,3 +193,29 @@ async def test_status_uses_the_configured_catalogue(client, clean_db, monkeypatc
     body = (await client.get("/discovery/status")).json()
     assert body["catalogue_size"] == 2
     assert set(body["next_topics"]) == {"alpha", "beta"}
+
+
+
+async def test_status_does_not_echo_provider_errors(client, clean_db, monkeypatch):
+    """ProviderConfigError can wrap an arbitrary underlying exception, and an
+    unexpected construction error can carry anything — neither reaches the
+    response body."""
+    from corp.workers.providers.factory import ProviderConfigError
+
+    def _config_error():
+        raise ProviderConfigError("LLM_PROVIDER=fair: token=sk-live-SECRET at /opt/fair")
+
+    monkeypatch.setattr(routes_ops, "build_provider", _config_error)
+    resp = await client.get("/discovery/status")
+    assert resp.status_code == 200
+    assert resp.json()["can_run"] is False
+    assert "GEMINI_API_KEY" in resp.json()["provider_detail"], "still actionable"
+    assert "SECRET" not in resp.text and "/opt/fair" not in resp.text
+
+    def _unexpected():
+        raise RuntimeError("postgresql://corp:hunter2@db.internal/corp")
+
+    monkeypatch.setattr(routes_ops, "build_provider", _unexpected)
+    resp = await client.get("/discovery/status")
+    assert resp.status_code == 200
+    assert "hunter2" not in resp.text and "db.internal" not in resp.text
