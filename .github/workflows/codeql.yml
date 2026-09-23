@@ -3,7 +3,7 @@ name: CORP CodeQL
 on:
   push:
     branches:
-      - testing/code-quality-pipeline
+      - main
   pull_request:
     branches:
       - main
