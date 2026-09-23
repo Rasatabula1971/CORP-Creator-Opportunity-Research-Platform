@@ -402,9 +402,9 @@
     "semantic_hash": ""
   },
   "pyproject.toml": {
-    "mtime": 1790132959.3191311,
-    "seen": 1790133377.0450723,
-    "ast_hash": "4bf4cc6ca2d2b33c70359851fe4fb5eb",
+    "mtime": 1790177304.37607,
+    "seen": 1790177792.621869,
+    "ast_hash": "df5ecbc3b78df1fc293c7205fc17b543",
     "semantic_hash": ""
   },
   "tests/__init__.py": {
@@ -510,9 +510,9 @@
     "semantic_hash": ""
   },
   "tests/integration/test_migration.py": {
-    "mtime": 1790132969.1442842,
-    "seen": 1790133377.0451133,
-    "ast_hash": "394bb51ea08b51972f47a32dc67a80a7",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6219237,
+    "ast_hash": "45f3a7cb8314c673b768bb5127fd522e",
     "semantic_hash": ""
   },
   "tests/integration/test_models_db.py": {
@@ -900,9 +900,9 @@
     "semantic_hash": ""
   },
   "corp/warmstore/store.py": {
-    "mtime": 1790131341.8823729,
-    "seen": 1790133377.0449495,
-    "ast_hash": "39b985f4e5ddbe86633d69559e73e739",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6217153,
+    "ast_hash": "e28e8f4d9c985b3d6fe45855b9045d6b",
     "semantic_hash": ""
   },
   "corp/warmstore/sync.py": {
@@ -960,9 +960,9 @@
     "semantic_hash": ""
   },
   "corp/workers/adapters/googletrends.py": {
-    "mtime": 1790131341.8833017,
-    "seen": 1790133377.044971,
-    "ast_hash": "6638d7b1c5483a3b2022da92a40d8c55",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6217396,
+    "ast_hash": "f0b951378b4553f3a2499eb975c5a4a2",
     "semantic_hash": ""
   },
   "corp/workers/adapters/hackernews.py": {
@@ -978,9 +978,9 @@
     "semantic_hash": ""
   },
   "corp/workers/adapters/ids.py": {
-    "mtime": 1790131341.8833017,
-    "seen": 1790133377.044975,
-    "ast_hash": "b4e1d3e6d1250fb95b0860acf241ae33",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6217434,
+    "ast_hash": "359a79e5333adb49d5f6ab05fbcf8777",
     "semantic_hash": ""
   },
   "corp/workers/adapters/marketplace.py": {
@@ -1170,9 +1170,9 @@
     "semantic_hash": ""
   },
   "corp/workers/providers/groq.py": {
-    "mtime": 1790131341.887855,
-    "seen": 1790133377.045033,
-    "ast_hash": "8777911575c54a23eff8ba70082e70f2",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6218138,
+    "ast_hash": "fcff35a76b654db0d9cced8481611057",
     "semantic_hash": ""
   },
   "corp/workers/providers/pool.py": {
@@ -1626,9 +1626,9 @@
     "semantic_hash": ""
   },
   "tests/workers/test_googletrends_adapter.py": {
-    "mtime": 1790131341.9334881,
-    "seen": 1790133377.0451407,
-    "ast_hash": "56bfa5681c8d72952d8b1fcfacda3ce6",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6219637,
+    "ast_hash": "73d788616231d9060d6056c16ead23f1",
     "semantic_hash": ""
   },
   "tests/workers/test_groq_provider.py": {
@@ -1692,9 +1692,9 @@
     "semantic_hash": ""
   },
   "tests/workers/test_provider_factory.py": {
-    "mtime": 1790131341.9334881,
-    "seen": 1790133377.0451493,
-    "ast_hash": "bed1904aa04acb782fe02182b858802e",
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6219792,
+    "ast_hash": "cfe46bf8eac21b7fcaf04e709e57209c",
     "semantic_hash": ""
   },
   "tests/workers/test_provider_pool.py": {
@@ -2445,6 +2445,18 @@
     "mtime": 1790175393.969642,
     "seen": 1790175713.7822394,
     "ast_hash": "aaa19e481b0d03939e102546085d4340",
+    "semantic_hash": ""
+  },
+  ".github/workflows/code-quality.yml": {
+    "mtime": 1790177275.4938438,
+    "seen": 1790177792.6220398,
+    "ast_hash": "036847d3c3cad79ee811c4c76a027f37",
+    "semantic_hash": ""
+  },
+  ".github/workflows/codeql.yml": {
+    "mtime": 1790177275.4940894,
+    "seen": 1790177792.6220407,
+    "ast_hash": "01d6a0d79cc37a7af3d657edf091d399",
     "semantic_hash": ""
   }
 }

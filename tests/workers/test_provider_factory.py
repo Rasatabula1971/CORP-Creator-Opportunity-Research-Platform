@@ -12,7 +12,12 @@ from corp.workers.providers.registry import GeminiProvider
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(_env_file=None, **overrides)
+    values = {
+        "llm_provider": "auto",
+        "fair_enabled": True,
+    }
+    values.update(overrides)
+    return Settings(_env_file=None, **values)
 
 
 class FakeRouter:

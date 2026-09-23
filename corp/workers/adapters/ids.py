@@ -11,4 +11,7 @@ import hashlib
 def stable_id(prefix: str, *parts: str | None) -> str:
     """Return ``prefix`` + 16 hex chars derived from ``parts`` (case-insensitive)."""
     joined = "|".join((p or "").strip().casefold() for p in parts)
-    return prefix + hashlib.sha1(joined.encode("utf-8")).hexdigest()[:16]
+    # SHA-1 is retained solely for backward-compatible deterministic external IDs;
+    # it is not used for signatures, authentication, or any security decision.
+    digest = hashlib.sha1(joined.encode("utf-8")).hexdigest()  # nosemgrep
+    return prefix + digest[:16]
