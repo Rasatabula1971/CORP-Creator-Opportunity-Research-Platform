@@ -342,3 +342,22 @@ def test_seed_topic_is_hashable_and_frozen():
     seed = SeedTopic(topic="baking", momentum=1.0, reason="rotation")
     with pytest.raises(AttributeError):
         seed.topic = "other"  # type: ignore[misc]
+
+
+async def test_an_outage_warns_once_not_once_per_topic(clean_db, caplog):
+    import logging
+
+    topics = ("baking", "woodworking", "yoga", "fishing")
+    scanner = TrendScanner(
+        clean_db,
+        trend_provider=_FakeTrends(fail=set(topics)),
+        config=_config(*topics, per_pass=4),
+        discovery_config=_discovery(),
+    )
+    with caplog.at_level(logging.WARNING, logger="corp.workers.intelligence.trend_scan"):
+        seeds, stats = await scanner.scan()
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert stats.momentum_failures == 4
+    assert len(warnings) == 2, [r.getMessage() for r in warnings]  # first failure + summary
+    assert "4 of 4" in warnings[-1].getMessage()
+    assert len(seeds) == 4, "the pass must still select topics"

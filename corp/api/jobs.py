@@ -330,25 +330,25 @@ async def run_discovery_scan(
     so a hand-picked niche yields the same evidence and lineage.
     """
     from corp.database import async_session
-    from corp.workers.adapters.registry import build_adapter
+    from corp.workers.intelligence.trend_scan import TrendScanConfig
     from corp.workers.providers.capabilities import TrendProvider
     from corp.workers.providers.factory import build_provider
-    from corp.workers.scheduler.discovery_scan import run_discovery_pass
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        run_discovery_pass,
+    )
 
     provider = build_provider()
-    # The momentum signal is optional: a missing or broken Trends adapter
-    # downgrades ranking to rotation rather than failing the pass.
+    # The momentum signal is optional: a missing or broken source downgrades
+    # ranking to rotation rather than failing the pass. User-supplied topics
+    # skip the scan entirely, so they need no momentum source at all.
     trend_provider: TrendProvider | None = None
     if not topics:
         try:
-            candidate = build_adapter("googletrends")
+            region = TrendScanConfig.from_rules(settings.broad_topics_path).geo
+            trend_provider = build_momentum_provider(settings, region)
         except Exception as exc:  # noqa: BLE001 — ranking only
-            logger.info("Discovery scan: no Google Trends adapter (%s); ranking by rotation", exc)
-        else:
-            if isinstance(candidate, TrendProvider):
-                trend_provider = candidate
-            else:
-                await _close(candidate)
+            logger.info("Discovery scan: no momentum source (%s); ranking by rotation", exc)
 
     try:
         async with async_session() as session:
@@ -360,6 +360,7 @@ async def run_discovery_scan(
                     topics_per_pass=topics_per_pass,
                     campaign_id=campaign_id,
                     topics=topics,
+                    broad_topics_path=settings.broad_topics_path,
                 )
                 await session.commit()
             except Exception:

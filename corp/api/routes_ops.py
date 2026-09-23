@@ -415,8 +415,11 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
     design (Stage 4: "no push-notification/attention engine"), so the
     honest place for this is an endpoint you can check.
     """
-    from corp.workers.intelligence.trend_scan import TrendScanner
-    from corp.workers.scheduler.discovery_scan import AUTONOMOUS_CAMPAIGN_NAME
+    from corp.workers.intelligence.trend_scan import TrendScanConfig, TrendScanner
+    from corp.workers.scheduler.discovery_scan import (
+        AUTONOMOUS_CAMPAIGN_NAME,
+        momentum_readiness,
+    )
 
     # trend_provider=None: this is a cheap status read, so it must not make
     # a live Trends call. Ordering here is rotation-only and indicative.
@@ -425,7 +428,11 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
     # 500s exactly when the thing it reports on is broken is useless.
     cfg = None
     try:
-        scanner = TrendScanner(session, trend_provider=None)
+        scanner = TrendScanner(
+            session,
+            trend_provider=None,
+            config=TrendScanConfig.from_rules(settings.broad_topics_path),
+        )
         cfg = scanner.config
         due, scan_stats = await scanner.scan(
             settings.discovery_topics_per_pass or cfg.topics_per_pass
@@ -452,6 +459,8 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
         if callable(close):
             await close()
 
+    momentum_source, momentum_available, momentum_detail = momentum_readiness(settings)
+
     result = await session.execute(
         select(Campaign.id).where(
             func.lower(Campaign.name) == AUTONOMOUS_CAMPAIGN_NAME.lower()
@@ -467,7 +476,13 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
         # A pass needs an LLM to drill with; without one it fails immediately.
         "can_run": provider_ready,
         "provider_detail": provider_detail,
+        # Whether topics will be ranked by live momentum or just rotated
+        # through. Checks prerequisites only; no call is made to the source.
+        "momentum_source": momentum_source,
+        "momentum_available": momentum_available,
+        "momentum_detail": momentum_detail,
         "autonomous_campaign_id": result.scalar_one_or_none(),
+        # Rotation order: previewing momentum would spend quota on a status read.
         "next_topics": next_topics,
         "scan": scan,
         "error": error,

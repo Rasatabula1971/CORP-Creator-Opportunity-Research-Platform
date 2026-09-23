@@ -99,15 +99,17 @@ class DiscoveryProviders:
     def __init__(self) -> None:
         self._provider: LLMProvider | None = None
         self._trend: object | None = None
+        self._trend_unavailable = False
         self._unconfigured = False
 
     async def factory(self) -> "DiscoveryHandle | None":
-        from corp.workers.adapters.registry import build_adapter
+        from corp.workers.intelligence.trend_scan import TrendScanConfig
         from corp.workers.providers.capabilities import TrendProvider
         from corp.workers.providers.factory import ProviderConfigError, build_provider
         from corp.workers.scheduler.discovery_scan import (
             DiscoveryDeferredError,
             DiscoveryHandle,
+            build_momentum_provider,
         )
 
         if self._unconfigured:
@@ -125,19 +127,19 @@ class DiscoveryProviders:
         if callable(available) and not available():
             raise DiscoveryDeferredError("every LLM provider is in cooldown")
 
-        if self._trend is None:
+        if self._trend is None and not self._trend_unavailable:
+            # Built once and kept: the YouTube chart cache lives on the
+            # adapter, so a per-tick rebuild would re-spend the chart's quota
+            # on every pass instead of once per cache window.
             try:
-                candidate = build_adapter("googletrends")
+                region = TrendScanConfig.from_rules(settings.broad_topics_path).geo
+                self._trend = build_momentum_provider(settings, region)
             except Exception as exc:  # noqa: BLE001 — ranking signal only
                 logger.info(
-                    "Discovery crawler: no Google Trends adapter (%s); ranking by rotation",
-                    exc,
+                    "Discovery crawler: no momentum source (%s); ranking by rotation", exc
                 )
-            else:
-                if isinstance(candidate, TrendProvider):
-                    self._trend = candidate
-                else:
-                    await _close_quietly(candidate)
+            if self._trend is None:
+                self._trend_unavailable = True
 
         trend = self._trend if isinstance(self._trend, TrendProvider) else None
         # Providers outlive the tick, so releasing one here would defeat the
@@ -147,6 +149,7 @@ class DiscoveryProviders:
     async def aclose(self) -> None:
         provider, self._provider = self._provider, None
         trend, self._trend = self._trend, None
+        self._trend_unavailable = False
         for obj in (provider, trend):
             await _close_quietly(obj)
 
@@ -235,6 +238,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 interval_seconds=settings.discovery_interval_seconds,
                 topics_per_pass=settings.discovery_topics_per_pass,
                 qualification_rules_path=settings.niche_qualification_rules_path,
+                broad_topics_path=settings.broad_topics_path,
                 is_busy=_discovery_busy,
             )
             discovery.start()

@@ -1,33 +1,33 @@
 # Graph Report - CORP-Creator-Opportunity-Research-Platform  (2026-09-23)
 
 ## Corpus Check
-- 382 files · ~227,507 words
+- 387 files · ~234,391 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 13 file(s) not represented in the graph (top: (none) 5, .example 2, .ini 1)
 
 ## Summary
-- 4976 nodes · 14490 edges · 275 communities (212 shown, 63 thin omitted)
-- Extraction: 84% EXTRACTED · 16% INFERRED · 0% AMBIGUOUS · INFERRED: 2254 edges (avg confidence: 0.94)
+- 5164 nodes · 14958 edges · 288 communities (226 shown, 62 thin omitted)
+- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 2303 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1c44f0db`
+- Built from commit: `ccc01da4`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Evidence
+- OpportunityScore
 - CreatorStatus
 - test_scoring_engine.py
 - CORP Implementation Steps — Coding Roadmap
 - test_fair_provider.py
 - ConfidenceBand
-- ClusterPipeline
+- integration/test_cluster_pipeline.py
 - test_endpoints.py
-- Niche
+- test_models_db.py
 - IntelligencePipeline
 - YouTubeAdapter
-- LLMProvider
+- Evidence
 - SignalLevel
 - What You Must Do When Invoked
 - extract_observations
@@ -37,11 +37,11 @@
 - CORP — CIP-Driven Build Design (Claude Code handoff) — v1.1
 - test_youtube_adapter.py
 - test_niche_discovery.py
-- classify_topics
+- LLMCallError
 - AcquisitionCollector
-- cluster_pipeline.py
-- scoring_pipeline.py
-- NormalizedContent
+- Embedder
+- Niche
+- ._persist_items
 - MarketplaceAdapter
 - load_yaml_rules
 - graphify reference: extra exports and benchmark
@@ -65,34 +65,34 @@
 - AmazonReviewAdapter
 - CreatorOnboarder
 - PatreonSubstackAdapter
-- providers/registry.py
+- test_coerce.py
 - AppStoreAdapter
-- StackExchangeAdapter
+- test_stackexchange_adapter.py
 - EvidenceType
 - ProviderExhaustedError
 - test_watch_rescanner.py
 - CrowdfundingAdapter
 - GoogleTrendsAdapter
 - WikipediaAdapter
-- .select
+- Creator
 - test_registry_rescan.py
 - test_dossier_decision_endpoint.py
 - test_web_adapter.py
 - routes_ops.py
-- build_adapter
-- DossierGenerator
+- YtDlpAdapter
+- .select
 - SearchDemandAdapter
 - SourceHealthTracker
 - HackerNewsAdapter
 - test_corp2_export.py
 - register_error_handlers
-- engine.py
-- PipelineStats
-- WatchRescanConfig
+- ._score_opportunity
+- test_runs.py
+- app.py
 - test_ops_no_db.py
 - test_niche_candidates.py
 - test_discovery.py
-- test_campaign_research.py
+- CampaignResearchBatch
 - App.tsx
 - CreatorDetailPage.tsx
 - EcosystemEstimator
@@ -100,47 +100,47 @@
 - test_product_ideation.py
 - hooks.ts
 - EvidenceOrigin
-- RedditAdapter
+- NormalizedContent
 - scoring/niche_qualification.py
 - test_dossier_persistence.py
-- app.py
+- require_api_key
 - record_query
 - test_niche_naming.py
 - test_groq_provider.py
 - test_multi_discovery.py
-- CampaignNiche
+- NicheLifecycleStatus
 - ProblemCluster
 - package.json
-- CampaignResearchBatch
-- test_ytdlp_adapter.py
+- test_niche_canonicalization.py
+- providers/registry.py
 - Campaign
-- multi_discovery.py
+- MultiSourceDiscovery
 - test_captions.py
-- orchestrator.py
-- registry_rescan.py
+- ResearchOrchestrator
+- RegistryRescanScheduler
 - test_campaign_endpoints.py
 - test_reddit_adapter.py
-- test_competitive_pipeline.py
+- CompetitivePipeline
 - CampaignDetailPage.tsx
-- niche_discovery.py
+- matched_exclusion
 - 3. Product specification (Stage 3 — to freeze)
-- test_campaign_pipeline_discover_to_dossier
-- RunType
+- ScriptedProvider
+- .generate
 - compute_score
 - compilerOptions
 - NicheQualifier
 - PruneService
-- test_handoff_endpoint.py
-- WebPresenceAdapter
-- WatchRescanner
+- DecisionType
+- build_adapter
+- Ideator
 - compilerOptions
-- ._score_opportunity
-- advance
+- test_discovery_scan.py
+- ProblemObservation
 - NichePolicyClass
 - product_ideation.py
 - Decisions
 - ADR-0036 — CORP1 Stage 5, T6: Dossier Model and Generator
-- test_dossier_pipeline.py
+- _seed_full
 - ADR-0040 — CORP1 Stage 5, T10: Registry Re-scan Scheduler
 - ADR-0034 — CORP1 Stage 5, T4: Campaign Pipeline Rewire
 - ADR-0042 — CORP1 Stage 5, T13: Kickstarter + Indiegogo Adapter (Phase 2.3)
@@ -155,19 +155,19 @@
 - ADR-0044 — CORP1 Stage 5, T21: Full Scoring Integration (Phase 3.6)
 - ADR-0045 — Wire Registry Re-scan Scheduler into App Startup
 - Running CORP locally (laptop + flash drive)
-- database.py
+- test_handoff_endpoint.py
 - Slice 7 — Niche Discovery Light: One Source
 - ADR-0031 — CORP1 Stage 5, T1: Capability-Provider Interfaces
 - ADR-0035 — CORP1 Stage 5, T5: Product Idea Generation
-- Any
+- YouTubeAPIEnricher
 - _days_from_recency
 - Slice 19 — WarmStore Foundation
 - ADR-0046 — Wire T9 Handoff to T8's Approve Decision Path
 - ADR-0047 — Fix DossierGenerator Cross-Niche Opportunity Mismatch
 - devDependencies
 - CreatorsPage.tsx
-- ContentType
-- FakeRescanner
+- test_intelligence_pipeline.py
+- decide_resurface
 - Slice 18 — Creator Intelligence Dashboard
 - Slice 20 — WarmStore Pipeline Integration
 - Slice 21 — YouTube Transcript Segmentation
@@ -203,8 +203,8 @@
 - ADR-0063 — R12d: the re-scan outcome is visible in the dossier panel and on the Re-scan page
 - ADR-0064 — R14: reversible creator archive, respecting the append-only evidence trail
 - test_evidence_provenance_constructors.py
-- _Report
-- score_solution_saturation
+- DiscoveryScanScheduler
+- Settings
 - score_purchase_intent
 - Slice 1 — Campaign Persistence
 - Slice 2 — Canonical Niche Persistence
@@ -221,100 +221,113 @@
 - Step 0 — Project Scaffold (Adopt CIP)
 - .oxlintrc.json
 - CampaignStatus
-- score_commercial_intent
+- test_discovery_endpoint.py
 - finish_run returns a status; a fully failed run is kept
 - Step 2 — YouTube Adapter (Wrap google-api-python-client)
 - Step 3 — Content + Audience Intelligence (Wrap Gemini)
 - Step 6 — Scoring + Confidence (Adapt CIP Steps 9 + 12)
 - Step 8 — Minimal Console + Gate A (Mirror CIP Step 14)
-- _WorkingFair
+- stub_fair
 - CreatorNicheResponse
-- score_evidence_depth
+- StackExchangeAdapter
 - Step 1 — Core Data Model (Adapt CIP Evidence Model)
 - Step 4 — Problem Clustering (Adopt BERTopic / HDBSCAN)
 - Step 5 — Commercial Intent (Build rules table + Wrap Gemini)
 - React + TypeScript + Vite
-- pytest_sessionfinish
+- test_trend_scan.py
 - tsconfig.json
 - .record_step
-- .__init__
+- sync.py
+- trend_scan.py
+- load_scoring_rules
+- ._get_engine
+- LLMProvider
+- jobs.py
+- _score_from_items
+- test_mirror_embeddings.py
+- PooledProvider
+- CompetitorStrength
+- patched_pipeline
+- score_audience_dissatisfaction
+- score_audience_problem_frequency
+- ._restore_if_in_progress
 
 ## God Nodes (most connected - your core abstractions)
 1. `NormalizedContent` - 210 edges
 2. `ResearchRun` - 178 edges
 3. `ComplianceStatus` - 158 edges
 4. `AccessMethod` - 157 edges
-5. `Niche` - 143 edges
+5. `Niche` - 155 edges
 6. `Creator` - 132 edges
 7. `Evidence` - 128 edges
-8. `CreatorStatus` - 104 edges
-9. `Campaign` - 97 edges
+8. `Campaign` - 104 edges
+9. `CreatorStatus` - 104 edges
 10. `EvidenceType` - 96 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `FakeSignal` --uses--> `SignalLevel`  [INFERRED]
   tests/workers/test_dossier_generator.py → corp/core/models/intent.py
+- `captured()` --uses--> `JobRegistry`  [INFERRED]
+  tests/api/test_discovery_endpoint.py → corp/api/jobs.py
 - `test_run_pipeline_unknown_kind_raises()` --calls--> `run_pipeline()`  [EXTRACTED]
   tests/api/test_ops_no_db.py → corp/api/jobs.py
 - `fake_fair()` --uses--> `Settings`  [INFERRED]
   tests/workers/test_provider_factory.py → corp/config.py
-- `test_campaign_creation_unaffected_by_niche_addition()` --uses--> `CampaignStatus`  [INFERRED]
-  tests/integration/test_models_db.py → corp/core/models/campaign.py
-- `test_create_campaign_with_custom_config()` --uses--> `CampaignStatus`  [INFERRED]
-  tests/integration/test_models_db.py → corp/core/models/campaign.py
+- `clean_db()` --uses--> `Base`  [INFERRED]
+  tests/conftest.py → corp/core/models/base.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (275 total, 63 thin omitted)
+## Communities (288 total, 62 thin omitted)
 
-### Community 0 - "Evidence"
-Cohesion: 0.10
-Nodes (38): Competitor, CompetitorStrength, CompetitorType, str, An existing product/creator/workaround already serving a problem cluster's…, Evidence, Append-only evidence store. No UPDATE or DELETE — ever., ProblemClusterMember (+30 more)
+### Community 0 - "OpportunityScore"
+Cohesion: 0.21
+Nodes (21): OpportunityScore, Any, Scores every active ProblemCluster for a creator, then aggregates per creator., Load the strength of every Competitor row known for this cluster. Independent…, ScoringPipeline, asyncio, AsyncSession, Integration tests for ScoringPipeline against real Postgres. (+13 more)
 
 ### Community 1 - "CreatorStatus"
-Cohesion: 0.16
-Nodes (29): CreatorStatus, str, creator_status_for_dossiers(), mirror_creator_status(), AsyncSession, Gate A logic — human review decisions with state machine transitions — and the…, The creator status implied by its ACTIVE dossiers, by precedence: any approved…, Move Creator.status to match the creator's active dossiers after a dossier-gate… (+21 more)
+Cohesion: 0.12
+Nodes (42): CreatorStatus, str, creator_status_for_dossiers(), mirror_creator_status(), Gate A logic — human review decisions with state machine transitions — and the…, The creator status implied by its ACTIVE dossiers, by precedence: any approved…, Move Creator.status to match the creator's active dossiers after a dossier-gate…, InvalidTransitionError (+34 more)
 
 ### Community 2 - "test_scoring_engine.py"
 Cohesion: 0.08
-Nodes (41): get_score_band(), Any, Higher = more whitespace (less saturated), matching the "higher is better"…, From TrendProvider + SearchIntentProvider evidence (Google Trends interest,…, From DissatisfactionProvider evidence — low-star reviews, complaints about…, score_audience_dissatisfaction(), score_audience_problem_frequency(), score_competitor_saturation() (+33 more)
+Nodes (40): get_score_band(), Any, From TrendProvider + SearchIntentProvider evidence (Google Trends interest,…, Higher = less saturated = more room, from SolutionProvider evidence…, score_commercial_intent(), score_creator_reach(), score_evidence_depth(), score_external_demand_strength() (+32 more)
 
 ### Community 3 - "CORP Implementation Steps — Coding Roadmap"
 Cohesion: 0.22
 Nodes (9): 7.1 Dossier template (`workers/dossier/templates/dossier.html.j2`), 7.2 Dossier engine (`workers/dossier/generator.py`), 7.3 Tests, CORP Implementation Steps — Coding Roadmap, Deferred (Only If Thin Slice Earns It), Implementation Order & Dependencies, Key Architectural Decisions (Pre-resolved), Phasing Strategy (+1 more)
 
 ### Community 4 - "test_fair_provider.py"
-Cohesion: 0.05
-Nodes (65): provider_health(), Diagnose the active LLM provider. Returns the active provider's name and, when…, ProviderError, ProviderUnavailableError, Exception, Provider health signals the pool acts on. Only these two trigger failover.…, Transient failure (5xx, timeout, transport) that outlasted the retry budget., FairProvider (+57 more)
+Cohesion: 0.09
+Nodes (42): FairProvider, _model_label(), LLMProvider backed by an in-process FAIR router. ``router`` is a…, The model that answered the last call (vendor-canonical label, e.g.…, Every model FAIR may route to, plus the pre-call label: one family for…, _accepted(), Attempt, FakeFair (+34 more)
 
 ### Community 5 - "ConfidenceBand"
 Cohesion: 0.27
 Nodes (15): ConfidenceBand, str, compute_confidence_band(), Any, Confidence banding driven by YAML thresholds when provided. Args: thresholds:…, Regression: 90-365 days used to silently fall through to MEDIUM instead of…, test_custom_thresholds_override_defaults(), test_degrades_to_low_past_medium_max_days() (+7 more)
 
-### Community 6 - "ClusterPipeline"
-Cohesion: 0.06
-Nodes (61): ClusterPipeline, AsyncSession, Merge cluster labels into the creator's ContentItem.topics list. Produces a…, Embeds ProblemObservations, clusters them, and persists results. A new run for…, _build_clusters(), cluster_observations(), ClusteringConfig, ClusterResult (+53 more)
+### Community 6 - "integration/test_cluster_pipeline.py"
+Cohesion: 0.09
+Nodes (46): _build_clusters(), cluster_observations(), ClusteringConfig, _generate_label(), _pick_representative(), datetime, ndarray, Problem observation clustering via UMAP + HDBSCAN with c-TF-IDF labeling. (+38 more)
 
 ### Community 7 - "test_endpoints.py"
-Cohesion: 0.23
-Nodes (30): _make_client(), AsyncClient, asyncio, AsyncSession, MonkeyPatch, parametrize, API endpoint tests against real Postgres., research_more is a dossier-gate decision; Gate A must say so, not 500. (+22 more)
+Cohesion: 0.18
+Nodes (35): create_app(), health(), No-DB tests for the FastAPI application factory's docs/schema exposure., test_docs_disabled_when_api_key_configured(), test_docs_open_when_no_api_key(), _make_client(), AsyncClient, asyncio (+27 more)
 
-### Community 8 - "Niche"
+### Community 8 - "test_models_db.py"
 Cohesion: 0.10
-Nodes (61): Niche, Canonical niche identity. A broad domain (e.g. "Fitness") is a discovery input,…, _create_campaign_and_niche(), _create_creator(), _create_evidence(), asyncio, AsyncSession, Integration tests: models against real Postgres 16. Tests model creation,… (+53 more)
+Nodes (59): _create_campaign_and_niche(), _create_creator(), _create_evidence(), asyncio, AsyncSession, Integration tests: models against real Postgres 16. Tests model creation,…, The one rule this slice enforces at the DB level (§11)., The existing, designed cross-creator clustering capability… (+51 more)
 
 ### Community 9 - "IntelligencePipeline"
-Cohesion: 0.09
-Nodes (28): AudienceInteraction, IntelligencePipeline, Any, Extract per-comment + cross-comment observations, one content item at a time.…, Run one batched extraction and persist its observations., Mark an interaction as extracted under the current prompt + model., True when this interaction was already extracted by the current prompt version…, Save single-comment observations against a specific evidence row. (+20 more)
+Cohesion: 0.12
+Nodes (13): IntelligencePipeline, Any, Extract per-comment + cross-comment observations, one content item at a time.…, Run one batched extraction and persist its observations., Mark an interaction as extracted under the current prompt + model., True when this interaction was already extracted by the current prompt version…, Save single-comment observations against a specific evidence row., Newest evidence row for a source id (re-collection appends, never updates). (+5 more)
 
 ### Community 10 - "YouTubeAdapter"
-Cohesion: 0.08
-Nodes (16): _parse_iso8601_duration(), datetime, _RateLimiter, Collects videos, comments, and captions from a YouTube channel., Resolve a channel handle (e.g. '@mkbhd') to a channel ID., List videos from a channel's uploads playlist., Get comment threads (top-level + replies) for a video., Return the duration of an ISO 8601 string in seconds, or None if unparseable.… (+8 more)
+Cohesion: 0.07
+Nodes (25): _extract_channel_id(), _http_error_reason(), _parse_iso8601_duration(), Any, datetime, retry, _RateLimiter, Collects videos, comments, and captions from a YouTube channel. (+17 more)
 
-### Community 11 - "LLMProvider"
-Cohesion: 0.15
-Nodes (19): IntentPipeline, AsyncSession, Classifies commercial intent for each active ProblemCluster. Runs inside the…, AsyncSession, LLMProvider, ABC, Abstract LLM provider with JSON-mode generation., FakeProvider (+11 more)
+### Community 11 - "Evidence"
+Cohesion: 0.21
+Nodes (17): Evidence, Append-only evidence store. No UPDATE or DELETE — ever., CommercialSignal, IntentPipeline, Classifies commercial intent for each active ProblemCluster. Runs inside the…, FakeProvider, asyncio, AsyncSession (+9 more)
 
 ### Community 12 - "SignalLevel"
 Cohesion: 0.08
@@ -330,51 +343,51 @@ Nodes (15): extract_observations(), Extract problem observations from a single c
 
 ### Community 15 - "ComplianceStatus"
 Cohesion: 0.05
-Nodes (62): create_evidence(), AsyncSession, AccessMethod, ComplianceStatus, str, EvidenceCreate, EvidenceResponse, BaseModel (+54 more)
+Nodes (78): create_evidence(), AsyncSession, AccessMethod, ComplianceStatus, str, EvidenceCreate, EvidenceResponse, BaseModel (+70 more)
 
 ### Community 16 - "test_dossier_generator.py"
 Cohesion: 0.22
 Nodes (28): FakeAccount, FakeCluster, FakeCompetitor, FakeCreator, FakeCreatorScore, FakeDataCoverage, FakeObservation, FakeOpportunity (+20 more)
 
 ### Community 17 - "test_provider_registry.py"
-Cohesion: 0.07
-Nodes (36): classify_quota_error(), _finish_reason(), GeminiProvider, Any, BaseException, Why the first candidate stopped, for error messages; None when unknown., Log schema mismatches so they are no longer silent., Return the model's JSON-object answer. ``schema`` is the JSON Schema of the… (+28 more)
+Cohesion: 0.10
+Nodes (27): classify_quota_error(), BaseException, Turn a Gemini 429 into a pool signal. Gemini reports a per-day cap and a per-…, _response_hash(), _client_error(), _FakeClient, gemini(), make() (+19 more)
 
 ### Community 18 - "CORP — CIP-Driven Build Design (Claude Code handoff) — v1.1"
 Cohesion: 0.14
 Nodes (14): 0. What "using CIP" means here, 1. Two findings before you build, 3. Prior art — five candidate repos (search-before-build gate, executed), 4. The headline: CORP and CIP share DNA, 5. Repo skeleton (respects your import-linter discipline), 6. Recommended v1 build sequence (thin slice, N=1, YouTube-only), 7. Phase 0 source-capability matrix (pre-filled — don't restart from zero), 8. Open decisions for you (+6 more)
 
 ### Community 19 - "test_youtube_adapter.py"
-Cohesion: 0.09
-Nodes (33): _extract_channel_id(), _http_error_reason(), Any, Exception, retry, QuotaExceededError, Page through every reply for a top-level comment (main-lineage bugfix)., authorChannelId on a comment snippet is either {"value": "UCxx"} or absent. (+25 more)
+Cohesion: 0.13
+Nodes (24): Exception, QuotaExceededError, Raised when YouTube API daily quota would be exceeded., _comment_threads_response(), _make_adapter(), _playlist_items_response(), Unit tests for the YouTube adapter — all API calls mocked., CORP1 Stage 4/5, T2: YouTube is ProblemProvider, delegating to collect(). (+16 more)
 
 ### Community 20 - "test_niche_discovery.py"
-Cohesion: 0.07
-Nodes (94): NicheCandidate, NicheCandidateStatus, str, NicheAlias, Alternate wording that resolves to one canonical Niche. Existence of this table…, CanonConfig, NicheCanonicalizer, AsyncSession (+86 more)
+Cohesion: 0.19
+Nodes (46): NicheCandidate, Broad topic -> capability fan-out -> LLM synthesis -> recurse. ``provider`` is…, RecursiveNicheDiscovery, _config(), _content(), _FakeTrendAdapter, _make_campaign(), _make_campaign_run() (+38 more)
 
-### Community 21 - "classify_topics"
-Cohesion: 0.18
-Nodes (12): classify_topics(), Any, Classify a creator's content into topics. Args: provider: LLM provider…, FailingProvider, FakeProvider, Unit tests for topic classification — LLM calls mocked., test_classify_topics_basic(), test_classify_topics_clamps_confidence() (+4 more)
+### Community 21 - "LLMCallError"
+Cohesion: 0.11
+Nodes (19): LLMCallError, BaseException, RuntimeError, Typed failures raised by the LLM helper functions. The helpers used to swallow…, A single LLM call failed (transport, provider, or unparseable output)., Intelligence pipeline — orchestrates extraction and topic classification., classify_topics(), Any (+11 more)
 
 ### Community 22 - "AcquisitionCollector"
 Cohesion: 0.16
 Nodes (21): AcquisitionCollector, AsyncSession, Persists adapter output into ContentItem, AudienceInteraction, and Evidence…, _create_creator(), FakeAdapter, asyncio, AsyncSession, Integration tests for AcquisitionCollector against real Postgres. (+13 more)
 
-### Community 23 - "cluster_pipeline.py"
-Cohesion: 0.10
-Nodes (22): Clustering pipeline — embed observations, cluster, persist to DB, unify topics., embed_texts(), embed_texts_async(), Embedder, ndarray, Protocol, Embedding generation for ProblemObservation text using sentence-transformers., Protocol for anything that can embed text into vectors. (+14 more)
+### Community 23 - "Embedder"
+Cohesion: 0.09
+Nodes (23): AsyncSession, embed_texts(), embed_texts_async(), Embedder, ndarray, Protocol, Embedding generation for ProblemObservation text using sentence-transformers., Protocol for anything that can embed text into vectors. (+15 more)
 
-### Community 24 - "scoring_pipeline.py"
-Cohesion: 0.13
-Nodes (30): Base, generate_uuid(), TimestampMixin, ContentItem, CreatorPlatformAccount, CreatorNiche, Many-to-many: a creator may be associated with several niches (§14). This is…, Dossier persistence (CORP1 Stage 4's one new model). Before this, the dossier… (+22 more)
+### Community 24 - "Niche"
+Cohesion: 0.08
+Nodes (48): Base, generate_uuid(), TimestampMixin, CampaignNiche, How one niche performed within one campaign (§12). Never overwrites Niche's own…, Competitor, CompetitorType, An existing product/creator/workaround already serving a problem cluster's… (+40 more)
 
-### Community 25 - "NormalizedContent"
-Cohesion: 0.07
-Nodes (17): _content_extra(), _int_or_none(), _is_interaction(), Any, Update the platform account's follower count and append a snapshot., Find the ContentItem a comment/reply/question/review belongs to., Whitelist adapter metadata that scoring or the dossier can use later., NormalizedContent (+9 more)
+### Community 25 - "._persist_items"
+Cohesion: 0.18
+Nodes (7): _content_extra(), _int_or_none(), _is_interaction(), Any, Update the platform account's follower count and append a snapshot., Find the ContentItem a comment/reply/question/review belongs to., Whitelist adapter metadata that scoring or the dossier can use later.
 
 ### Community 27 - "MarketplaceAdapter"
-Cohesion: 0.05
-Nodes (56): Return ``prefix`` + 16 hex chars derived from ``parts`` (case-insensitive)., stable_id(), _extract_price(), _html_to_text(), _is_retryable(), MarketplaceAdapter, _parse_etsy_api_response(), _parse_etsy_listings() (+48 more)
+Cohesion: 0.06
+Nodes (42): _extract_price(), _html_to_text(), MarketplaceAdapter, _parse_etsy_listings(), _parse_gumroad_listings(), _parse_udemy_response(), Any, AsyncClient (+34 more)
 
 ### Community 28 - "load_yaml_rules"
 Cohesion: 0.36
@@ -398,11 +411,11 @@ Nodes (5): For /graphify explain, For /graphify path, graphify reference: query,
 
 ### Community 34 - "schemas/dossier.py"
 Cohesion: 0.12
-Nodes (30): get_dossier_json(), ClusterDetail, CompetitorResponse, BaseModel, DataCoverageResponse, DossierCreatorResponse, DossierOpportunityResponse, DossierPlatformAccountResponse (+22 more)
+Nodes (29): get_dossier_json(), CompetitorResponse, BaseModel, DataCoverageResponse, DossierCreatorResponse, DossierOpportunityResponse, DossierPlatformAccountResponse, DossierResponse (+21 more)
 
 ### Community 35 - "build_provider"
-Cohesion: 0.06
-Nodes (65): build_provider(), _configured_members(), _gemini(), _groq(), ProviderConfigError, Exception, Provider selection — builds the configured LLMProvider from settings. Selection…, No usable LLM provider is configured. (+57 more)
+Cohesion: 0.09
+Nodes (45): build_provider(), ProviderConfigError, Exception, No usable LLM provider is configured., Return the LLMProvider selected by configuration., FairUnavailableError, Exception, FAIR cannot be used in this process (not installed, or no provider key). (+37 more)
 
 ### Community 36 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -417,16 +430,16 @@ Cohesion: 0.50
 Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
 
 ### Community 72 - "ResearchRun"
-Cohesion: 0.10
-Nodes (34): str, Stored as plain strings on ResearchRun.status., ResearchRun, RunScope, RunStatus, Acquisition orchestrator — adapter output → DB rows with evidence chain., Collect all data for a creator and persist to DB. Args: identifier: Platform-…, Creator onboarding from selected niches (Slice 14). The last step before the… (+26 more)
+Cohesion: 0.07
+Nodes (52): _mark_orphaned_runs(), Mark ResearchRun rows stuck in 'running' as 'failed' on startup., _latest_failed_rescans(), R12d: the newest failed ``watch_rescan`` run per targeted dossier (either…, str, Stored as plain strings on ResearchRun.status., What kind of research this run is (§11), distinct from RunScope, which…, ResearchRun (+44 more)
 
 ### Community 73 - "run.py"
-Cohesion: 0.08
-Nodes (44): _close(), _commit_or_rollback(), _embedder_factory(), _singleton(), Any, In-process background jobs for long-running pipelines. The console needs to…, Persist whatever a crashing pipeline flushed (e.g. a failed ResearchRun). If…, Run one stage. ``collect`` needs platform + identifier. (+36 more)
+Cohesion: 0.14
+Nodes (27): Any, Production embedder using sentence-transformers (local, free)., SentenceTransformerEmbedder, CandidateConfig, _close(), main(), Run a pipeline from the command line using the configured provider/adapter.…, _run_add_campaign() (+19 more)
 
 ### Community 75 - "WarmStore"
-Cohesion: 0.05
-Nodes (50): SQLite table definitions for the CORP warm store. Mirrors the PostgreSQL…, _prep(), Any, AsyncEngine, Path, WarmStore — async SQLite store for bulk CORP data. Provides idempotent put/get…, Return {id: raw_text} for the given evidence IDs., Return {id: embedding_bytes} for the given observation IDs. (+42 more)
+Cohesion: 0.14
+Nodes (13): SQLite table definitions for the CORP warm store. Mirrors the PostgreSQL…, _prep(), Any, WarmStore — async SQLite store for bulk CORP data. Provides idempotent put/get…, Serialize JSON-typed values, datetime strings, and enum instances for SQLite., Async SQLite store for bulk CORP data (evidence, embeddings, content)., WarmStore, Table (+5 more)
 
 ### Community 76 - "AmazonReviewAdapter"
 Cohesion: 0.05
@@ -440,29 +453,29 @@ Nodes (43): CreatorOnboarder, _is_enrichable_channel_id(), OnboardConfig, Any, A
 Cohesion: 0.06
 Nodes (40): _extract_tiers(), _parse_substack_date(), _parse_substack_response(), PatreonSubstackAdapter, Any, AsyncClient, datetime, retry (+32 more)
 
-### Community 79 - "providers/registry.py"
-Cohesion: 0.09
-Nodes (40): as_bool(), as_float(), as_int(), Any, Defensive coercion of untrusted LLM JSON values. Model output is not shape-…, Coerce ``value`` to float, returning ``default`` if it isn't numeric., Coerce ``value`` to int, returning ``default`` if it isn't a whole number.…, Coerce ``value`` to bool, treating the string "false"/"0"/"no"/… as False.… (+32 more)
+### Community 79 - "test_coerce.py"
+Cohesion: 0.10
+Nodes (32): as_bool(), as_float(), as_int(), Any, Defensive coercion of untrusted LLM JSON values. Model output is not shape-…, Coerce ``value`` to float, returning ``default`` if it isn't numeric., Coerce ``value`` to int, returning ``default`` if it isn't a whole number.…, Coerce ``value`` to bool, treating the string "false"/"0"/"no"/… as False.… (+24 more)
 
 ### Community 80 - "AppStoreAdapter"
-Cohesion: 0.06
-Nodes (42): AppStoreAdapter, _parse_iso(), _parse_review_feed(), Any, AsyncClient, datetime, retry, Parse an Apple RSS ``updated`` timestamp (ISO 8601), normalized to UTC. (+34 more)
+Cohesion: 0.07
+Nodes (35): AppStoreAdapter, _parse_iso(), _parse_review_feed(), Any, AsyncClient, datetime, retry, Parse an Apple RSS ``updated`` timestamp (ISO 8601), normalized to UTC. (+27 more)
 
-### Community 81 - "StackExchangeAdapter"
-Cohesion: 0.09
-Nodes (33): Any, AsyncClient, datetime, retry, ProblemProvider (CORP1 Stage 4/5, T2): "How do I X?" questions are a direct…, Collects questions (and their answers) from a Stack Exchange site. Each…, StackExchangeAdapter, _ts() (+25 more)
+### Community 81 - "test_stackexchange_adapter.py"
+Cohesion: 0.18
+Nodes (25): _answer(), _make_response(), mock_client(), _mock_resp(), fixture, _question(), Tests for the Stack Exchange adapter — all HTTP calls mocked., A single record missing its id (e.g. deleted content omitted under… (+17 more)
 
 ### Community 82 - "EvidenceType"
-Cohesion: 0.07
-Nodes (39): EvidenceType, infer_evidence_type(), Which capability-provider interface (CORP1 Stage 4) produced this row. NOT NULL…, Lenient platform → evidence-type lookup; write paths use the strict…, MonetisationProvider, PlanningIntentProvider, ProblemProvider, Evidence that creators or products in this space already earn money. (+31 more)
+Cohesion: 0.06
+Nodes (49): EvidenceType, infer_evidence_type(), Which capability-provider interface (CORP1 Stage 4) produced this row. NOT NULL…, Lenient platform → evidence-type lookup; write paths use the strict…, Strict form for write paths: an unmapped platform is a configuration error and…, require_evidence_type(), DissatisfactionProvider, EvidenceProvider (+41 more)
 
 ### Community 83 - "ProviderExhaustedError"
-Cohesion: 0.10
-Nodes (32): ProviderExhaustedError, A quota that will not clear inside one call's retry window. ``retry_after`` is…, PooledProvider, Any, Failover across free-tier providers. Same ``LLMProvider`` interface, so…, Clock, daily(), Fake (+24 more)
+Cohesion: 0.16
+Nodes (28): ProviderExhaustedError, A quota that will not clear inside one call's retry window. ``retry_after`` is…, Clock, daily(), Fake, _pool(), Unit tests for the provider pool — scripted fake providers, fake clock., A provider that burns minutes timing out must not reset the cap. Before: the… (+20 more)
 
 ### Community 84 - "test_watch_rescanner.py"
-Cohesion: 0.13
-Nodes (42): DossierStatus, str, Denormalized mirror of the latest HumanDecision for fast dashboard queries.…, RuntimeError, A stage of the re-research chain failed; the message names it., RescanError, _d(), EvidenceAddingDriller (+34 more)
+Cohesion: 0.11
+Nodes (45): DossierStatus, str, Denormalized mirror of the latest HumanDecision for fast dashboard queries.…, RuntimeError, A stage of the re-research chain failed; the message names it., RescanError, _d(), EvidenceAddingDriller (+37 more)
 
 ### Community 85 - "CrowdfundingAdapter"
 Cohesion: 0.08
@@ -476,13 +489,13 @@ Nodes (31): GoogleTrendsAdapter, _has_pytrends(), _parse_rss_date(), _parse_tren
 Cohesion: 0.08
 Nodes (27): Any, AsyncClient, retry, TrendProvider (CORP1 Stage 4/5, T2): sustained article pageviews are a demand-…, Collects Wikipedia article summaries with pageview trend data. Each article…, WikipediaAdapter, mock_client(), _mock_resp() (+19 more)
 
-### Community 88 - ".select"
-Cohesion: 0.13
-Nodes (39): archive_creator(), _as_utc(), create_decision(), generate_persisted_dossier(), _generate_product_ideas_best_effort(), get_campaign(), get_competitors(), get_creator() (+31 more)
+### Community 88 - "Creator"
+Cohesion: 0.15
+Nodes (34): archive_creator(), _as_utc(), generate_persisted_dossier(), _generate_product_ideas_best_effort(), get_campaign(), get_competitors(), get_creator(), get_dossier() (+26 more)
 
 ### Community 89 - "test_registry_rescan.py"
-Cohesion: 0.20
-Nodes (41): Dossier, One decision-ready dossier for one creator x niche x opportunity., find_due_watched_dossiers(), Every currently-active (never-superseded) WATCHING dossier whose niche's…, One re-scan pass. Regenerates the dossier for every due WATCHING dossier. A…, rescan_watched_dossiers(), _due_watching(), _make_creator() (+33 more)
+Cohesion: 0.14
+Nodes (53): Dossier, One decision-ready dossier for one creator x niche x opportunity., _campaign_for_niche(), find_due_watched_dossiers(), AsyncSession, datetime, Registry Re-scan Scheduler (CORP1 Stage 5, T10). Architecture invariant (Stage…, Every currently-active (never-superseded) WATCHING dossier whose niche's… (+45 more)
 
 ### Community 90 - "test_dossier_decision_endpoint.py"
 Cohesion: 0.14
@@ -493,20 +506,20 @@ Cohesion: 0.07
 Nodes (31): AsyncNetworkStream, is_public_url(), parse_page(), Any, HTMLParser, Extract title, description, visible text, and classified outbound links., All addresses ``host`` resolves to. Module-level so tests can stub it., Network backend that validates DNS at connection time. The pre-flight… (+23 more)
 
 ### Community 92 - "routes_ops.py"
-Cohesion: 0.10
-Nodes (41): BackgroundTasks, add_account(), CampaignPipelineRequest, create_campaign(), create_creator(), CreatorCreateRequest, DossierDecisionRequest, DossierDecisionResponse (+33 more)
-
-### Community 93 - "build_adapter"
 Cohesion: 0.09
-Nodes (27): BaseSettings, Settings, AdapterConfigError, build_adapter(), build_search_adapter(), Exception, Adapter selection — builds a SourceAdapter for a platform name from settings., The requested platform is unknown or not configured. (+19 more)
+Nodes (42): BackgroundTasks, add_account(), CampaignPipelineRequest, ClusterDetail, create_campaign(), create_creator(), CreatorCreateRequest, discovery_status() (+34 more)
 
-### Community 94 - "DossierGenerator"
-Cohesion: 0.09
-Nodes (20): ColumnElement, _comparable_products(), DataCoverage, DossierData, DossierGenerator, OpportunityContext, Any, datetime (+12 more)
+### Community 93 - "YtDlpAdapter"
+Cohesion: 0.06
+Nodes (34): _default_factory(), _Extractor, _host_allowed(), Any, datetime, Protocol, yt-dlp's native search syntax: ``ytsearch5:query``, ``ytsearchdate3:query``. A…, The slice of ``yt_dlp.YoutubeDL`` this adapter uses. (+26 more)
+
+### Community 94 - ".select"
+Cohesion: 0.08
+Nodes (22): ColumnElement, _comparable_products(), DataCoverage, DossierData, DossierGenerator, OpportunityContext, Any, datetime (+14 more)
 
 ### Community 95 - "SearchDemandAdapter"
-Cohesion: 0.09
-Nodes (26): Any, AsyncClient, retry, SearchIntentProvider (CORP1 Stage 4/5, T2): autocomplete suggestions reveal…, Collects Google autocomplete suggestions as search-demand signals. Each…, SearchDemandAdapter, _autocomplete_response(), mock_client() (+18 more)
+Cohesion: 0.08
+Nodes (28): Any, AsyncClient, retry, SearchIntentProvider (CORP1 Stage 4/5, T2): autocomplete suggestions reveal…, Collects Google autocomplete suggestions as search-demand signals. Each…, SearchDemandAdapter, Evidence that people actively look for answers (autocomplete, "people also…, SearchIntentProvider (+20 more)
 
 ### Community 96 - "SourceHealthTracker"
 Cohesion: 0.08
@@ -518,39 +531,39 @@ Nodes (25): HackerNewsAdapter, _parse_ts(), Any, AsyncClient, datetime, retry, C
 
 ### Community 98 - "test_corp2_export.py"
 Cohesion: 0.14
-Nodes (36): DossierEvidence, One evidence row's membership in one dossier's CORP2 handoff trail. Mirrors…, build_handoff_package(), EvidenceTrailEntry, HandoffPackage, _isoformat_nested(), NichePathEntry, Any (+28 more)
+Nodes (38): DossierEvidence, One evidence row's membership in one dossier's CORP2 handoff trail. Mirrors…, HumanDecision, Append-only. Every decision is a new row — never update or delete., build_handoff_package(), EvidenceTrailEntry, HandoffPackage, _isoformat_nested() (+30 more)
 
 ### Community 99 - "register_error_handlers"
 Cohesion: 0.09
 Nodes (30): _body(), Any, FastAPI, One error shape for the UI to branch on. Every error body carries ``detail``…, register_error_handlers(), _adapter(), _http(), _integrity() (+22 more)
 
-### Community 100 - "engine.py"
-Cohesion: 0.08
-Nodes (33): load_scoring_rules(), Evidence depth input: observation counts weighted by how they were obtained., 0.5 = flat or unknown; strong growth → 1.0; decline → toward 0., Higher = less saturated = more room for a new product. ``commerce_overlap`` is…, How much the creator already talks about this problem in their own content., Fraction of the creator's audience platforms where the problem shows up.…, score_competition_saturation(), score_creator_content_alignment() (+25 more)
+### Community 100 - "._score_opportunity"
+Cohesion: 0.10
+Nodes (28): growth_ratio(), Evidence depth input: observation counts weighted by how they were obtained., Relative growth between two snapshot values; None when not measurable., 0.5 = flat or unknown; strong growth → 1.0; decline → toward 0., Higher = less saturated = more room for a new product. ``commerce_overlap`` is…, How much the creator already talks about this problem in their own content., Fraction of the creator's audience platforms where the problem shows up.…, score_competition_saturation() (+20 more)
 
-### Community 101 - "PipelineStats"
-Cohesion: 0.08
-Nodes (26): What the creator's own titles, descriptions and transcripts address., PipelineStats, Any, BaseException, Advance the creator to ``working`` for the block, then ``done`` on success. The…, Counts one pipeline run keeps while it works. Persisted on the run., Decide a run's terminal status from its stats., resolve_status() (+18 more)
+### Community 101 - "test_runs.py"
+Cohesion: 0.15
+Nodes (17): Advance the creator to ``working`` for the block, then ``done`` on success. The…, stage(), FakeSession, FakeSessionWithCreator, parametrize, Unit tests for the shared run lifecycle helpers — no database., A fully failed run is still research memory: it must come back to the caller…, test_finish_run_all_failed_returns_failed_run_without_raising() (+9 more)
 
-### Community 102 - "WatchRescanConfig"
-Cohesion: 0.09
-Nodes (29): _noop_close(), AsyncSession, R12c: the Watch re-scan scheduler's LLM provider, built once and kept for the…, The scheduler's ``rescanner_factory``: None when no provider is configured (re-…, RescanProviders, Exception, A rescanner plus the cleanup for whatever it was built around (the LLM…, Raised by a rescanner factory to defer the whole tick without touching any… (+21 more)
+### Community 102 - "app.py"
+Cohesion: 0.07
+Nodes (38): _close_quietly(), _discovery_busy(), DiscoveryProviders, _job_busy(), lifespan(), _noop_close(), AsyncSession, FastAPI (+30 more)
 
 ### Community 103 - "test_ops_no_db.py"
-Cohesion: 0.08
-Nodes (18): JobRegistry, JobResponse, JobStatus, BaseModel, str, Run ``work`` and record its outcome on ``job``. Never raises., Mark any still-running jobs as failed (called at shutdown)., api_key() (+10 more)
+Cohesion: 0.07
+Nodes (19): JobRegistry, JobResponse, JobStatus, BaseModel, str, The in-flight job of a given kind, if any. Campaign-less jobs (an autonomous…, Run ``work`` and record its outcome on ``job``. Never raises., Mark any still-running jobs as failed (called at shutdown). (+11 more)
 
 ### Community 104 - "test_niche_candidates.py"
-Cohesion: 0.15
-Nodes (26): NicheCandidateEvidence, One evidence row's membership in one candidate, with its similarity to the…, NicheCandidateGenerator, Any, Every non-empty evidence row collected by this campaign's discovery runs., Group the campaign's discovery evidence into staged candidates. Returns the run., _candidates(), FakeEmbedder (+18 more)
+Cohesion: 0.21
+Nodes (22): NicheCandidateGenerator, _candidates(), FakeEmbedder, NamingProvider, asyncio, AsyncSession, ndarray, Integration tests for NicheCandidateGenerator against real Postgres. (+14 more)
 
 ### Community 105 - "test_discovery.py"
-Cohesion: 0.16
-Nodes (27): find_queries(), Previous executions matching every given filter, newest first. Passing…, NicheDiscoveryCollector, AsyncSession, skipif, _campaign(), FakeAdapter, _item() (+19 more)
+Cohesion: 0.18
+Nodes (24): NicheDiscoveryCollector, AsyncSession, skipif, _campaign(), FakeAdapter, asyncio, AsyncSession, Path (+16 more)
 
-### Community 106 - "test_campaign_research.py"
-Cohesion: 0.11
-Nodes (21): CreatorResearcher, Protocol, ResearchReport, T, _batch(), _ExpiredAttributeError, _FakeCreator, _FakeSession (+13 more)
+### Community 106 - "CampaignResearchBatch"
+Cohesion: 0.09
+Nodes (42): BatchConfig, CampaignResearchBatch, CreatorResearcher, AsyncSession, Protocol, ResearchReport, T, _FakeReport (+34 more)
 
 ### Community 107 - "App.tsx"
 Cohesion: 0.14
@@ -565,24 +578,24 @@ Cohesion: 0.21
 Nodes (24): EcoConfig, EcosystemEstimator, AsyncSession, FakeEnricher, _FakeItem, FakeSearchAdapter, asyncio, AsyncSession (+16 more)
 
 ### Community 110 - "test_provider_health.py"
-Cohesion: 0.08
-Nodes (21): PingResult, Real end-to-end liveness probe: enumerate providers, then run a trivial schema-…, Outcome of a FAIR end-to-end liveness probe. ``ok`` is only true when at least…, _FakeFair, Tests for /providers/health — the endpoint that reports the active LLM provider…, A bare Gemini/Groq or a PooledProvider isn't a FairProvider — no ping is run,…, PooledProvider isn't FAIR, but it does have member_names — verify that member…, A diagnostic endpoint must never 500 for the very thing it exists to diagnose.… (+13 more)
+Cohesion: 0.07
+Nodes (23): PingResult, Real end-to-end liveness probe: enumerate providers, then run a trivial schema-…, Outcome of a FAIR end-to-end liveness probe. ``ok`` is only true when at least…, client(), _FakeFair, fixture, Tests for /providers/health — the endpoint that reports the active LLM provider…, A bare Gemini/Groq or a PooledProvider isn't a FairProvider — no ping is run,… (+15 more)
 
 ### Community 111 - "test_product_ideation.py"
-Cohesion: 0.23
-Nodes (24): ProductIdea, ProductIdeaEvidence, One evidence row's membership in one product idea's provenance trail. Mirrors…, One LLM-generated, evidence-grounded product idea for one creator's problem…, IdeationConfig, ProductIdeationGenerator, AsyncSession, _config() (+16 more)
+Cohesion: 0.25
+Nodes (22): ProductIdea, One LLM-generated, evidence-grounded product idea for one creator's problem…, IdeationConfig, ProductIdeationGenerator, AsyncSession, _config(), _idea(), _make_cluster_with_evidence() (+14 more)
 
 ### Community 112 - "hooks.ts"
 Cohesion: 0.10
 Nodes (29): api, Campaign, CampaignCreateInput, CampaignNiche, CampaignNicheStatus, CampaignStatus, CommercialSignal, CompetitorStrength (+21 more)
 
 ### Community 113 - "EvidenceOrigin"
-Cohesion: 0.20
-Nodes (29): EvidenceOrigin, Whether the row is raw data or an LLM-derived claim (Provenance Invariant). NOT…, Gate, HumanDecision, Append-only. Every decision is a new row — never update or delete., _create_candidate(), _create_dossier_prereqs(), asyncio (+21 more)
+Cohesion: 0.22
+Nodes (26): EvidenceOrigin, Whether the row is raw data or an LLM-derived claim (Provenance Invariant). NOT…, _create_candidate(), _create_dossier_prereqs(), asyncio, AsyncSession, parametrize, Integration tests for CORP1 Stage 4 / T0: the niche + niche-candidate drill-… (+18 more)
 
-### Community 114 - "RedditAdapter"
-Cohesion: 0.10
-Nodes (13): Any, AsyncClient, datetime, retry, Newest posts for ``r/<sub>``, ``u/<user>`` or a bare subreddit name., Full comment tree for one post. Collapsed 'more' stubs are skipped., Collects posts and full comment trees from a subreddit or user profile., RedditAdapter (+5 more)
+### Community 114 - "NormalizedContent"
+Cohesion: 0.06
+Nodes (21): NormalizedContent, BaseModel, The one schema every adapter family emits. This is the Build item.…, Any, AsyncClient, datetime, retry, Newest posts for ``r/<sub>``, ``u/<user>`` or a bare subreddit name. (+13 more)
 
 ### Community 115 - "scoring/niche_qualification.py"
 Cohesion: 0.15
@@ -592,29 +605,29 @@ Nodes (26): compute_components(), compute_confidence(), compute_qualification_sc
 Cohesion: 0.29
 Nodes (28): _make_creator(), _make_evidence(), _make_niche(), _make_run(), _make_scored_opportunity(), _niche_evidence(), _promoted_candidate(), asyncio (+20 more)
 
-### Community 117 - "app.py"
-Cohesion: 0.11
-Nodes (24): create_app(), _job_busy(), lifespan(), _mark_orphaned_runs(), FastAPI, FastAPI application factory., Mark ResearchRun rows stuck in 'running' as 'failed' on startup., A job queued/running for the campaign or the creator: the scheduler must not… (+16 more)
+### Community 117 - "require_api_key"
+Cohesion: 0.24
+Nodes (10): Single shared API key. Enough for a one-team console; swap for real auth later., No-op when API_KEY is unset (local dev); otherwise the header must match., require_api_key(), No-DB tests for the shared API-key dependency., Starlette decodes headers as latin-1; non-ASCII chars must not cause a…, test_matching_key_passes(), test_missing_key_rejected(), test_no_key_configured_is_noop() (+2 more)
 
 ### Community 118 - "record_query"
 Cohesion: 0.13
-Nodes (26): str, One executed search, recorded under its ResearchRun (§12, ADR-006). This is the…, ResearchQuery, ResearchQueryStatus, AsyncSession, datetime, Research query ledger — the persistence service for ResearchQuery (§13). Two…, record_query() (+18 more)
+Nodes (28): str, One executed search, recorded under its ResearchRun (§12, ADR-006). This is the…, ResearchQuery, ResearchQueryStatus, find_queries(), AsyncSession, datetime, Research query ledger — the persistence service for ResearchQuery (§13). Two… (+20 more)
 
 ### Community 119 - "test_niche_naming.py"
 Cohesion: 0.14
-Nodes (24): check_grounding(), ClusterName, name_cluster(), _normalize(), Ask the provider to name a cluster; verify every cited term against the texts.…, Return the cited terms that do NOT occur in the texts (case/space-insensitive).…, _answer(), FakeProvider (+16 more)
+Nodes (25): check_grounding(), ClusterName, name_cluster(), _normalize(), Name an evidence cluster as a niche candidate (Slice 8, §16). The LLM's role…, Ask the provider to name a cluster; verify every cited term against the texts.…, Return the cited terms that do NOT occur in the texts (case/space-insensitive).…, _answer() (+17 more)
 
 ### Community 120 - "test_groq_provider.py"
 Cohesion: 0.19
 Nodes (26): _capture(), handler(), _completion(), _provider(), Unit tests for the Groq provider — HTTP mocked, no network., A long retry-after is passed through for the pool to judge; it is not a daily…, The contract is a JSON object; a top-level list must not leak through., Non-reasoning models reject the parameter, so None/"" must not send it. (+18 more)
 
 ### Community 121 - "test_multi_discovery.py"
-Cohesion: 0.12
-Nodes (16): FakeAdapter, _make_item(), Exception, patch, Tests for multi-source niche discovery — all DB + HTTP calls mocked., test_archive_written(), test_deduplicates_evidence(), test_discover_fans_out() (+8 more)
+Cohesion: 0.10
+Nodes (21): _to_evidence(), FakeAdapter, _make_item(), mock_session(), Exception, fixture, patch, Path (+13 more)
 
-### Community 122 - "CampaignNiche"
-Cohesion: 0.22
-Nodes (20): CampaignNiche, How one niche performed within one campaign (§12). Never overwrites Niche's own…, NicheLifecycleStatus, The cycle from §7: CANDIDATE precedes verification; ACTIVE/EXPAND then cycle…, NicheVerifier, AsyncSession, VerifyConfig, VerifyResult (+12 more)
+### Community 122 - "NicheLifecycleStatus"
+Cohesion: 0.27
+Nodes (20): NicheCandidateEvidence, One evidence row's membership in one candidate, with its similarity to the…, NicheLifecycleStatus, The cycle from §7: CANDIDATE precedes verification; ACTIVE/EXPAND then cycle…, NicheVerifier, AsyncSession, VerifyConfig, VerifyResult (+12 more)
 
 ### Community 123 - "ProblemCluster"
 Cohesion: 0.14
@@ -624,33 +637,33 @@ Nodes (19): ProblemCluster, ClusterContext, CreatorContext, Frequency of the mos
 Cohesion: 0.08
 Nodes (24): oxlint, react-dom, tailwindcss, @tailwindcss/vite, @types/node, @types/react, @types/react-dom, typescript (+16 more)
 
-### Community 125 - "CampaignResearchBatch"
-Cohesion: 0.32
-Nodes (21): BatchConfig, CampaignResearchBatch, AsyncSession, _FakeReport, FakeResearcher, _make_campaign(), _onboarded_creator(), asyncio (+13 more)
-
-### Community 126 - "test_ytdlp_adapter.py"
+### Community 125 - "test_niche_canonicalization.py"
 Cohesion: 0.12
-Nodes (22): _adapter(), FakeExtractor, no_captions(), fixture, parametrize, Unit tests for the yt-dlp metadata adapter — extractor faked, no network., A search spans many channels, so it must never emit a creator profile item —…, Answers extract_info from a url -> info table; records the opts it was built… (+14 more)
+Nodes (44): NicheCandidateStatus, str, NicheAlias, Alternate wording that resolves to one canonical Niche. Existence of this table…, CanonConfig, NicheCanonicalizer, AsyncSession, The Niche the parent candidate resolved to (PROMOTED or MERGED -- lineage… (+36 more)
+
+### Community 126 - "providers/registry.py"
+Cohesion: 0.08
+Nodes (28): ProviderError, ProviderUnavailableError, Exception, Provider health signals the pool acts on. Only these two trigger failover.…, Transient failure (5xx, timeout, transport) that outlasted the retry budget., Any, Map a non-accepted SolveResponse onto the pool's error vocabulary., Fold ``system`` into the single task string FAIR's ``solve()`` accepts. FAIR… (+20 more)
 
 ### Community 127 - "Campaign"
 Cohesion: 0.31
 Nodes (22): Campaign, CampaignNicheStatus, str, How far this niche has gotten within this specific campaign. Distinct from…, The top-level research execution unit above niche and creator research. A…, NicheSelector, AsyncSession, SelectionConfig (+14 more)
 
-### Community 128 - "multi_discovery.py"
-Cohesion: 0.13
-Nodes (13): Strict form for write paths: an unmapped platform is a configuration error and…, require_evidence_type(), mirror_evidence(), Write the raw normalized items as JSONL; return a data-path-relative reference.…, One query against one source, under ``campaign_id``. Returns the run. Never…, MultiSourceDiscovery, Any, Multi-source niche discovery — fans a query across all niche adapters. Given a… (+5 more)
+### Community 128 - "MultiSourceDiscovery"
+Cohesion: 0.17
+Nodes (8): Write the raw normalized items as JSONL; return a data-path-relative reference.…, MultiSourceDiscovery, Any, Orchestrates niche discovery across multiple adapters. Usage:: disco =…, Fan out ``query`` across all healthy niche adapters under ``campaign_id``.…, Shared filename-safe slug helper for acquisition warmstore paths., slugify(), test_discover_unknown_campaign()
 
 ### Community 129 - "test_captions.py"
 Cohesion: 0.16
 Nodes (21): fetch_youtube_caption(), Any, Group raw snippets into segments split at natural pauses. A new segment starts…, Return the transcript as a ``caption`` item, or None when unavailable.…, _segment_snippets(), TranscriptSegment, _mock_fetched_transcript(), Tests for YouTube transcript segmentation and fetch. (+13 more)
 
-### Community 130 - "orchestrator.py"
-Cohesion: 0.14
-Nodes (15): AsyncSession, Research orchestrator — runs every stage for one creator, in order. collect…, Keep the failed run row a crashing stage flushed. If the session is poisoned…, ResearchOrchestrator, ResearchReport, _fake_session(), _FakeCreator, _orchestrator() (+7 more)
+### Community 130 - "ResearchOrchestrator"
+Cohesion: 0.15
+Nodes (14): AsyncSession, Keep the failed run row a crashing stage flushed. If the session is poisoned…, ResearchOrchestrator, ResearchReport, _fake_session(), _FakeCreator, _orchestrator(), patch (+6 more)
 
-### Community 131 - "registry_rescan.py"
-Cohesion: 0.10
-Nodes (15): BusyCheck, _campaign_for_niche(), async_sessionmaker, AsyncSession, datetime, Protocol, Registry Re-scan Scheduler (CORP1 Stage 5, T10). Architecture invariant (Stage…, True when a job is already queued/running for this dossier's campaign (``None``… (+7 more)
+### Community 131 - "RegistryRescanScheduler"
+Cohesion: 0.18
+Nodes (7): BusyCheck, async_sessionmaker, Protocol, True when a job is already queued/running for this dossier's campaign (``None``…, The in-process scheduled job itself: an asyncio loop ticking every…, RegistryRescanScheduler, RescannerFactory
 
 ### Community 132 - "test_campaign_endpoints.py"
 Cohesion: 0.29
@@ -660,33 +673,33 @@ Nodes (22): _make_client(), AsyncClient, asyncio, AsyncSession, API endpoint tes
 Cohesion: 0.21
 Nodes (20): _adapter(), handler(), _comment(), _listing(), _post(), Unit tests for the Reddit adapter — public JSON endpoints mocked, no network., A single malformed record (e.g. a promoted/placeholder child with no id) must…, Build an adapter whose HTTP client answers from a path→body table. (+12 more)
 
-### Community 134 - "test_competitive_pipeline.py"
-Cohesion: 0.14
-Nodes (13): _http_url_or_none(), Keep only http(s) URLs: the dossier renders ``Competitor.url`` into an href., _cluster(), FakeProvider, FakeSession, _pipeline(), parametrize, Unit tests for the competitive discovery pipeline — no database. (+5 more)
+### Community 134 - "CompetitivePipeline"
+Cohesion: 0.21
+Nodes (8): CompetitivePipeline, _http_url_or_none(), Keep only http(s) URLs: the dossier renders ``Competitor.url`` into an href., Discovers competitors for each ProblemCluster via LLM analysis., Run competitive discovery for all clusters belonging to a creator., parametrize, test_http_url_or_none(), test_http_url_or_none_truncates_to_column_width()
 
 ### Community 135 - "CampaignDetailPage.tsx"
 Cohesion: 0.12
 Nodes (15): react, @tanstack/react-query, useCampaign(), useCampaignCreators(), useCampaignNiches(), useJob(), useStartCampaignPipeline(), App() (+7 more)
 
-### Community 136 - "niche_discovery.py"
-Cohesion: 0.16
-Nodes (16): _evidence_supporting(), _fetch_method(), _gather_safely(), matched_exclusion(), _normalize(), Any, Recursive niche discovery (CORP1 Stage 3/4/5, T3; extended by T8). Supersedes…, Deterministic substring match against Stage 3's exclusion categories. Returns… (+8 more)
+### Community 136 - "matched_exclusion"
+Cohesion: 0.12
+Nodes (13): _evidence_supporting(), matched_exclusion(), _normalize(), Deterministic substring match against Stage 3's exclusion categories. Returns…, Full-text (untruncated) superset match: every row whose raw_text contains at…, RuntimeError, Return up to ``limit`` topics ready to drill, best first., Best-effort Google Trends score per topic. Missing keys mean no signal, which… (+5 more)
 
 ### Community 137 - "3. Product specification (Stage 3 — to freeze)"
 Cohesion: 0.10
 Nodes (20): 1. Problem (Stage 1/2 recap), 2. What exists to build on (Stage 2 research, verified in code), 3.1 Watch re-scan (R12), 3.2 Research More completion (R12a — same machinery, do first), 3.3 "The evidence strengthened" — definition (decision needed), 3.4 Cost and safety limits (decision needed), 3.5 Human-visible behaviour, 3.6 Non-goals (+12 more)
 
-### Community 138 - "test_campaign_pipeline_discover_to_dossier"
-Cohesion: 0.10
-Nodes (12): FakeEmbedder, FakeResearcher, FakeYouTubeSearchAdapter, Any, AsyncSession, ndarray, Synthesizes exactly one specific-enough niche, grounded in the fake evidence's…, No real clusters to separate (canonicalization runs against an empty Niche… (+4 more)
+### Community 138 - "ScriptedProvider"
+Cohesion: 0.13
+Nodes (7): FakeResearcher, FakeYouTubeSearchAdapter, Any, Synthesizes exactly one specific-enough niche, grounded in the fake evidence's…, Returns one channel per niche query, with a follower count inside the default…, Matches the CreatorResearcher Protocol CampaignResearchBatch accepts --…, ScriptedProvider
 
-### Community 139 - "RunType"
-Cohesion: 0.20
-Nodes (17): What kind of research this run is (§11), distinct from RunScope, which…, RunType, InvalidResearchRunError, Exception, Validation for ResearchRun's run_type/reference invariants (§11). Enforces the…, validate_run_type(), _cosine(), ndarray (+9 more)
+### Community 139 - ".generate"
+Cohesion: 0.15
+Nodes (14): InvalidResearchRunError, Exception, validate_run_type(), _cosine(), Any, ndarray, Every non-empty evidence row collected by this campaign's discovery runs., Group the campaign's discovery evidence into staged candidates. Returns the run. (+6 more)
 
 ### Community 140 - "compute_score"
-Cohesion: 0.13
-Nodes (19): compute_hash(), compute_score(), Weighted mean of the components actually supplied. Normalise over the weight…, Deterministic hash: same inputs → same hash. Adapted from CIP Step 9., test_compute_hash_changes_with_input(), test_compute_hash_changes_with_rule_version(), test_compute_hash_deterministic(), test_compute_score_weighted_average() (+11 more)
+Cohesion: 0.18
+Nodes (14): compute_hash(), compute_score(), Weighted mean of the components actually supplied. Normalise over the weight…, Deterministic hash: same inputs → same hash. Adapted from CIP Step 9., test_compute_hash_changes_with_input(), test_compute_hash_changes_with_rule_version(), test_compute_hash_deterministic(), test_compute_score_weighted_average() (+6 more)
 
 ### Community 141 - "compilerOptions"
 Cohesion: 0.10
@@ -700,37 +713,37 @@ Nodes (17): NicheQualifier, asyncio, AsyncSession, Integration tests for NicheQu
 Cohesion: 0.18
 Nodes (14): PruneReport, PruneService, Any, AsyncSession, Maintenance ops — prune bulk history from Postgres to keep it bounded. The warm…, Deletes safe-to-drop bulk history older than a retention window. Dry-run by…, No-DB unit tests for the prune maintenance service., _session() (+6 more)
 
-### Community 144 - "test_handoff_endpoint.py"
-Cohesion: 0.22
-Nodes (16): DecisionType, DecisionCreate, DecisionResponse, PipelineStepResponse, BaseModel, Gate A (creator-level) decision. research_more belongs to the dossier gate…, ResearchRunResponse, _make_client() (+8 more)
+### Community 144 - "DecisionType"
+Cohesion: 0.21
+Nodes (16): create_decision(), DossierDecisionRequest, DossierDecisionResponse, The four-state dossier decision gate: Reject / Research More / Watch / Approve,…, record_dossier_decision(), DecisionType, Gate, DecisionCreate (+8 more)
 
-### Community 145 - "WebPresenceAdapter"
-Cohesion: 0.15
-Nodes (7): _normalize(), AsyncClient, Collects a creator's landing page and its commerce-related outbound pages., GET ``url`` following redirects by hand so each hop is host-checked. Returns…, Stable id for a page: scheme+host+path, no query/fragment, max 255 chars., WebPresenceAdapter, test_contract()
+### Community 145 - "build_adapter"
+Cohesion: 0.09
+Nodes (14): build_adapter(), Adapter selection — builds a SourceAdapter for a platform name from settings., _normalize(), AsyncClient, Collects a creator's landing page and its commerce-related outbound pages., GET ``url`` following redirects by hand so each hop is host-checked. Returns…, Stable id for a page: scheme+host+path, no query/fragment, max 255 chars., WebPresenceAdapter (+6 more)
 
-### Community 146 - "WatchRescanner"
-Cohesion: 0.15
-Nodes (11): CreatorResearcher, decide_resurface(), Ideator, NicheDriller, Protocol, Design §3.3 option C. Pure so it can be unit-tested exhaustively., Never leave a Research More dossier stuck in progress., RescanOutcome (+3 more)
+### Community 146 - "Ideator"
+Cohesion: 0.29
+Nodes (5): CreatorResearcher, Ideator, NicheDriller, Protocol, StageReport
 
 ### Community 147 - "compilerOptions"
 Cohesion: 0.12
 Nodes (16): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib, module, moduleDetection, noEmit, noFallthroughCasesInSwitch (+8 more)
 
-### Community 148 - "._score_opportunity"
-Cohesion: 0.14
-Nodes (11): growth_ratio(), Relative growth between two snapshot values; None when not measurable., score_recency_trend(), Any, View growth across the cluster's content items, earliest vs latest snapshot., Load the strength of every Competitor row known for this cluster. Independent…, parametrize, test_growth_ratio() (+3 more)
+### Community 148 - "test_discovery_scan.py"
+Cohesion: 0.10
+Nodes (31): Why a pass returned what it did — surfaced in the run record so a scan that…, A broad topic cleared to enter recursive discovery., SeedTopic, TrendScanStats, DiscoveryPassStats, get_or_create_autonomous_campaign(), Any, The autonomous discovery crawler — CORP1 Step 1 with no user input. One pass… (+23 more)
 
-### Community 149 - "advance"
-Cohesion: 0.28
-Nodes (14): advance(), AsyncSession, Move ``creator`` to ``target`` if the state machine allows it. Returns True…, Put a creator back to ``previous`` after a failed stage, bypassing validation., restore(), _creator(), FakeSession, Unit tests for session-aware creator transitions — no database. (+6 more)
+### Community 149 - "ProblemObservation"
+Cohesion: 0.12
+Nodes (18): ProblemObservation, ClusterPipeline, _cosine_to_centroid(), ndarray, Clustering pipeline — embed observations, cluster, persist to DB, unify topics., Merge cluster labels into the creator's ContentItem.topics list. Produces a…, Cosine similarity of each row to the centroid, in [0, 1] (clipped)., Embeds ProblemObservations, clusters them, and persists results. A new run for… (+10 more)
 
 ### Community 150 - "NichePolicyClass"
 Cohesion: 0.23
 Nodes (13): NichePolicyClass, str, Configuration-driven policy tier (ADR-008); classification rules live outside…, CampaignNicheCreate, CampaignNicheDetailResponse, CampaignNicheResponse, BaseModel, NicheAliasCreate (+5 more)
 
 ### Community 151 - "product_ideation.py"
-Cohesion: 0.24
-Nodes (14): ProductIdeaComplexity, ProductIdeaType, str, Matches the CORP1 spec's product-idea vocabulary (Stage 1, step 6)., _as_price(), _evidence_supporting(), _normalize(), propose_ideas() (+6 more)
+Cohesion: 0.14
+Nodes (19): ProductIdeaComplexity, ProductIdeaType, str, Matches the CORP1 spec's product-idea vocabulary (Stage 1, step 6)., _as_price(), _evidence_supporting(), _normalize(), propose_ideas() (+11 more)
 
 ### Community 152 - "Decisions"
 Cohesion: 0.13
@@ -740,9 +753,9 @@ Nodes (14): 1. Exclusion uses `NicheCandidateStatus.REJECTED`, not `policy_class
 Cohesion: 0.13
 Nodes (14): ADR-0036 — CORP1 Stage 5, T6: Dossier Model and Generator, Consequences, Context, Decisions, Evidence trail respects the Stage 4 acceptance test directly, Files changed, `generate_and_persist` is additive, not a replacement, `niche_id` comes from the caller, not auto-derived inside the generator (+6 more)
 
-### Community 154 - "test_dossier_pipeline.py"
-Cohesion: 0.32
-Nodes (14): asyncio, AsyncSession, Integration tests for DossierGenerator against real Postgres., _load_observations caps at 10 rows; with no ORDER BY which 10 of N came back…, Seed a creator with clusters, signals, and scores — full pipeline output., _seed_full(), test_dossier_contains_competitors(), test_dossier_contains_evidence() (+6 more)
+### Community 154 - "_seed_full"
+Cohesion: 0.31
+Nodes (13): asyncio, AsyncSession, _load_observations caps at 10 rows; with no ORDER BY which 10 of N came back…, Seed a creator with clusters, signals, and scores — full pipeline output., _seed_full(), test_dossier_contains_competitors(), test_dossier_contains_evidence(), test_dossier_contains_scores() (+5 more)
 
 ### Community 155 - "ADR-0040 — CORP1 Stage 5, T10: Registry Re-scan Scheduler"
 Cohesion: 0.14
@@ -800,9 +813,9 @@ Nodes (11): ADR-0045 — Wire Registry Re-scan Scheduler into App Startup, Conse
 Cohesion: 0.17
 Nodes (12): 1. Install dependencies, 2. Set up PostgreSQL + pgvector, 3. Configure `.env`, 4. Run migrations, 5. Run the app, Common commands, Flash-drive notes, How the hot/warm split actually works (+4 more)
 
-### Community 169 - "database.py"
-Cohesion: 0.27
-Nodes (8): _engine(), get_session(), _LazySessionmaker, _make_session_factory(), async_sessionmaker, AsyncEngine, AsyncSession, Proxy that creates the real async_sessionmaker on first use.
+### Community 169 - "test_handoff_endpoint.py"
+Cohesion: 0.10
+Nodes (26): _engine(), get_session(), _LazySessionmaker, _make_session_factory(), async_sessionmaker, AsyncEngine, AsyncSession, Proxy that creates the real async_sessionmaker on first use. (+18 more)
 
 ### Community 170 - "Slice 7 — Niche Discovery Light: One Source"
 Cohesion: 0.18
@@ -816,9 +829,9 @@ Nodes (10): ADR-0031 — CORP1 Stage 5, T1: Capability-Provider Interfaces, `CAP
 Cohesion: 0.18
 Nodes (10): ADR-0035 — CORP1 Stage 5, T5: Product Idea Generation, Consequences, Context, Corrected acceptance criterion: no `Evidence.origin` field exists, Decision, Evidence membership: full-text superset match, deduped by evidence id, Files changed, Grounding reuses `niche_naming.check_grounding` unchanged (+2 more)
 
-### Community 173 - "Any"
-Cohesion: 0.22
-Nodes (6): _as_int_or_none(), NicheEcoResult, Any, Search one niche and return every unique channel, uncorrected subscriber counts…, One deduplicated, batched subscriber-count lookup for the whole campaign,…, yt-dlp counts are ints, but be defensive: a string would make the…
+### Community 173 - "YouTubeAPIEnricher"
+Cohesion: 0.15
+Nodes (9): _as_int_or_none(), NicheEcoResult, Any, Search one niche and return every unique channel, uncorrected subscriber counts…, One deduplicated, batched subscriber-count lookup for the whole campaign,…, yt-dlp counts are ints, but be defensive: a string would make the…, Fetches real subscriber counts via YouTube Data API v3. Costs 1 quota unit per…, YouTubeAPIEnricher (+1 more)
 
 ### Community 174 - "_days_from_recency"
 Cohesion: 0.29
@@ -844,13 +857,13 @@ Nodes (10): devDependencies, oxlint, tailwindcss, @tailwindcss/vite, @types/node
 Cohesion: 0.27
 Nodes (6): useArchivedCreators(), useCreateCreator(), useCreators(), PlatformAccountCreateInput, AddCreatorForm(), CreatorsPage()
 
-### Community 180 - "ContentType"
-Cohesion: 0.44
-Nodes (8): ContentType, InteractionType, str, ContentItemCreate, ContentItemResponse, InteractionCreate, InteractionResponse, BaseModel
+### Community 180 - "test_intelligence_pipeline.py"
+Cohesion: 0.14
+Nodes (23): ContentType, InteractionType, str, ContentItemCreate, ContentItemResponse, InteractionCreate, InteractionResponse, BaseModel (+15 more)
 
-### Community 181 - "FakeRescanner"
-Cohesion: 0.31
-Nodes (6): ResurfaceDecision, FakeRescanner, _Outcome, Stands in for WatchRescanner: supersedes the watched dossier with a new version…, Commits an early stage, then hits a real DB error and rolls the shared session…, RollbackRescanner
+### Community 181 - "decide_resurface"
+Cohesion: 0.29
+Nodes (6): decide_resurface(), Design §3.3 option C. Pure so it can be unit-tested exhaustively., ResurfaceDecision, _Outcome, Commits an early stage, then hits a real DB error and rolls the shared session…, RollbackRescanner
 
 ### Community 182 - "Slice 18 — Creator Intelligence Dashboard"
 Cohesion: 0.22
@@ -992,13 +1005,13 @@ Nodes (6): ADR-0064 — R14: reversible creator archive, respecting the append-o
 Cohesion: 0.43
 Nodes (6): _evidence_calls(), parametrize, Path, Provenance Invariant (CORP1 Stage 4 acceptance): no Evidence row is ever…, test_every_evidence_constructor_sets_type_and_origin(), test_scan_actually_finds_constructors()
 
-### Community 217 - "_Report"
-Cohesion: 0.29
-Nodes (3): Reproduces ResearchOrchestrator._persist_after_crash's rollback branch: commits…, _Report, RollbackResearcher
+### Community 217 - "DiscoveryScanScheduler"
+Cohesion: 0.09
+Nodes (22): DiscoveryDeferredError, DiscoveryHandle, DiscoveryScanScheduler, async_sessionmaker, AsyncSession, Exception, A provider plus how to release it once the tick is done., In-process loop running one :func:`run_discovery_pass` per tick. Start it from… (+14 more)
 
-### Community 218 - "score_solution_saturation"
-Cohesion: 0.33
-Nodes (6): Higher = less saturated = more room, from SolutionProvider evidence…, score_solution_saturation(), test_solution_saturation_at_cap_fully_saturated(), test_solution_saturation_beyond_cap_stays_zero(), test_solution_saturation_few_solutions_high_score(), test_solution_saturation_no_evidence_is_neutral()
+### Community 218 - "Settings"
+Cohesion: 0.13
+Nodes (24): BaseSettings, Treat DISCOVERY_TOPICS_PER_PASS= (blank) as unset. .env files carry everything…, Settings, AdapterConfigError, build_search_adapter(), Exception, The requested platform is unknown or not configured., Adapter for creator DISCOVERY via keyword search (``ytsearchN:`` syntax).… (+16 more)
 
 ### Community 219 - "score_purchase_intent"
 Cohesion: 0.33
@@ -1064,9 +1077,9 @@ Nodes (5): plugins, rules, react/only-export-components, react/rules-of-hooks, $
 Cohesion: 0.60
 Nodes (4): CampaignStatus, str, CampaignResponse, test_campaign_schema_round_trip()
 
-### Community 235 - "score_commercial_intent"
-Cohesion: 0.40
-Nodes (5): score_commercial_intent(), test_commercial_intent_confidence_clamped(), test_commercial_intent_strong(), test_commercial_intent_validation(), test_commercial_intent_weak_low_confidence()
+### Community 235 - "test_discovery_endpoint.py"
+Cohesion: 0.08
+Nodes (12): captured(), client(), fixture, API tests for POST /discovery/run — both entry points the spec freezes., A status read is for diagnosing trouble, so it must survive it., Swap the registry and the work function so no pipeline actually runs., Installing CORP must not start unattended LLM spend., Copying .env.example and leaving the override empty must not raise an… (+4 more)
 
 ### Community 236 - "finish_run returns a status; a fully failed run is kept"
 Cohesion: 0.40
@@ -1088,17 +1101,17 @@ Nodes (5): 6.1 YAML decision rules (`rules/scoring.yaml`), 6.2 Scoring engine (`
 Cohesion: 0.40
 Nodes (5): 8.1 FastAPI read/write API (`api/`), 8.2 Gate A logic (`core/state/gates.py`), 8.3 React console (`web/`), 8.4 Tests, Step 8 — Minimal Console + Gate A (Mirror CIP Step 14)
 
-### Community 241 - "_WorkingFair"
-Cohesion: 0.40
-Nodes (3): Fake FAIR that accepts CORP's full kwarg set., __init__(), _WorkingFair
+### Community 241 - "stub_fair"
+Cohesion: 0.09
+Nodes (17): _cfg(), fixture, Install a fake ``fair.embedded.module.FAIR`` class for build_fair_provider to…, Fake FAIR that accepts CORP's full kwarg set., An installed FAIR that doesn't accept ``env_file`` should be retried without…, Signature so different that no kwargs match — must raise FairUnavailableError…, A FAIR that reads a bad env file at construction, or otherwise raises, should…, FAIR constructs fine, then ``router.providers()`` blows up (e.g. an older… (+9 more)
 
 ### Community 242 - "CreatorNicheResponse"
 Cohesion: 0.67
 Nodes (3): CreatorNicheCreate, CreatorNicheResponse, BaseModel
 
-### Community 243 - "score_evidence_depth"
-Cohesion: 0.50
-Nodes (4): score_evidence_depth(), test_evidence_depth_at_cap(), test_evidence_depth_positive(), test_evidence_depth_zero()
+### Community 243 - "StackExchangeAdapter"
+Cohesion: 0.13
+Nodes (8): Any, AsyncClient, datetime, retry, ProblemProvider (CORP1 Stage 4/5, T2): "How do I X?" questions are a direct…, Collects questions (and their answers) from a Stack Exchange site. Each…, StackExchangeAdapter, _ts()
 
 ### Community 244 - "Step 1 — Core Data Model (Adapt CIP Evidence Model)"
 Cohesion: 0.50
@@ -1116,20 +1129,76 @@ Nodes (4): 5.1 Intent rules table (`core/intent/hierarchy.py` + `rules/intent.ya
 Cohesion: 0.50
 Nodes (3): Expanding the Oxlint configuration, React Compiler, React + TypeScript + Vite
 
+### Community 268 - "test_trend_scan.py"
+Cohesion: 0.23
+Nodes (23): Turns the broad-topic catalogue into a ranked list of seed topics.…, TrendScanner, _config(), _discovery(), _FakeTrends, Unit tests for the Level 0 trend scan (CORP1 Step 1)., A topic Trends could not score must not jump a topic it did., The crawler must keep crawling when the ranking signal is absent. (+15 more)
+
+### Community 271 - "sync.py"
+Cohesion: 0.18
+Nodes (20): _get_store(), mirror_content_items(), mirror_interactions(), mirror_metrics(), mirror_observations(), mirror_research_queries(), mirror_scores(), model_to_dict() (+12 more)
+
+### Community 275 - "trend_scan.py"
+Cohesion: 0.15
+Nodes (13): DiscoveryConfig, AsyncSession, datetime, True when ``keyword`` already matches a canonical Niche (or alias) whose…, See :func:`registry_fresh` -- the drill engine and the Level 0 trend scan must…, registry_fresh(), AsyncSession, CORP1 Step 1, Level 0 — the autonomous trend scan. The drill engine… (+5 more)
+
+### Community 276 - "load_scoring_rules"
+Cohesion: 0.12
+Nodes (15): load_scoring_rules(), AsyncSession, Path, AsyncSession, test_rules_v2_weights_sum_to_one_and_cover_ten_components(), test_v2_aggregate_uses_all_weights(), The real rules file, not a fixture -- catches a future rebalancing mistake…, The sum-to-one check alone would let a silent reweighting (still summing to… (+7 more)
+
+### Community 277 - "._get_engine"
+Cohesion: 0.15
+Nodes (7): AsyncEngine, Path, Return {id: raw_text} for the given evidence IDs., Return {id: embedding_bytes} for the given observation IDs., Return {table_name: row_count} for every warm table., Export every table to a JSONL file under out_dir. Returns row counts., Create all warm-store tables (idempotent), then heal column drift.…
+
+### Community 278 - "LLMProvider"
+Cohesion: 0.12
+Nodes (11): AsyncSession, AsyncSession, Ask the provider to identify niches from ``texts``; keep only the ones whose…, synthesize_niches(), SynthesizedNiche, AsyncSession, LLMProvider, ABC (+3 more)
+
+### Community 279 - "jobs.py"
+Cohesion: 0.27
+Nodes (14): _close(), _commit_or_rollback(), _embedder_factory(), _singleton(), Any, In-process background jobs for long-running pipelines. The console needs to…, Persist whatever a crashing pipeline flushed (e.g. a failed ResearchRun). If…, Run one stage. ``collect`` needs platform + identifier. (+6 more)
+
+### Community 280 - "_score_from_items"
+Cohesion: 0.21
+Nodes (10): Any, Pull a 0..100 momentum score out of whatever the adapter returned. With…, _score_from_items(), _Item, Stands in for NormalizedContent — only .metadata is read., No pytrends: the adapter returns keyword-matched trending items with no…, test_score_ignores_unparseable_interest(), test_score_prefers_avg_interest_and_clamps() (+2 more)
+
+### Community 281 - "test_mirror_embeddings.py"
+Cohesion: 0.22
+Nodes (10): embedding_to_bytes(), Serialize an observation embedding for the warm store's BLOB column. The ORM…, _obs(), MonkeyPatch, ndarray, parametrize, Path, Embeddings must survive the Postgres -> warm store mirror as float32 bytes. The… (+2 more)
+
+### Community 282 - "PooledProvider"
+Cohesion: 0.22
+Nodes (3): PooledProvider, Any, test_empty_pool_rejected()
+
+### Community 283 - "CompetitorStrength"
+Cohesion: 0.29
+Nodes (10): CompetitorStrength, str, Higher = more whitespace (less saturated), matching the "higher is better"…, score_competitor_saturation(), test_competitor_saturation_above_cap_clamped(), test_competitor_saturation_empty_list_neutral(), test_competitor_saturation_fully_saturated(), test_competitor_saturation_mixed() (+2 more)
+
+### Community 284 - "patched_pipeline"
+Cohesion: 0.25
+Nodes (7): _FakeRun, patched_pipeline(), discover(), qualify_campaign(), fixture, Replace the drill engine and qualifier so these tests exercise the pass's own…, discover()
+
+### Community 285 - "score_audience_dissatisfaction"
+Cohesion: 0.33
+Nodes (6): From DissatisfactionProvider evidence — low-star reviews, complaints about…, score_audience_dissatisfaction(), test_audience_dissatisfaction_at_cap(), test_audience_dissatisfaction_higher_is_stronger_signal(), test_audience_dissatisfaction_positive(), test_audience_dissatisfaction_zero_evidence()
+
+### Community 286 - "score_audience_problem_frequency"
+Cohesion: 0.33
+Nodes (6): score_audience_problem_frequency(), test_frequency_above_cap(), test_frequency_at_cap(), test_frequency_negative(), test_frequency_positive(), test_frequency_zero()
+
 ## Knowledge Gaps
 - **625 isolated node(s):** `corp`, `FakeCluster`, `FakeOppScore`, `FakeObservation`, `$schema` (+620 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1892 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **63 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1972 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **62 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `NormalizedContent` connect `NormalizedContent` to `multi_discovery.py`, `test_captions.py`, `niche_discovery.py`, `YouTubeAdapter`, `ComplianceStatus`, `WebPresenceAdapter`, `test_niche_discovery.py`, `AcquisitionCollector`, `scoring_pipeline.py`, `MarketplaceAdapter`, `ResearchRun`, `AmazonReviewAdapter`, `PatreonSubstackAdapter`, `AppStoreAdapter`, `StackExchangeAdapter`, `EvidenceType`, `CrowdfundingAdapter`, `GoogleTrendsAdapter`, `WikipediaAdapter`, `build_adapter`, `SearchDemandAdapter`, `HackerNewsAdapter`, `test_discovery.py`, `RedditAdapter`, `test_multi_discovery.py`?**
-  _High betweenness centrality (0.067) - this node is a cross-community bridge._
-- **Why does `ComplianceStatus` connect `ComplianceStatus` to `Evidence`, `test_captions.py`, `test_reddit_adapter.py`, `ClusterPipeline`, `test_endpoints.py`, `Niche`, `IntelligencePipeline`, `YouTubeAdapter`, `LLMProvider`, `test_handoff_endpoint.py`, `WebPresenceAdapter`, `test_niche_discovery.py`, `AcquisitionCollector`, `scoring_pipeline.py`, `NormalizedContent`, `test_dossier_pipeline.py`, `MarketplaceAdapter`, `ResearchRun`, `AmazonReviewAdapter`, `PatreonSubstackAdapter`, `AppStoreAdapter`, `StackExchangeAdapter`, `EvidenceType`, `test_watch_rescanner.py`, `CrowdfundingAdapter`, `GoogleTrendsAdapter`, `WikipediaAdapter`, `test_registry_rescan.py`, `test_web_adapter.py`, `build_adapter`, `SearchDemandAdapter`, `HackerNewsAdapter`, `test_corp2_export.py`, `test_niche_candidates.py`, `test_discovery.py`, `test_product_ideation.py`, `EvidenceOrigin`, `RedditAdapter`, `test_dossier_persistence.py`, `test_multi_discovery.py`, `CampaignNiche`, `test_ytdlp_adapter.py`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
-- **Why does `LLMProvider` connect `LLMProvider` to `Evidence`, `orchestrator.py`, `test_fair_provider.py`, `test_competitive_pipeline.py`, `niche_discovery.py`, `IntelligencePipeline`, `test_campaign_pipeline_discover_to_dossier`, `RunType`, `SignalLevel`, `extract_observations`, `test_provider_registry.py`, `test_niche_discovery.py`, `classify_topics`, `cluster_pipeline.py`, `product_ideation.py`, `scoring_pipeline.py`, `build_provider`, `ResearchRun`, `run.py`, `providers/registry.py`, `ProviderExhaustedError`, `WatchRescanConfig`, `test_niche_candidates.py`, `test_product_ideation.py`, `app.py`, `test_niche_naming.py`, `test_groq_provider.py`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **Why does `NormalizedContent` connect `NormalizedContent` to `MultiSourceDiscovery`, `test_captions.py`, `YouTubeAdapter`, `ComplianceStatus`, `build_adapter`, `test_niche_discovery.py`, `AcquisitionCollector`, `Niche`, `._persist_items`, `MarketplaceAdapter`, `ResearchRun`, `AmazonReviewAdapter`, `PatreonSubstackAdapter`, `AppStoreAdapter`, `EvidenceType`, `CrowdfundingAdapter`, `GoogleTrendsAdapter`, `WikipediaAdapter`, `YtDlpAdapter`, `SearchDemandAdapter`, `HackerNewsAdapter`, `test_discovery.py`, `StackExchangeAdapter`, `test_multi_discovery.py`?**
+  _High betweenness centrality (0.063) - this node is a cross-community bridge._
+- **Why does `ComplianceStatus` connect `ComplianceStatus` to `OpportunityScore`, `test_captions.py`, `test_reddit_adapter.py`, `CompetitivePipeline`, `test_endpoints.py`, `integration/test_cluster_pipeline.py`, `test_models_db.py`, `YouTubeAdapter`, `Evidence`, `build_adapter`, `test_niche_discovery.py`, `AcquisitionCollector`, `Niche`, `_seed_full`, `MarketplaceAdapter`, `test_handoff_endpoint.py`, `test_intelligence_pipeline.py`, `ResearchRun`, `AmazonReviewAdapter`, `PatreonSubstackAdapter`, `AppStoreAdapter`, `EvidenceType`, `test_watch_rescanner.py`, `CrowdfundingAdapter`, `GoogleTrendsAdapter`, `WikipediaAdapter`, `test_registry_rescan.py`, `test_web_adapter.py`, `YtDlpAdapter`, `SearchDemandAdapter`, `HackerNewsAdapter`, `test_corp2_export.py`, `test_niche_candidates.py`, `test_discovery.py`, `test_product_ideation.py`, `EvidenceOrigin`, `NormalizedContent`, `StackExchangeAdapter`, `test_dossier_persistence.py`, `test_multi_discovery.py`, `NicheLifecycleStatus`, `test_niche_canonicalization.py`?**
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
+- **Why does `LLMProvider` connect `LLMProvider` to `ResearchOrchestrator`, `test_fair_provider.py`, `CompetitivePipeline`, `IntelligencePipeline`, `ScriptedProvider`, `Evidence`, `SignalLevel`, `extract_observations`, `ComplianceStatus`, `test_provider_registry.py`, `trend_scan.py`, `test_niche_discovery.py`, `LLMCallError`, `test_discovery_scan.py`, `Embedder`, `Niche`, `product_ideation.py`, `PooledProvider`, `build_provider`, `test_intelligence_pipeline.py`, `ResearchRun`, `test_coerce.py`, `ProviderExhaustedError`, `DiscoveryScanScheduler`, `Settings`, `app.py`, `test_niche_candidates.py`, `test_product_ideation.py`, `test_niche_naming.py`, `test_groq_provider.py`, `providers/registry.py`?**
+  _High betweenness centrality (0.057) - this node is a cross-community bridge._
 - **Are the 46 inferred relationships involving `NormalizedContent` (e.g. with `AcquisitionCollector` and `_is_interaction()`) actually correct?**
   _`NormalizedContent` has 46 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 71 inferred relationships involving `ResearchRun` (e.g. with `_mark_orphaned_runs()` and `get_evidence()`) actually correct?**

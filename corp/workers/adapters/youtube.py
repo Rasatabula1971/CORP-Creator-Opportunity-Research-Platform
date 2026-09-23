@@ -95,6 +95,29 @@ def _http_error_reason(exc: HttpError) -> str:
     return ""
 
 
+_KEY_PARAM = re.compile(r"([?&]key=)[^&\s>'\"]+")
+
+
+def redact_api_key(text: str) -> str:
+    """Strip the developer key from anything that embeds a request URL."""
+    return _KEY_PARAM.sub(r"\1REDACTED", text)
+
+
+def describe_http_error(exc: BaseException) -> str:
+    """A loggable one-liner for an API error that never includes the key.
+
+    ``str(HttpError)`` embeds the full request URI, and the Data API carries
+    the developer key as a ``key=`` query parameter — so logging the raw
+    exception writes the key into every log line. Status and reason are all
+    a reader needs; anything else is passed through :func:`redact_api_key`.
+    """
+    if isinstance(exc, HttpError):
+        status = getattr(getattr(exc, "resp", None), "status", "?")
+        reason = _http_error_reason(exc) or "unknown"
+        return f"HttpError {status} ({reason})"
+    return f"{type(exc).__name__}: {redact_api_key(str(exc))}"
+
+
 class _RateLimiter:
     """Thread-safe per-second rate limiter."""
 
@@ -442,7 +465,9 @@ class YouTubeAdapter(SourceAdapter, ProblemProvider):
                         raise QuotaExceededError(
                             f"YouTube quota/rate limit fetching replies ({reason})"
                         ) from e
-                logger.warning("reply fetch for %s failed: %s", comment_id, e)
+                logger.warning(
+                    "reply fetch for %s failed: %s", comment_id, describe_http_error(e)
+                )
                 return results
             results.extend(resp.get("items", []))
             page_token = resp.get("nextPageToken")

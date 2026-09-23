@@ -9,18 +9,21 @@ spec freezes as an automated action ("Topic scan (Google Trends pull) —
 AUTO").
 
 **Where topics come from.** A curated catalogue (``rules/broad_topics.yaml``)
-bounds the universe; Google Trends ranks it. That split is deliberate.
-Trends' ``trending:<geo>`` feed reports what spiked in the last 24 hours
+bounds the universe; a momentum source ranks it — YouTube's official
+trending charts by default (:mod:`corp.workers.adapters.youtube_trends`),
+Google Trends optionally. That split is deliberate. A trending feed —
+Google's or YouTube's — reports what spiked in the last 24 hours
 — news, sport, celebrities — while Level 0 wants durable areas a digital
 product can be built for ("small business", "home organization", the
 spec's own examples). Drilling a news spike costs a full recursive LLM
-pass and yields a niche tree nobody can build for. So Trends decides
+pass and yields a niche tree nobody can build for. So the momentum source decides
 *which catalogue topics have momentum now and therefore go first*; it
 does not get to nominate "Lakers score" as a research target.
 
-**Degrading.** Momentum is a ranking signal, never a gate. pytrends is an
-optional dependency, the Trends endpoint is undocumented and rate-limited,
-and the whole lookup can simply fail. When it does, the scanner falls back
+**Degrading.** Momentum is a ranking signal, never a gate. The YouTube
+source needs an API key and draws on a daily quota; the Google Trends one
+needs pytrends and an undocumented, rate-limited endpoint; either lookup
+can simply fail. When it does, the scanner falls back
 to least-recently-researched ordering, which rotates through the catalogue
 on its own. A crawler that stops crawling because a ranking signal went
 missing would be worse than one that keeps going in a fixed order.
@@ -90,10 +93,10 @@ class SeedTopic:
     """A broad topic cleared to enter recursive discovery."""
 
     topic: str
-    # 0..100 from Google Trends' interest-over-time average, or None when
+    # 0..100 from the momentum source's ``avg_interest``, or None when
     # no live signal was obtained for this topic.
     momentum: float | None
-    # "trends_momentum" when Trends ranked it, "rotation" when it is here
+    # "trends_momentum" when the momentum source ranked it, "rotation" when it is here
     # because it is the least recently researched.
     reason: str
 
@@ -214,19 +217,28 @@ class TrendScanner:
     async def _momentum_for(
         self, topics: list[str], stats: TrendScanStats
     ) -> dict[str, float]:
-        """Best-effort Google Trends score per topic. Missing keys mean no
+        """Best-effort momentum score per topic. Missing keys mean no
         signal, which the caller ranks by rotation instead."""
         if self._provider is None:
             logger.info("Trend scan: no trend provider; ranking by rotation")
             return {}
 
         scores: dict[str, float] = {}
+        first_failure: str | None = None
         for topic in topics:
             try:
                 items = await self._provider.fetch_trend(topic)
             except Exception as exc:  # noqa: BLE001 — a ranking signal, not the work
                 stats.momentum_failures += 1
-                logger.warning("Trend scan: momentum lookup failed for %r: %s", topic, exc)
+                # One outage fails every topic the same way; warn once and
+                # summarise, rather than one warning per catalogue entry.
+                if first_failure is None:
+                    first_failure = f"{type(exc).__name__}: {exc}"
+                    logger.warning(
+                        "Trend scan: momentum lookup failed for %r: %s", topic, first_failure
+                    )
+                else:
+                    logger.debug("Trend scan: momentum lookup failed for %r: %s", topic, exc)
                 continue
             score = _score_from_items(items)
             if score is None:
@@ -234,11 +246,20 @@ class TrendScanner:
             scores[topic] = score
             stats.scored += 1
 
+        if stats.momentum_failures > 1:
+            logger.warning(
+                "Trend scan: momentum unavailable for %d of %d topic(s); those are "
+                "ranked by rotation (first error: %s)",
+                stats.momentum_failures,
+                len(topics),
+                first_failure,
+            )
+
         if not scores and not self._config.allow_rotation_fallback:
             # The operator asked for a live signal or nothing. Surface the
             # reason rather than silently drilling an arbitrary topic.
             raise TrendSignalUnavailableError(
-                f"no Google Trends momentum for any of {len(topics)} eligible topic(s) "
+                f"no momentum signal for any of {len(topics)} eligible topic(s) "
                 f"and allow_rotation_fallback is false"
             )
         return scores
@@ -266,11 +287,12 @@ class TrendSignalUnavailableError(RuntimeError):
 def _score_from_items(items: list[Any]) -> float | None:
     """Pull a 0..100 momentum score out of whatever the adapter returned.
 
-    With pytrends installed the Trends adapter emits one ``interest`` item
-    carrying ``metadata["avg_interest"]``. Without it the adapter falls
-    back to keyword-matched trending items, which carry no series — there
-    the count of matching items is the only signal available, so treat it
-    as a weak one rather than discarding the topic outright.
+    The YouTube trends adapter, and the Google Trends adapter with pytrends
+    installed, each emit one ``interest`` item carrying
+    ``metadata["avg_interest"]``. Google Trends without pytrends falls back
+    to keyword-matched trending items, which carry no series — there the
+    count of matching items is the only signal available, so treat it as a
+    weak one rather than discarding the topic outright.
     """
     if not items:
         return None

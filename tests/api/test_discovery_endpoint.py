@@ -168,3 +168,28 @@ async def test_status_never_500s_when_the_preview_scan_breaks(client, clean_db, 
     # The settings half still answers, which is the part you check first.
     assert body["enabled"] is False
     assert body["interval_seconds"] > 0
+
+
+async def test_status_reports_the_momentum_source(client, clean_db, monkeypatch):
+    monkeypatch.setattr(settings, "discovery_momentum_source", "youtube")
+    monkeypatch.setattr(settings, "youtube_api_key", "")
+    body = (await client.get("/discovery/status")).json()
+    assert body["momentum_source"] == "youtube"
+    assert body["momentum_available"] is False
+    assert "YOUTUBE_API_KEY" in body["momentum_detail"]
+
+    monkeypatch.setattr(settings, "youtube_api_key", "k")
+    body = (await client.get("/discovery/status")).json()
+    assert body["momentum_available"] is True
+    assert body["momentum_detail"] is None
+
+
+async def test_status_uses_the_configured_catalogue(client, clean_db, monkeypatch, tmp_path):
+    custom = tmp_path / "topics.yaml"
+    custom.write_text(
+        'version: "t"\nscan:\n  topics_per_pass: 2\n  geo: "US"\ntopics:\n  - alpha\n  - beta\n'
+    )
+    monkeypatch.setattr(settings, "broad_topics_path", str(custom))
+    body = (await client.get("/discovery/status")).json()
+    assert body["catalogue_size"] == 2
+    assert set(body["next_topics"]) == {"alpha", "beta"}

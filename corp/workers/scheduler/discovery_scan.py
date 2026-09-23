@@ -39,11 +39,14 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from corp.config import Settings
 from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
 from corp.workers.intelligence.niche_qualification import NicheQualifier
 from corp.workers.intelligence.trend_scan import (
+    DEFAULT_BROAD_TOPICS_PATH,
     SeedTopic,
+    TrendScanConfig,
     TrendScanner,
     TrendScanStats,
 )
@@ -90,6 +93,62 @@ class DiscoveryPassStats:
         }
 
 
+def momentum_readiness(cfg: Settings) -> tuple[str, bool, str | None]:
+    """(source, available, why-not) for the configured momentum source.
+
+    No network: this only checks that the source's prerequisites exist, so
+    the status endpoint can call it on every read.
+    """
+    source = cfg.discovery_momentum_source
+    if source == "none":
+        return source, False, "momentum disabled; topics are ranked by rotation"
+    if source == "youtube":
+        if not cfg.youtube_api_key:
+            return source, False, "YOUTUBE_API_KEY is not set; topics are ranked by rotation"
+        return source, True, None
+    # googletrends: the trending RSS needs nothing, but a per-topic interest
+    # series needs pytrends. Without it most catalogue topics match nothing.
+    try:
+        import pytrends  # noqa: F401
+    except ImportError:
+        return (
+            source,
+            False,
+            "pytrends is not installed; Google Trends can only keyword-match the "
+            "trending feed, which rarely contains catalogue topics",
+        )
+    return source, True, None
+
+
+def build_momentum_provider(cfg: Settings, region: str) -> TrendProvider | None:
+    """The TrendProvider the scanner ranks with, or None to rank by rotation.
+
+    One place for both the scheduler and the manual trigger to decide, so
+    the two cannot silently disagree about where momentum comes from.
+    """
+    source = cfg.discovery_momentum_source
+    if source == "none":
+        return None
+    if source == "youtube":
+        if not cfg.youtube_api_key:
+            logger.info("Discovery momentum: YOUTUBE_API_KEY not set; ranking by rotation")
+            return None
+        from corp.workers.adapters.youtube_trends import YouTubeTrendsAdapter
+
+        return YouTubeTrendsAdapter(
+            api_key=cfg.youtube_api_key,
+            region=region,
+            daily_quota=cfg.youtube_daily_quota_units,
+            requests_per_second=cfg.youtube_requests_per_second,
+        )
+    from corp.workers.adapters.registry import build_adapter
+
+    adapter = build_adapter("googletrends", cfg)
+    if isinstance(adapter, TrendProvider):
+        return adapter
+    raise TypeError(f"googletrends adapter is not a TrendProvider: {type(adapter).__name__}")
+
+
 async def get_or_create_autonomous_campaign(
     session: AsyncSession, name: str = AUTONOMOUS_CAMPAIGN_NAME
 ) -> Campaign:
@@ -126,6 +185,7 @@ async def run_discovery_pass(
     topics_per_pass: int | None = None,
     campaign_id: str | None = None,
     topics: list[str] | None = None,
+    broad_topics_path: str = DEFAULT_BROAD_TOPICS_PATH,
 ) -> DiscoveryPassStats:
     """One full pass. Caller owns the transaction.
 
@@ -151,6 +211,7 @@ async def run_discovery_pass(
         scanner = TrendScanner(
             session,
             trend_provider=trend_provider,
+            config=TrendScanConfig.from_rules(broad_topics_path),
             niche_rules_path=niche_rules_path,
         )
         seeds, scan_stats = await scanner.scan(topics_per_pass)
@@ -244,8 +305,10 @@ class DiscoveryScanScheduler:
         topics_per_pass: int | None = None,
         niche_rules_path: str = "rules/niche_discovery_prompt.yaml",
         qualification_rules_path: str = "rules/niche_qualification.yaml",
+        broad_topics_path: str = DEFAULT_BROAD_TOPICS_PATH,
         is_busy: Callable[[], bool] | None = None,
     ) -> None:
+        self._broad_topics_path = broad_topics_path
         self._session_factory = session_factory
         self._provider_factory = provider_factory
         self._interval_seconds = interval_seconds
@@ -311,6 +374,7 @@ class DiscoveryScanScheduler:
                             niche_rules_path=self._niche_rules_path,
                             qualification_rules_path=self._qualification_rules_path,
                             topics_per_pass=self._topics_per_pass,
+                            broad_topics_path=self._broad_topics_path,
                         )
                         await session.commit()
                     except Exception:

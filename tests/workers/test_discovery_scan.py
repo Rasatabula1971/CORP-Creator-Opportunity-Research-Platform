@@ -320,3 +320,101 @@ async def test_scheduler_gives_up_after_max_consecutive_failures(clean_db):
     assert sched._consecutive_failures == sched.MAX_CONSECUTIVE_FAILURES
     # _run_forever's guard means the loop exits rather than spinning.
     await asyncio.wait_for(sched._run_forever(), timeout=5)
+
+
+# ── Momentum source selection ────────────────────────────────────────
+
+
+def _cfg(**overrides):
+    from corp.config import Settings
+
+    base = {"discovery_momentum_source": "youtube", "youtube_api_key": ""}
+    base.update(overrides)
+    return Settings(**base)
+
+
+def test_youtube_is_the_default_momentum_source():
+    from corp.config import Settings
+
+    assert Settings.model_fields["discovery_momentum_source"].default == "youtube"
+
+
+def test_youtube_without_a_key_ranks_by_rotation():
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        momentum_readiness,
+    )
+
+    cfg = _cfg(youtube_api_key="")
+    assert build_momentum_provider(cfg, "US") is None
+    source, ok, why = momentum_readiness(cfg)
+    assert (source, ok) == ("youtube", False)
+    assert "YOUTUBE_API_KEY" in why
+
+
+def test_youtube_with_a_key_builds_the_official_trends_adapter(monkeypatch):
+    from corp.workers.adapters import youtube_trends
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        momentum_readiness,
+    )
+
+    monkeypatch.setattr(youtube_trends, "build", lambda *a, **kw: object())
+    cfg = _cfg(youtube_api_key="k", youtube_daily_quota_units=1234)
+    provider = build_momentum_provider(cfg, "gb")
+    assert isinstance(provider, youtube_trends.YouTubeTrendsAdapter)
+    assert provider.region == "GB"
+    assert provider._daily_quota == 1234, "must draw on the configured daily quota"
+    assert momentum_readiness(cfg) == ("youtube", True, None)
+
+
+def test_none_disables_momentum_entirely():
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        momentum_readiness,
+    )
+
+    cfg = _cfg(discovery_momentum_source="none", youtube_api_key="k")
+    assert build_momentum_provider(cfg, "US") is None
+    assert momentum_readiness(cfg)[1] is False
+
+
+def test_googletrends_remains_selectable():
+    from corp.workers.adapters.googletrends import GoogleTrendsAdapter
+    from corp.workers.scheduler.discovery_scan import (
+        build_momentum_provider,
+        momentum_readiness,
+    )
+
+    cfg = _cfg(discovery_momentum_source="googletrends")
+    assert isinstance(build_momentum_provider(cfg, "US"), GoogleTrendsAdapter)
+    source, ok, why = momentum_readiness(cfg)
+    assert source == "googletrends"
+    # pytrends is not a dependency, so this is the honest answer by default.
+    if not ok:
+        assert "pytrends" in why
+
+
+def test_an_unknown_momentum_source_is_rejected_at_startup():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _cfg(discovery_momentum_source="reddit")
+
+
+# ── BROAD_TOPICS_PATH is honoured ────────────────────────────────────
+
+
+async def test_the_pass_reads_the_configured_catalogue(clean_db, patched_pipeline, tmp_path):
+    """BROAD_TOPICS_PATH used to be declared but never read: the scan always
+    loaded rules/broad_topics.yaml whatever it was set to."""
+    custom = tmp_path / "topics.yaml"
+    custom.write_text(
+        'version: "test"\nscan:\n  topics_per_pass: 5\n  geo: "US"\n'
+        "topics:\n  - lock picking as a sport\n"
+    )
+    stats = await run_discovery_pass(
+        clean_db, _FakeProvider(), broad_topics_path=str(custom)
+    )
+    assert [t for _, t in patched_pipeline["discover"]] == ["lock picking as a sport"]
+    assert stats.scan["catalogue"] == 1

@@ -13,10 +13,14 @@ version: "1.0.0"
 # tree worth drilling, and drilling it costs a full recursive LLM pass.
 #
 # So the division of labour is: this file bounds the universe of topics
-# worth drilling, and Google Trends decides which of them have momentum
-# right now and therefore go first. Trends still drives ordering and
-# timing on every pass — it just cannot nominate "Lakers score" as a
-# niche to research.
+# worth drilling, and a momentum source decides which of them have
+# momentum right now and therefore go first — by default YouTube's
+# official trending charts (DISCOVERY_MOMENTUM_SOURCE; see
+# corp/workers/adapters/youtube_trends.py), optionally Google Trends. The
+# momentum source drives ordering and timing on every pass — it just
+# cannot nominate "Lakers score" as a niche to research. YouTube trending
+# skews to entertainment exactly as Google's feed does, which is why it
+# ranks this list rather than replacing it.
 #
 # The registry (Niche.next_recheck_at, frozen at 90 days) does the rest:
 # a topic drilled recently is skipped, so the scanner rotates through the
@@ -31,7 +35,8 @@ scan:
   # Topics handed to the drill engine per pass. Each one costs a full
   # recursive discovery pass, so this is the main cost lever.
   topics_per_pass: 3
-  # Geo passed to Google Trends when scoring momentum.
+  # Region the momentum source is asked about: YouTube's regionCode for
+  # the trending chart, or Google Trends' geo. ISO 3166-1 alpha-2.
   geo: "US"
   # A momentum lookup that fails (no pytrends, no network, rate limit)
   # must not stop the pass: the scanner falls back to least-recently-

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -154,6 +156,12 @@ class Settings(BaseSettings):
     discovery_interval_seconds: int = 86_400
     # None = use topics_per_pass from rules/broad_topics.yaml.
     discovery_topics_per_pass: int | None = None
+    # Where Level 0 momentum comes from. "youtube" is the official Data API
+    # (needs YOUTUBE_API_KEY; ~15-30 quota units per pass). "googletrends" is
+    # the RSS/pytrends path the Google Trends adapter labels "tolerated/
+    # undocumented". "none" ranks purely by least-recently-researched. A
+    # source whose prerequisites are missing degrades to that same rotation.
+    discovery_momentum_source: Literal["youtube", "googletrends", "none"] = "youtube"
 
     @field_validator("discovery_topics_per_pass", mode="before")
     @classmethod
