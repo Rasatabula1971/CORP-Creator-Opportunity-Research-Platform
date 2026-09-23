@@ -69,7 +69,6 @@ jobs:
       CORP_TEST_DATABASE_URL_SYNC: postgresql://corp:corp@localhost:5432/corp_test
       DATABASE_URL: postgresql+asyncpg://corp:corp@localhost:5432/corp_test
       DATABASE_URL_SYNC: postgresql://corp:corp@localhost:5432/corp_test
-      APP_ENV: test
       LLM_PROVIDER: auto
       FAIR_ENABLED: "false"
       WARM_STORE_PATH: /tmp/corp-warm/warm.db
