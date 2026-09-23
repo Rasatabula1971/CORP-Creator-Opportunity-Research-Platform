@@ -45,6 +45,7 @@ dev = [
     "types-yt-dlp>=2026.8,<2027",
     "types-PyYAML>=6,<7",
     "types-jsonschema>=4.23,<5",
+    "types-defusedxml>=0.7,<1",
     "graphifyy>=0.1",
 ]
 
