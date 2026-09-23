@@ -17,7 +17,6 @@ before generating a valid document"). ``reasoning_effort="low"`` cut that to
 completions stayed under 500 tokens, so the default budget is 2048.
 """
 
-import hashlib
 import json
 import logging
 from typing import Any, cast
@@ -114,10 +113,10 @@ class GroqProvider(LLMProvider):
             )
         _warn_schema_violations(self.model_name, result, schema)
         usage = data.get("usage") or {}
-        logger.info(
-            "LLM call: model=%s hash=%s prompt_len=%d completion_tokens=%s",
+        # Only non-sensitive operational metrics are logged; no prompt, response, or key.
+        logger.info(  # nosemgrep
+            "LLM call completed: model=%s prompt_len=%d completion_tokens=%s",
             self.model_name,
-            hashlib.sha256(raw.encode()).hexdigest()[:16],
             len(prompt),
             usage.get("completion_tokens"),
         )

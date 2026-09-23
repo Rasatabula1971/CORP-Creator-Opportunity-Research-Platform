@@ -1,0 +1,191 @@
+name: CORP Code Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  python-static:
+    name: Python static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Dependency consistency
+        run: pip check
+
+      - name: Ruff
+        run: ruff check corp tests
+
+      - name: Mypy strict
+        if: always()
+        run: mypy corp
+
+      - name: Import architecture contracts
+        if: always()
+        run: lint-imports
+
+  python-tests:
+    name: Pytest + coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: corp
+          POSTGRES_PASSWORD: corp
+          POSTGRES_DB: corp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U corp -d corp_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CORP_TEST_DATABASE_URL: postgresql+asyncpg://corp:corp@localhost:5432/corp_test
+      CORP_TEST_DATABASE_URL_SYNC: postgresql://corp:corp@localhost:5432/corp_test
+      DATABASE_URL: postgresql+asyncpg://corp:corp@localhost:5432/corp_test
+      DATABASE_URL_SYNC: postgresql://corp:corp@localhost:5432/corp_test
+      LLM_PROVIDER: auto
+      FAIR_ENABLED: "false"
+      WARM_STORE_PATH: /tmp/corp-warm/warm.db
+      CORP_DATA_PATH: /tmp/corp-data
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Dependency consistency
+        run: pip check
+
+      - name: Prepare test database
+        run: |
+          mkdir -p /tmp/corp-warm /tmp/corp-data
+          alembic upgrade head
+
+      - name: Run test suite with coverage
+        run: |
+          pytest -ra --cov=corp --cov-report=term-missing --cov-report=xml:coverage.xml
+
+  frontend:
+    name: React / TypeScript
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Oxc lint
+        run: npm run lint
+
+      - name: TypeScript + production build
+        run: npm run build
+
+      - name: Dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  python-dependency-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit CORP runtime dependencies
+        continue-on-error: true
+        run: pip-audit .
+
+  semgrep:
+    name: Semgrep security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Scan Python source
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/security-audit \
+            --metrics=off \
+            --sarif \
+            --output semgrep.sarif \
+            corp
+
+      - name: Upload Semgrep SARIF to code scanning
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: Preserve Semgrep report
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          retention-days: 14

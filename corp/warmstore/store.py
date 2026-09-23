@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Table, insert, select, text
+from sqlalchemy import Table, func, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from corp.warmstore.schema import (
@@ -103,13 +103,17 @@ class WarmStore:
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
             for table in ALL_TABLES:
-                result = await conn.execute(text(f"PRAGMA table_info([{table.name}])"))
+                # Table names come only from ALL_TABLES metadata, never user input.
+                result = await conn.execute(
+                    text(f"PRAGMA table_info([{table.name}])")  # nosemgrep
+                )
                 existing = {row[1] for row in result.fetchall()}
                 for col in table.columns:
                     if col.name in existing:
                         continue
                     ddl = f"ALTER TABLE [{table.name}] ADD COLUMN [{col.name}] {col.type}"
-                    await conn.execute(text(ddl))
+                    # table/column/type are SQLAlchemy schema metadata, never external input.
+                    await conn.execute(text(ddl))  # nosemgrep
         self._schema_ready = True
 
     async def close(self) -> None:
@@ -169,11 +173,10 @@ class WarmStore:
         async with engine.connect() as conn:
             for i in range(0, len(ids), 500):
                 batch = ids[i : i + 500]
-                placeholders = ", ".join(f":id{j}" for j in range(len(batch)))
-                params = {f"id{j}": eid for j, eid in enumerate(batch)}
                 rows = await conn.execute(
-                    text(f"SELECT id, raw_text FROM evidence WHERE id IN ({placeholders})"),
-                    params,
+                    select(evidence.c.id, evidence.c.raw_text).where(
+                        evidence.c.id.in_(batch)
+                    )
                 )
                 for row in rows:
                     result[row.id] = row.raw_text
@@ -188,14 +191,14 @@ class WarmStore:
         async with engine.connect() as conn:
             for i in range(0, len(ids), 500):
                 batch = ids[i : i + 500]
-                placeholders = ", ".join(f":id{j}" for j in range(len(batch)))
-                params = {f"id{j}": oid for j, oid in enumerate(batch)}
                 rows = await conn.execute(
-                    text(
-                        f"SELECT id, embedding FROM problem_observations "
-                        f"WHERE id IN ({placeholders}) AND embedding IS NOT NULL"
-                    ),
-                    params,
+                    select(
+                        problem_observations.c.id,
+                        problem_observations.c.embedding,
+                    ).where(
+                        problem_observations.c.id.in_(batch),
+                        problem_observations.c.embedding.is_not(None),
+                    )
                 )
                 for row in rows:
                     result[row.id] = row.embedding
@@ -212,7 +215,7 @@ class WarmStore:
         async with engine.connect() as conn:
             for table in ALL_TABLES:
                 result = await conn.execute(
-                    text(f"SELECT COUNT(*) FROM [{table.name}]")
+                    select(func.count()).select_from(table)
                 )
                 counts[table.name] = result.scalar() or 0
         return counts

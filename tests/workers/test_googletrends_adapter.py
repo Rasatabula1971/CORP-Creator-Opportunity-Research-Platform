@@ -99,6 +99,19 @@ def test_parse_rss_invalid_xml():
     assert results == []
 
 
+def test_parse_rss_rejects_external_entities():
+    malicious = """<?xml version="1.0"?>
+<!DOCTYPE rss [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+]>
+<rss version="2.0">
+  <channel>
+    <item><title>&xxe;</title></item>
+  </channel>
+</rss>"""
+    assert _parse_trends_rss(malicious, "US") == []
+
+
 def test_parse_rss_date_converts_offset_to_utc():
     # 00:00 at -0700 is 07:00 UTC — the instant must be preserved, not relabeled.
     dt = _parse_rss_date("Mon, 15 Sep 2026 00:00:00 -0700")
