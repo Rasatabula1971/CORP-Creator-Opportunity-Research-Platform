@@ -25,8 +25,6 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
-from xml.etree.ElementTree import ParseError
-
 from defusedxml import ElementTree as DefusedElementTree
 from defusedxml.common import DefusedXmlException
 
@@ -247,7 +245,7 @@ def _parse_trends_rss(xml_text: str, geo: str) -> list[NormalizedContent]:
 
     try:
         root = DefusedElementTree.fromstring(xml_text)
-    except (ParseError, DefusedXmlException):
+    except (DefusedElementTree.ParseError, DefusedXmlException):
         logger.warning("Failed to parse Google Trends RSS")
         return []
 
