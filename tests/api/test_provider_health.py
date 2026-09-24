@@ -7,6 +7,8 @@ JSON shape and the routing between the three cases the endpoint distinguishes
 (FAIR, non-FAIR, no usable provider).
 """
 
+from types import SimpleNamespace
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -34,16 +36,14 @@ class _FakeFair(FairProvider):
         skipped: dict[str, str] | None = None,
         providers: list[dict] | None = None,
     ):
-        # Skip real __init__: only the diagnostics read the router, and they
+        # The router is a stand-in: only the diagnostics read it, and they
         # need just ``skipped`` and ``providers()``.
-        from types import SimpleNamespace
-
+        router = SimpleNamespace(skipped=skipped or {}, providers=lambda: providers or [])
+        super().__init__(router)
         self._ping = ping_result
         self._members = member_names
         self._closed = False
         self._last_model = "gemini-3.6-flash"
-        self._used = set()
-        self._fair = SimpleNamespace(skipped=skipped or {}, providers=lambda: providers or [])
 
     @property
     def model_name(self) -> str:
