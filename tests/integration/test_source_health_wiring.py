@@ -14,6 +14,7 @@ Adapter fan-out is faked throughout; no network.
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.config import settings
 from corp.core.models.campaign import Campaign
 from corp.core.models.workflow import RunStatus
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
@@ -207,6 +208,8 @@ async def test_every_source_disconnected_fails_the_run_loudly(
     session = clean_db
     campaign = await _make_campaign(session)
     tracker = SourceHealthTracker(str(tmp_path))
+    # Every platform in play here, so none is skipped as "disabled" instead.
+    monkeypatch.setattr(settings, "discovery_disabled_sources", "")
     for platform in NICHE_FAN_OUT_PLATFORMS:
         for _ in range(DEFAULT_DISCONNECT_AFTER):
             tracker.record_failure(platform, RuntimeError("outage"))
@@ -280,3 +283,70 @@ def test_save_is_atomic_and_leaves_no_temp_file(tmp_path):
     reloaded = SourceHealthTracker(str(tmp_path))
     reloaded.load()
     assert reloaded.get_record("reddit").consecutive_failures == 1
+
+
+@pytest.mark.asyncio
+async def test_disabled_source_is_skipped_without_touching_health(
+    clean_db: AsyncSession, monkeypatch, tmp_path
+):
+    """ADR-0066: a source switched off by configuration is a decision, not
+    an outage. It must not be built, must not be recorded against source
+    health (or it would trip the breaker for nothing), and the run must
+    say why it was left out."""
+    session = clean_db
+    campaign = await _make_campaign(session)
+    tracker = SourceHealthTracker(str(tmp_path))
+    monkeypatch.setattr(settings, "discovery_disabled_sources", "stackexchange, Crowdfunding")
+
+    built: list[str] = []
+
+    def _build(platform: str) -> SourceAdapter:
+        built.append(platform)
+        return _DualCapabilityAdapter()
+
+    monkeypatch.setattr("corp.workers.intelligence.niche_discovery.build_adapter", _build)
+
+    discovery = RecursiveNicheDiscovery(
+        session, _provider(), rules_path="unused", config=_config(), health=tracker
+    )
+    run = await discovery.discover(campaign.id, "broad topic")
+
+    assert "stackexchange" not in built and "crowdfunding" not in built
+    assert built, "the other platforms are still built"
+    assert tracker.get_record("stackexchange").total_failures == 0
+    assert tracker.get_record("crowdfunding").total_failures == 0
+    skipped = (run.stats or {}).get("extra", {}).get("skipped_sources", {})
+    assert skipped["stackexchange"] == "disabled by DISCOVERY_DISABLED_SOURCES"
+    assert skipped["crowdfunding"] == "disabled by DISCOVERY_DISABLED_SOURCES"
+    assert run.status != RunStatus.FAILED.value
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_adapter_is_skipped_without_a_health_failure(
+    clean_db: AsyncSession, monkeypatch, tmp_path
+):
+    """A registry AdapterConfigError (e.g. every marketplace site removed as
+    blocked) is configuration, not an outage: skipped with a reason, no
+    breaker accounting."""
+    from corp.workers.adapters.registry import AdapterConfigError
+
+    session = clean_db
+    campaign = await _make_campaign(session)
+    tracker = SourceHealthTracker(str(tmp_path))
+    monkeypatch.setattr(settings, "discovery_disabled_sources", "")
+
+    def _build(platform: str) -> SourceAdapter:
+        if platform == "marketplace":
+            raise AdapterConfigError("no usable marketplace")
+        return _DualCapabilityAdapter()
+
+    monkeypatch.setattr("corp.workers.intelligence.niche_discovery.build_adapter", _build)
+
+    discovery = RecursiveNicheDiscovery(
+        session, _provider(), rules_path="unused", config=_config(), health=tracker
+    )
+    run = await discovery.discover(campaign.id, "broad topic")
+
+    assert tracker.get_record("marketplace").total_failures == 0
+    skipped = (run.stats or {}).get("extra", {}).get("skipped_sources", {})
+    assert skipped["marketplace"] == "not configured; details in the server log"

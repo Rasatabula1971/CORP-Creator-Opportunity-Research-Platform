@@ -46,11 +46,17 @@ class Settings(BaseSettings):
     amazon_max_reviews: int = 50
     amazon_max_products: int = 5
 
-    # Marketplace adapter (niche-signal: Gumroad/Etsy/Udemy listings for saturation + pricing).
+    # Marketplace adapter (niche-signal: Gumroad/Etsy listings for saturation + pricing).
+    # Udemy is no longer a valid site: its Affiliate API (the only public
+    # endpoint) was discontinued on 2025-01-01 and returns 403 for good; the
+    # registry drops it with a warning if it is listed (ADR-0066).
     marketplace_max_listings: int = 30
-    marketplace_sites: str = "gumroad,etsy,udemy"
-    # Etsy Open API v3 key (Personal App tier). When set, Etsy uses official API
-    # instead of HTML scraping. Register at https://www.etsy.com/developers.
+    marketplace_sites: str = "gumroad,etsy"
+    # Etsy Open API v3 key (Personal App tier). REQUIRED for Etsy: the HTML
+    # search page sits behind DataDome, which answers every non-browser
+    # client with 403, so without a key the registry leaves Etsy out rather
+    # than burn a blocked request per keyword (ADR-0066). Register at
+    # https://www.etsy.com/developers.
     etsy_api_key: str = ""
 
     # Hacker News adapter (niche-signal: stories + comments via Algolia API). Fully open.
@@ -70,8 +76,10 @@ class Settings(BaseSettings):
     appstore_country: str = "us"
 
     # Crowdfunding adapter (niche-signal: Kickstarter + Indiegogo backing as
-    # purchase-intent evidence). Both platforms' internal search endpoints,
-    # verified live; no official API, no key.
+    # purchase-intent evidence). Both platforms' internal search endpoints;
+    # no official API, no key. Off by default via discovery_disabled_sources
+    # below: since 2026-09 both sit behind edge bot protection that refuses
+    # any non-browser client, browser headers included (ADR-0066).
     crowdfunding_max_projects: int = 30
 
     # Patreon + Substack adapter (niche-signal: creator monetisation --
@@ -91,6 +99,12 @@ class Settings(BaseSettings):
     # Multi-source niche discovery — comma-separated platforms to include.
     # Defaults to all niche-family adapters.
     niche_discovery_platforms: str = ""
+    # Niche-discovery fan-out platforms to leave out entirely (comma-separated
+    # names from NICHE_FAN_OUT_PLATFORMS). A disabled source is neither built
+    # nor counted against source health; the run records it as skipped with
+    # this reason. Distinct from the circuit breaker, which is for sources
+    # that are meant to work but currently don't.
+    discovery_disabled_sources: str = "crowdfunding"
 
     # Bulk research artifacts (raw payloads, JSONL archives) — §24. Relational
     # rows stay in Postgres; this is the external SD/SSD side, so it must be
