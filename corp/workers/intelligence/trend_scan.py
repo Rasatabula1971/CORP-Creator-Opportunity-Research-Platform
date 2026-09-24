@@ -42,13 +42,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from corp.core.models.niche import Niche
+from corp.core.models.workflow import ResearchRun
 from corp.core.scoring.niche_qualification import load_rules
+from corp.workers.intelligence.niche_discovery import (
+    PIPELINE as NICHE_DISCOVERY_PIPELINE,
+)
 from corp.workers.intelligence.niche_discovery import (
     DiscoveryConfig,
     matched_exclusion,
@@ -157,14 +161,35 @@ class TrendScanner:
         limit = self._config.topics_per_pass if limit is None else limit
         stats = TrendScanStats(catalogue=len(self._config.topics))
 
-        eligible: list[str] = []
+        non_excluded: list[str] = []
         for topic in self._config.topics:
             category = matched_exclusion(topic, self._discovery.exclusions)
             if category is not None:
                 stats.excluded += 1
                 logger.debug("Trend scan: %r excluded (%s)", topic, category)
                 continue
+            non_excluded.append(topic)
+
+        # When this drilled last, read from ResearchRun history -- not the
+        # Niche table. A catalogue keyword like "small business" never
+        # appears there verbatim: the drill engine always synthesizes more
+        # specific niche names from it (see niche_discovery.py's
+        # synthesize_niches). Checking Niche.canonical_name here would
+        # therefore never match, silently defeating both the freshness
+        # skip below and the rotation fallback further down, so the same
+        # handful of catalogue topics would be re-selected and re-drilled
+        # every single pass, forever.
+        last_drilled = await self._topic_scan_history(non_excluded)
+        now = datetime.now(UTC).timestamp()
+        recheck_seconds = self._discovery.recheck_days * 86400
+
+        eligible: list[str] = []
+        for topic in non_excluded:
             if await registry_fresh(self._session, topic):
+                stats.registry_fresh += 1
+                continue
+            seen = last_drilled.get(topic)
+            if seen is not None and (now - seen) < recheck_seconds:
                 stats.registry_fresh += 1
                 continue
             eligible.append(topic)
@@ -182,17 +207,16 @@ class TrendScanner:
             return [], stats
 
         momentum = await self._momentum_for(eligible, stats)
-        last_researched = await self._last_researched_for(eligible)
 
         def sort_key(topic: str) -> tuple[int, float, float, str]:
             score = momentum.get(topic)
             if score is not None:
                 # Rank 0: a live signal. Negative score sorts desc.
                 return (0, -score, 0.0, topic)
-            # Rank 1: rotation. Never researched (None) goes first, then
+            # Rank 1: rotation. Never drilled (None) goes first, then
             # oldest first. Timestamps are compared as epoch seconds so a
             # missing value can share the tuple slot.
-            seen = last_researched.get(topic)
+            seen = last_drilled.get(topic)
             return (1, 0.0, seen if seen is not None else float("-inf"), topic)
 
         ranked = sorted(eligible, key=sort_key)[:limit]
@@ -264,20 +288,30 @@ class TrendScanner:
             )
         return scores
 
-    async def _last_researched_for(self, topics: list[str]) -> dict[str, float]:
-        """Epoch seconds of each topic's last research pass, when known."""
+    async def _topic_scan_history(self, topics: list[str]) -> dict[str, float]:
+        """Epoch seconds of each broad topic's last non-failed drill,
+        read from the niche-discovery ResearchRun history (every
+        discover() call records its ``topic`` in ``config_snapshot``).
+        A "failed" run (every source errored, nothing produced) does not
+        count, so a transient outage doesn't lock a topic out for the
+        full recheck window; "partial" and "completed" both do."""
+        if not topics:
+            return {}
         lowered = [t.lower() for t in topics]
+        topic_col = func.lower(ResearchRun.config_snapshot["topic"].astext)
         result = await self._session.execute(
-            select(Niche.canonical_name, Niche.last_researched_at).where(
-                func.lower(Niche.canonical_name).in_(lowered),
-                Niche.last_researched_at.isnot(None),
+            select(
+                topic_col,
+                func.max(func.coalesce(ResearchRun.completed_at, ResearchRun.created_at)),
             )
+            .where(
+                ResearchRun.config_snapshot["pipeline"].astext == NICHE_DISCOVERY_PIPELINE,
+                topic_col.in_(lowered),
+                ResearchRun.status != "failed",
+            )
+            .group_by(topic_col)
         )
-        out: dict[str, float] = {}
-        for name, seen in result.all():
-            if seen is not None:
-                out[str(name).lower()] = seen.timestamp()
-        return out
+        return {topic: seen.timestamp() for topic, seen in result.all() if seen is not None}
 
 
 class TrendSignalUnavailableError(RuntimeError):
