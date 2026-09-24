@@ -226,7 +226,7 @@ async def run_discovery_pass(
     for seed in seeds:
         try:
             run = await discovery.discover(campaign_id, seed.topic)
-        except Exception as exc:  # noqa: BLE001 — one topic must not sink the pass
+        except Exception:  # noqa: BLE001 — one topic must not sink the pass
             stats.topics_failed += 1
             stats.topics.append(
                 {
@@ -234,7 +234,13 @@ async def run_discovery_pass(
                     "reason": seed.reason,
                     "momentum": seed.momentum,
                     "status": "failed",
-                    "error": f"{type(exc).__name__}: {exc}",
+                    # Not str(exc): this dict flows into the job's result,
+                    # readable from GET /jobs/{job_id}, and an adapter
+                    # exception can carry filesystem paths, URLs, or
+                    # provider/connection details (same rule as
+                    # /discovery/status — see routes_ops.py). Full detail
+                    # goes to the log only, via logger.exception below.
+                    "error": "drilling this topic failed; details in the server log",
                 }
             )
             logger.exception("Discovery pass: drilling %r failed", seed.topic)

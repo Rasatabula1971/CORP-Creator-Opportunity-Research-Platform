@@ -46,7 +46,7 @@ def patched_pipeline(monkeypatch):
         async def discover(self, campaign_id: str, topic: str):
             calls["discover"].append((campaign_id, topic))
             if topic == "explode":
-                raise RuntimeError("drill failed")
+                raise RuntimeError("connect to postgresql://corp:hunter2@db.internal failed")
             return _FakeRun(run_id=f"run-{topic}")
 
     class _FakeQualifier:
@@ -150,9 +150,22 @@ async def test_one_failing_topic_does_not_sink_the_pass(clean_db, patched_pipeli
     assert stats.topics_failed == 1
     failed = [t for t in stats.topics if t["status"] == "failed"]
     assert len(failed) == 1
-    assert "RuntimeError" in failed[0]["error"]
     # The surviving topics were still qualified.
     assert stats.qualified is True
+
+
+async def test_a_failed_topics_error_never_echoes_the_exception(clean_db, patched_pipeline):
+    """This dict flows into the job's result (GET /jobs/{job_id}), so an
+    adapter/connection exception's own text — which can carry credentials,
+    hostnames, or filesystem paths — must never reach it (same rule
+    /discovery/status already follows; see routes_ops.py)."""
+    stats = await run_discovery_pass(
+        clean_db, _FakeProvider(), topics=["baking", "explode", "yoga"]
+    )
+    [failed] = [t for t in stats.topics if t["status"] == "failed"]
+    assert failed["error"] == "drilling this topic failed; details in the server log"
+    dumped = repr(stats.as_dict())
+    assert "hunter2" not in dumped and "db.internal" not in dumped
 
 
 async def test_qualification_failure_leaves_the_drilled_niches(clean_db, monkeypatch):
