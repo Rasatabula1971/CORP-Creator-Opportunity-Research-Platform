@@ -400,3 +400,98 @@ async def test_fetch_dissatisfaction_excludes_unparseable_ratings(mock_client):
     mock_client.get = AsyncMock(return_value=_mock_resp(feed))
 
     assert await adapter.fetch_dissatisfaction("id:123456") == []
+
+
+# ── One iTunes search per query, however many capabilities ask ───────
+
+
+def _search_or_reviews(calls: list[str]):
+    async def mock_get(url, **kwargs):
+        url_str = str(url)
+        calls.append(url_str)
+        if "itunes.apple.com/search" in url_str:
+            return _mock_resp(SEARCH_RESPONSE)
+        return _mock_resp(REVIEW_FEED)
+
+    return mock_get
+
+
+async def test_solutions_and_dissatisfaction_share_one_search(mock_client):
+    """Audit fix: the niche pipeline asks the same adapter instance for
+    fetch_solutions() and fetch_dissatisfaction() with the same query,
+    and both began with an identical iTunes search -- two requests (and
+    two throttle waits) per niche for one result set."""
+    calls: list[str] = []
+    mock_client.get = _search_or_reviews(calls)
+    adapter = AppStoreAdapter(max_apps=2, max_reviews=10, client=mock_client,
+                              request_interval_seconds=0)
+
+    solutions = await adapter.fetch_solutions("cool app")
+    reviews = await adapter.fetch_dissatisfaction("cool app")
+
+    assert len(solutions) == 2 and len(reviews) > 0
+    searches = [u for u in calls if "itunes.apple.com/search" in u]
+    assert len(searches) == 1, "the second capability must reuse the first search"
+
+
+async def test_search_key_ignores_case_prefix_and_whitespace(mock_client):
+    calls: list[str] = []
+    mock_client.get = _search_or_reviews(calls)
+    adapter = AppStoreAdapter(max_apps=2, client=mock_client, request_interval_seconds=0)
+
+    await adapter.fetch_solutions("search:Cool App")
+    await adapter.fetch_solutions("  cool app ")
+    await adapter.fetch_solutions("COOL APP")
+
+    assert sum("itunes.apple.com/search" in u for u in calls) == 1
+
+
+async def test_concurrent_callers_await_the_same_search(mock_client):
+    import asyncio
+
+    calls: list[str] = []
+    mock_client.get = _search_or_reviews(calls)
+    adapter = AppStoreAdapter(max_apps=2, client=mock_client, request_interval_seconds=0)
+
+    a, b = await asyncio.gather(
+        adapter.fetch_solutions("cool app"), adapter.fetch_solutions("cool app"),
+    )
+
+    assert [r.external_id for r in a] == [r.external_id for r in b]
+    assert sum("itunes.apple.com/search" in u for u in calls) == 1
+
+
+async def test_different_queries_are_searched_separately(mock_client):
+    calls: list[str] = []
+    mock_client.get = _search_or_reviews(calls)
+    adapter = AppStoreAdapter(max_apps=2, client=mock_client, request_interval_seconds=0)
+
+    await adapter.fetch_solutions("cool app")
+    await adapter.fetch_solutions("other app")
+
+    assert sum("itunes.apple.com/search" in u for u in calls) == 2
+
+
+async def test_a_failed_search_is_not_cached(mock_client):
+    """A cached exception would make every later capability call for the
+    query fail without ever retrying the request."""
+    attempts = 0
+
+    async def flaky_get(url, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            request = httpx.Request("GET", str(url))
+            response = httpx.Response(404, request=request)
+            raise httpx.HTTPStatusError("not found", request=request, response=response)
+        return _mock_resp(SEARCH_RESPONSE)
+
+    mock_client.get = flaky_get
+    adapter = AppStoreAdapter(max_apps=2, client=mock_client, request_interval_seconds=0)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await adapter.fetch_solutions("cool app")
+    results = await adapter.fetch_solutions("cool app")
+
+    assert len(results) == 2
+    assert attempts == 2
