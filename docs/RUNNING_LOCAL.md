@@ -124,7 +124,15 @@ base URL, or `web/src/api/client.ts`).
 
 On Windows, `start_corp.bat` does steps 2, 4 and 5 in one go: it checks
 Postgres, applies migrations, reads `API_PORT` from `.env` (default 8010),
-refuses to start if that port is already taken, and launches uvicorn.
+refuses to start if that port is already taken, launches uvicorn and the
+dashboard in their own windows, and then **starts one autonomous discovery
+pass** (`scripts/start_discovery.ps1`: `POST /discovery/run`, followed to the
+end in the launcher window with a per-topic and per-stage summary). That is
+the frozen flow running unattended: the LLM picks the topics, drills them
+into niches, and the chain runs through to dossiers at the human gate. Set
+`AUTO_DISCOVERY=false` in `.env` to launch without a pass. The pass needs an
+LLM key (`GEMINI_API_KEY` or `GROQ_API_KEY`); without one the script says so
+and exits, and the API and dashboard keep running.
 
 Dashboard (defaults to calling `http://localhost:8010`; override it in
 Settings → API base URL if you moved the API):
