@@ -175,6 +175,11 @@ async def provider_health() -> dict[str, Any]:
 
     try:
         if isinstance(provider, FairProvider):
+            # Cheap, no network: which providers FAIR refuses and why, and
+            # the governor's current view of the ones it accepted. This is
+            # where "Gemini is configured but never used" becomes visible.
+            payload["skipped"] = provider.skipped_providers()
+            payload["providers"] = provider.provider_status()
             try:
                 result = await provider.ping()
             except Exception as exc:  # noqa: BLE001 — a failed probe is the diagnosis

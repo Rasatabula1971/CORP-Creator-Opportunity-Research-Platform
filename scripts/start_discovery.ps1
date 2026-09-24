@@ -53,6 +53,36 @@ if (-not $status.can_run) {
     Say "Add GEMINI_API_KEY or GROQ_API_KEY to .env and relaunch."
     exit 2
 }
+# The LLM router's own view: which keyed providers it refuses (and why),
+# and the governor's status of the ones it accepted. One real solve call.
+try {
+    $health = Get-Json "/providers/health"
+    if ($health.kind -eq "FairProvider") {
+        if ($health.fair.ok) {
+            Say "LLM router: FAIR, probe answered by $($health.fair.solve_provider)/$($health.fair.solve_model)."
+        } else {
+            Say "LLM router: FAIR probe failed: $($health.fair.detail)"
+        }
+        foreach ($p in $health.providers) {
+            Say ("  {0,-24} {1,-16} {2} model(s)" -f $p.provider_id, $p.status, $p.models)
+        }
+        $skipped = $health.skipped
+        if ($skipped) {
+            foreach ($name in ($skipped | Get-Member -MemberType NoteProperty | ForEach-Object Name)) {
+                Say ("  {0,-24} SKIPPED: {1}" -f $name, $skipped.$name)
+            }
+            $unconfirmed = @($skipped | Get-Member -MemberType NoteProperty | ForEach-Object Name | Where-Object { $skipped.$_ -match "confirm" })
+            if ($unconfirmed) {
+                Say ("  Add FAIR_CONFIRMED_FREE_PROVIDERS=" + ($unconfirmed -join ",") + " to .env once you have checked those accounts are free-only.")
+            }
+        }
+    } else {
+        Say "LLM provider: $($health.provider) ($($health.kind))."
+    }
+} catch {
+    Say "Provider health check failed: $($_.Exception.Message)"
+}
+
 if ($status.momentum_available) {
     Say "Topics ranked by $($status.momentum_source) momentum."
 } else {

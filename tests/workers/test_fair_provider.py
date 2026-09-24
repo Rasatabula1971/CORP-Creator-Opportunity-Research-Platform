@@ -448,6 +448,9 @@ class _WorkingFair:
         quality_level="standard",
         timeout_seconds=30.0,
         cache_enabled=True,
+        confirmed_free_providers=None,
+        max_unanswered_attempts=6,
+        on_event=None,
     ):
         self.kwargs = dict(
             gemini_api_key=gemini_api_key,
@@ -456,6 +459,9 @@ class _WorkingFair:
             quality_level=quality_level,
             timeout_seconds=timeout_seconds,
             cache_enabled=cache_enabled,
+            confirmed_free_providers=confirmed_free_providers,
+            max_unanswered_attempts=max_unanswered_attempts,
+            on_event=on_event,
         )
 
     def providers(self):
@@ -589,3 +595,98 @@ async def test_classify_names_the_failure_detail_when_fair_provides_it():
     text = str(info.value)
     assert "gemini-3.5-flash-lite:INFRA_FAILURE(PROVIDER_UNAVAILABLE: HTTP_503)" in text
     assert "gpt-oss-20b:INFRA_FAILURE(PROVIDER_UNAVAILABLE)" in text
+
+
+# ── wiring for FAIR's free-tier confirmation and event stream ─────────
+
+
+def test_build_fair_provider_passes_confirmation_and_budgets(stub_fair):
+    stub_fair(_WorkingFair)
+    cfg = _cfg()
+    cfg.fair_confirmed_free_providers = " google_gemini_api, Groq ,"
+    cfg.fair_max_unanswered_attempts = 9
+    provider = build_fair_provider(cfg)
+    kw = provider._fair.kwargs
+    assert kw["confirmed_free_providers"] == {"google_gemini_api", "groq"}
+    assert kw["max_unanswered_attempts"] == 9
+    assert callable(kw["on_event"])
+
+
+def test_build_fair_provider_sends_no_confirmation_when_unset(stub_fair):
+    stub_fair(_WorkingFair)
+    provider = build_fair_provider(_cfg())
+    assert provider._fair.kwargs["confirmed_free_providers"] is None
+
+
+def test_unconfirmed_keyed_providers_get_an_actionable_warning(stub_fair, caplog):
+    class _Skipping(_WorkingFair):
+        skipped = {
+            "google_gemini_api": (
+                "explicit free-tier account confirmation required; "
+                "pass confirmed_free_providers with this provider_id"
+            ),
+            "ollama_cloud": "credit-priced cloud service is not eligible",
+        }
+
+    stub_fair(_Skipping)
+    with caplog.at_level("WARNING", logger="corp.workers.providers.fair"):
+        build_fair_provider(_cfg())
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("FAIR_CONFIRMED_FREE_PROVIDERS" in m and "google_gemini_api" in m for m in messages)
+    # Ineligible services are not a confirmation problem; they must not be named there.
+    assert not any("FAIR_CONFIRMED_FREE_PROVIDERS" in m and "ollama_cloud" in m for m in messages)
+
+
+def test_fair_events_log_failures_and_escalations_only(caplog):
+    from corp.workers.providers.fair import _log_fair_event
+
+    with caplog.at_level("DEBUG", logger="corp.workers.providers.fair"):
+        _log_fair_event(
+            "ATTEMPT_COMPLETED",
+            {"provider_id": "groq", "model_id": "openai/gpt-oss-20b", "disposition": "ACCEPTED"},
+        )
+        _log_fair_event(
+            "ATTEMPT_COMPLETED",
+            {
+                "provider_id": "google_gemini_api",
+                "model_id": "gemini-3.5-flash-lite",
+                "disposition": "INFRA_FAILURE",
+                "error_type": "PROVIDER_UNAVAILABLE",
+                "error_detail": "HTTP_503",
+            },
+        )
+        _log_fair_event(
+            "ATTEMPT_COMPLETED",
+            {
+                "provider_id": "groq",
+                "model_id": "openai/gpt-oss-120b",
+                "disposition": "QUALITY_FAILURE",
+                "quality": {"reject_reasons": ["SCHEMA_FAILURE"]},
+            },
+        )
+        _log_fair_event(
+            "ESCALATION_REQUIRED",
+            {"reason_code": "ALL_FREE_MODELS_UNAVAILABLE", "attempts_count": 4},
+        )
+        _log_fair_event("PROFILED", {"task_class": "extraction"})
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    gemini_line = "FAIR attempt google_gemini_api/gemini-3.5-flash-lite INFRA_FAILURE"
+    assert warnings == [
+        gemini_line + " (PROVIDER_UNAVAILABLE: HTTP_503)",
+        "FAIR attempt groq/openai/gpt-oss-120b QUALITY_FAILURE rejected: SCHEMA_FAILURE",
+        "FAIR ESCALATION_REQUIRED: ALL_FREE_MODELS_UNAVAILABLE after 4 attempt(s)",
+    ]
+    debug = [r.getMessage() for r in caplog.records if r.levelname == "DEBUG"]
+    assert any("accepted" in m for m in debug) and any("PROFILED" in m for m in debug)
+
+
+def test_skipped_and_status_diagnostics_read_the_router():
+    fair = FakeFair()
+    fair.skipped = {"mistral": "explicit free-tier account confirmation required"}
+    provider = FairProvider(fair)
+    assert provider.skipped_providers() == {
+        "mistral": "explicit free-tier account confirmation required"
+    }
+    statuses = provider.provider_status()
+    assert statuses and all({"provider_id", "status", "models"} <= set(s) for s in statuses)

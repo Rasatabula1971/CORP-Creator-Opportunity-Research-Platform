@@ -124,6 +124,43 @@ def fair_available() -> bool:
         return False
 
 
+def _log_fair_event(event_type: str, payload: dict[str, Any]) -> None:
+    """FAIR's ``on_event`` callback: failed attempts and escalations at
+    warning, everything else at debug. Payloads are FAIR's own DTOs
+    (attempt records, reason codes); they never carry provider response
+    text or credentials, so logging them is safe."""
+    if event_type == "ATTEMPT_COMPLETED":
+        disposition = payload.get("disposition")
+        if disposition == "ACCEPTED":
+            logger.debug(
+                "FAIR attempt %s/%s accepted", payload.get("provider_id"), payload.get("model_id")
+            )
+            return
+        detail = payload.get("error_detail")
+        quality = payload.get("quality") or {}
+        reasons = quality.get("reject_reasons") if isinstance(quality, dict) else None
+        logger.warning(
+            "FAIR attempt %s/%s %s%s%s",
+            payload.get("provider_id"),
+            payload.get("model_id"),
+            disposition,
+            f" ({payload.get('error_type')}{': ' + detail if detail else ''})"
+            if payload.get("error_type")
+            else "",
+            f" rejected: {', '.join(reasons)}" if reasons else "",
+        )
+        return
+    if event_type in {"ESCALATION_REQUIRED", "FAILED"}:
+        logger.warning(
+            "FAIR %s: %s after %s attempt(s)",
+            event_type,
+            payload.get("reason_code"),
+            payload.get("attempts_count"),
+        )
+        return
+    logger.debug("FAIR event %s: %s", event_type, payload)
+
+
 def build_fair_provider(cfg: Settings) -> FairProvider:
     """Construct FAIR from CORP settings.
 
@@ -143,6 +180,9 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
             f"FAIR_QUALITY_LEVEL must be one of {QUALITY_LEVELS}, got {cfg.fair_quality_level!r}"
         )
 
+    confirmed = {
+        p.strip().lower() for p in cfg.fair_confirmed_free_providers.split(",") if p.strip()
+    }
     kwargs: dict[str, Any] = {
         "gemini_api_key": cfg.gemini_api_key or None,
         "groq_api_key": cfg.groq_api_key or None,
@@ -150,6 +190,14 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
         "quality_level": cfg.fair_quality_level,
         "timeout_seconds": cfg.fair_timeout_seconds,
         "cache_enabled": cfg.fair_cache_enabled,
+        # FAIR's operator attestation that these recurring free-tier accounts
+        # cannot bill; without it FAIR leaves the keyed provider out.
+        "confirmed_free_providers": confirmed or None,
+        "max_unanswered_attempts": cfg.fair_max_unanswered_attempts,
+        # FAIR's routing decisions into CORP's log: which model failed, how,
+        # and why a solve escalated. Without this the only trace of a
+        # 21-model search was the final ProviderError.
+        "on_event": _log_fair_event,
     }
     try:
         router = FAIR(**kwargs)
@@ -214,6 +262,16 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
     skipped = getattr(router, "skipped", None)
     if skipped:
         logger.warning("FAIR skipped providers: %s", skipped)
+        unconfirmed = sorted(
+            p for p, why in skipped.items() if "confirm" in str(why).lower()
+        )
+        if unconfirmed:
+            logger.warning(
+                "FAIR has keys for %s but will not route to them until "
+                "FAIR_CONFIRMED_FREE_PROVIDERS lists them (an attestation that "
+                "each account is free-only and cannot auto-bill)",
+                ", ".join(unconfirmed),
+            )
     return FairProvider(
         router,
         client_id=cfg.fair_client_id,
@@ -265,6 +323,27 @@ class FairProvider(LLMProvider):
 
     def models_used(self) -> set[str]:
         return set(self._used)
+
+    # ── operator diagnostics (no network) ─────────────────────────────
+
+    def skipped_providers(self) -> dict[str, str]:
+        """Providers FAIR has a key for but will not route to, with FAIR's
+        reason (free-tier confirmation missing, ineligible service, no
+        local daemon). Empty on a FAIR without the attribute."""
+        skipped = getattr(self._fair, "skipped", None)
+        return dict(skipped) if isinstance(skipped, dict) else {}
+
+    def provider_status(self) -> list[dict[str, Any]]:
+        """Each registered provider with FAIR's live governor status
+        (ACTIVE, THROTTLED, OUTAGE, QUOTA_EXHAUSTED, ...) and model count."""
+        return [
+            {
+                "provider_id": e.get("provider_id", "?"),
+                "status": e.get("status"),
+                "models": len(e.get("models", []) or []),
+            }
+            for e in self._fair.providers()
+        ]
 
     async def close(self) -> None:
         await self._fair.close()
