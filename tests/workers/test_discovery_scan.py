@@ -8,6 +8,7 @@ import pytest
 from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.workers.scheduler.discovery_scan import (
     AUTONOMOUS_CAMPAIGN_NAME,
+    AUTONOMOUS_CAMPAIGN_SLUG,
     DiscoveryDeferredError,
     DiscoveryHandle,
     DiscoveryScanScheduler,
@@ -82,6 +83,72 @@ async def test_autonomous_campaign_matches_case_insensitively(clean_db):
     await clean_db.flush()
     found = await get_or_create_autonomous_campaign(clean_db)
     assert found.name == AUTONOMOUS_CAMPAIGN_NAME.upper()
+
+
+async def test_autonomous_campaign_gets_its_slug_set_on_first_use(clean_db):
+    """A pre-existing row matched by name only (no slug yet, e.g. from
+    before the slug column existed) must be adopted, not left behind for
+    a second campaign to be created alongside it."""
+    legacy = Campaign(name=AUTONOMOUS_CAMPAIGN_NAME)
+    clean_db.add(legacy)
+    await clean_db.flush()
+    assert legacy.slug is None
+
+    found = await get_or_create_autonomous_campaign(clean_db)
+    assert found.id == legacy.id
+    assert found.slug == AUTONOMOUS_CAMPAIGN_SLUG
+
+
+async def test_losing_the_slug_race_returns_the_winners_row(clean_db, monkeypatch):
+    """Audit fix: two near-simultaneous autonomous passes must not each
+    find the campaign missing and insert their own copy. This reproduces
+    the actual race outcome against real Postgres: a rival row is already
+    committed under the unique slug (via a separate, already-closed
+    session/connection — no two transactions are ever open at once here,
+    so this cannot deadlock), but our session's own initial lookups are
+    forced to behave as they would have during the actual race window —
+    both missing it — so get_or_create_autonomous_campaign proceeds to
+    INSERT and must recover from the real IntegrityError that follows."""
+    from tests.conftest import async_test_session
+
+    winner = Campaign(
+        name="pre-existing row from the other session",
+        slug=AUTONOMOUS_CAMPAIGN_SLUG,
+        status=CampaignStatus.ACTIVE,
+    )
+    async with async_test_session() as rival:
+        rival.add(winner)
+        await rival.commit()
+
+    real_execute = clean_db.execute
+    calls = {"n": 0}
+
+    async def execute_first_lookup_as_a_miss(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+
+            class _EmptyResult:
+                def scalar_one_or_none(self) -> None:
+                    return None
+
+            return _EmptyResult()
+        return await real_execute(*args, **kwargs)
+
+    monkeypatch.setattr(clean_db, "execute", execute_first_lookup_as_a_miss)
+
+    found = await get_or_create_autonomous_campaign(clean_db)
+
+    assert found.id == winner.id
+    from sqlalchemy import func, select
+
+    count = (
+        await clean_db.execute(
+            select(func.count()).select_from(Campaign).where(
+                Campaign.slug == AUTONOMOUS_CAMPAIGN_SLUG
+            )
+        )
+    ).scalar_one()
+    assert count == 1
 
 
 # ── User-supplied topics: the alternate entry point ──────────────────

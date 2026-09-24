@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from corp.config import Settings
@@ -63,6 +64,11 @@ DEFAULT_INTERVAL_SECONDS = 86_400
 # than one per pass: the niche tree and its registry are cumulative, and a
 # campaign per night would shatter the dashboard into empty shells.
 AUTONOMOUS_CAMPAIGN_NAME = "Autonomous discovery"
+# Machine identity for that campaign, unique-constrained at the database
+# level (Campaign.slug) — unlike AUTONOMOUS_CAMPAIGN_NAME, which is
+# editable display text a person could rename, breaking a name-based
+# lookup silently.
+AUTONOMOUS_CAMPAIGN_SLUG = "autonomous-discovery"
 
 
 class DiscoveryDeferredError(Exception):
@@ -154,23 +160,57 @@ async def get_or_create_autonomous_campaign(
 ) -> Campaign:
     """The standing campaign for unattended passes, created on first use.
 
-    Matched case-insensitively on name so a renamed-then-restored campaign,
-    or one created by a different code path, is reused rather than
-    duplicated.
+    Matched first by slug (Campaign.slug, unique-constrained — see
+    migration 8fb35dc16e35), which is what makes two near-simultaneous
+    passes safe: only one of two concurrent inserts can win that
+    constraint, and the loser fetches the winner's row instead of leaving
+    a duplicate campaign behind. Falls back to a case-insensitive name
+    match for a row from before that migration, or created by a different
+    code path, and backfills its slug so it takes the fast path next time.
+
+    Must be the first thing this function's caller does with ``session``:
+    losing the race rolls the whole session back (a failed flush leaves
+    it unusable until Session.rollback() is called — see the IntegrityError
+    branch below), which would discard any other pending work already
+    flushed on it. Both current callers open a fresh session for exactly
+    this call, so that's never a concern in practice.
     """
+    result = await session.execute(
+        select(Campaign).where(Campaign.slug == AUTONOMOUS_CAMPAIGN_SLUG).limit(1)
+    )
+    campaign = result.scalar_one_or_none()
+    if campaign is not None:
+        return campaign
+
     result = await session.execute(
         select(Campaign).where(func.lower(Campaign.name) == name.lower()).limit(1)
     )
     campaign = result.scalar_one_or_none()
     if campaign is not None:
+        campaign.slug = AUTONOMOUS_CAMPAIGN_SLUG
+        await session.flush()
         return campaign
+
     campaign = Campaign(
         name=name,
+        slug=AUTONOMOUS_CAMPAIGN_SLUG,
         status=CampaignStatus.ACTIVE,
         started_at=datetime.now(UTC),
     )
     session.add(campaign)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        # Lost the race: a concurrent call already inserted the row with
+        # this slug between our select above and this flush. A failed
+        # flush leaves the session unusable until it's rolled back (see
+        # the docstring above on why that's safe here) — then fetch the
+        # winner's row instead of failing the pass.
+        await session.rollback()
+        result = await session.execute(
+            select(Campaign).where(Campaign.slug == AUTONOMOUS_CAMPAIGN_SLUG).limit(1)
+        )
+        return result.scalar_one()
     logger.info("Created the autonomous discovery campaign %s", campaign.id)
     return campaign
 
