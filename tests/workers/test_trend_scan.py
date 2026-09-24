@@ -235,26 +235,31 @@ async def test_a_topic_past_its_recheck_window_is_due_again(clean_db):
     assert stats.registry_fresh == 0
 
 
-async def test_rotation_puts_the_least_recently_researched_first(clean_db):
-    from corp.core.models.niche import Niche
+async def _seed_topic_drill(
+    session, topic: str, *, days_ago: float, status: str = "completed",
+) -> None:
+    """A discover() call's own ResearchRun history for ``topic`` -- what
+    the real pipeline leaves behind, unlike a Niche row named after the
+    raw catalogue keyword (the drill engine always synthesizes more
+    specific niche names from it, so that literal string never becomes
+    one)."""
+    from corp.core.models.workflow import ResearchRun
 
-    now = datetime.now(UTC)
-    # Both due, but researched at different times.
-    clean_db.add(
-        Niche(
-            canonical_name="baking",
-            last_researched_at=now - timedelta(days=100),
-            next_recheck_at=now - timedelta(days=10),
+    when = datetime.now(UTC) - timedelta(days=days_ago)
+    session.add(
+        ResearchRun(
+            config_snapshot={"pipeline": "niche_discovery_recursive", "topic": topic},
+            status=status,
+            completed_at=when,
         )
     )
-    clean_db.add(
-        Niche(
-            canonical_name="woodworking",
-            last_researched_at=now - timedelta(days=300),
-            next_recheck_at=now - timedelta(days=210),
-        )
-    )
-    await clean_db.flush()
+    await session.flush()
+
+
+async def test_rotation_puts_the_least_recently_drilled_first(clean_db):
+    # Both due, but drilled at different times.
+    await _seed_topic_drill(clean_db, "baking", days_ago=100)
+    await _seed_topic_drill(clean_db, "woodworking", days_ago=300)
 
     scanner = TrendScanner(
         clean_db,
@@ -263,22 +268,12 @@ async def test_rotation_puts_the_least_recently_researched_first(clean_db):
         discovery_config=_discovery(),
     )
     seeds, _ = await scanner.scan()
-    # Never-researched would come first; of these two, the older one wins.
+    # Never-drilled would come first; of these two, the older one wins.
     assert [s.topic for s in seeds] == ["woodworking", "baking"]
 
 
-async def test_never_researched_outranks_previously_researched(clean_db):
-    from corp.core.models.niche import Niche
-
-    now = datetime.now(UTC)
-    clean_db.add(
-        Niche(
-            canonical_name="baking",
-            last_researched_at=now - timedelta(days=100),
-            next_recheck_at=now - timedelta(days=10),
-        )
-    )
-    await clean_db.flush()
+async def test_never_drilled_outranks_previously_drilled(clean_db):
+    await _seed_topic_drill(clean_db, "baking", days_ago=100)
 
     scanner = TrendScanner(
         clean_db,
@@ -288,6 +283,49 @@ async def test_never_researched_outranks_previously_researched(clean_db):
     )
     seeds, _ = await scanner.scan()
     assert seeds[0].topic == "brand new topic"
+
+
+async def test_a_recently_drilled_topic_is_not_reselected(clean_db):
+    """The actual production shape this whole mechanism exists for: the
+    broad catalogue keyword itself never becomes a Niche row (the LLM
+    always synthesizes more specific names from it), so freshness must
+    come from the drill's own ResearchRun history, not the Niche table."""
+    await _seed_topic_drill(clean_db, "baking", days_ago=5)
+
+    scanner = TrendScanner(
+        clean_db,
+        trend_provider=None,
+        config=_config("baking", "woodworking"),
+        discovery_config=_discovery(),
+    )
+    seeds, stats = await scanner.scan()
+    assert [s.topic for s in seeds] == ["woodworking"]
+    assert stats.registry_fresh == 1
+
+
+async def test_a_failed_drill_does_not_block_a_quick_retry(clean_db):
+    """A topic where every evidence source errored produced nothing --
+    unlike a real (however thin) result, it shouldn't cost the topic the
+    full 90-day window."""
+    await _seed_topic_drill(clean_db, "baking", days_ago=1, status="failed")
+
+    scanner = TrendScanner(
+        clean_db, trend_provider=None, config=_config("baking"), discovery_config=_discovery(),
+    )
+    seeds, stats = await scanner.scan()
+    assert [s.topic for s in seeds] == ["baking"]
+    assert stats.registry_fresh == 0
+
+
+async def test_a_topic_drilled_past_its_recheck_window_is_due_again(clean_db):
+    await _seed_topic_drill(clean_db, "baking", days_ago=120)
+
+    scanner = TrendScanner(
+        clean_db, trend_provider=None, config=_config("baking"), discovery_config=_discovery(),
+    )
+    seeds, stats = await scanner.scan()
+    assert [s.topic for s in seeds] == ["baking"]
+    assert stats.registry_fresh == 0
 
 
 async def test_empty_catalogue_yields_nothing(clean_db):
