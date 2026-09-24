@@ -11,6 +11,7 @@ ENABLE_LINTERS:
 
 SHOW_ELAPSED_TIME: true
 PRINT_ALPACA: false
+FLAVOR_SUGGESTIONS: false
 
 EXCLUDED_DIRECTORIES:
   - .git
@@ -19,9 +20,15 @@ EXCLUDED_DIRECTORIES:
   - node_modules
   - htmlcov
   - megalinter-reports
+  - graphify-out
 
-# First integration run: report existing style/duplication debt without
-# allowing it to hide structural errors in workflows or JSON.
+# TypeScript tsconfig files are JSONC (comments are valid there) and are
+# already parsed by the TypeScript production build. Strict jsonlint should
+# still block malformed ordinary JSON without false-failing on tsconfig.
+JSON_JSONLINT_FILTER_REGEX_EXCLUDE: "(^|/)tsconfig(\\..*)?\\.json$"
+
+# First integration: report existing style/duplication debt without allowing
+# it to hide structural errors in GitHub Actions or ordinary JSON.
 YAML_YAMLLINT_DISABLE_ERRORS: true
 MARKDOWN_MARKDOWNLINT_DISABLE_ERRORS: true
 COPYPASTE_JSCPD_DISABLE_ERRORS: true
