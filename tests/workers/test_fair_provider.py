@@ -672,8 +672,10 @@ def test_fair_events_log_failures_and_escalations_only(caplog):
 
     warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert warnings == [
-        "FAIR attempt google_gemini_api/gemini-3.5-flash-lite INFRA_FAILURE "
-        "(PROVIDER_UNAVAILABLE: HTTP_503)",
+        (
+            "FAIR attempt google_gemini_api/gemini-3.5-flash-lite INFRA_FAILURE "
+            "(PROVIDER_UNAVAILABLE: HTTP_503)"
+        ),
         "FAIR attempt groq/openai/gpt-oss-120b QUALITY_FAILURE rejected: SCHEMA_FAILURE",
         "FAIR ESCALATION_REQUIRED: ALL_FREE_MODELS_UNAVAILABLE after 4 attempt(s)",
     ]

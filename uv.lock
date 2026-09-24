@@ -430,7 +430,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5,<1" },
     { name = "sentence-transformers", specifier = ">=6.1,<7" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<2.1" },
     { name = "tenacity", specifier = ">=8.3,<10" },
     { name = "transformers", specifier = ">=5.17,<6" },
     { name = "types-defusedxml", marker = "extra == 'dev'", specifier = ">=0.7,<1" },

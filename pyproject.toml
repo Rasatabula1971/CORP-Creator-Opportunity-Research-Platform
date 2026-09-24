@@ -6,7 +6,11 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.30,<1",
-    "sqlalchemy[asyncio]>=2.0,<3",
+    # <2.1: SQLAlchemy 2.1.0 (2026-09-24) switches the default postgresql://
+    # driver to psycopg 3 (Alembic's sync engine then fails to import it) and
+    # changes Row/Result typing enough to break mypy in three modules. Moving
+    # to 2.1 is its own task; until then CI must not float onto it.
+    "sqlalchemy[asyncio]>=2.0,<2.1",
     "alembic>=1.13,<2",
     "asyncpg>=0.29,<1",
     # Sync driver for Alembic (env.py uses a sync engine; the app itself uses asyncpg).
