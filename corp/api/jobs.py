@@ -487,6 +487,7 @@ async def run_campaign_pipeline(
 
     if kind == "estimate-ecosystem":
         from corp.workers.adapters.registry import build_search_adapter
+        from corp.workers.campaign_config import eco_config, load_campaign
         from corp.workers.intelligence.ecosystem_estimator import (
             EcosystemEstimator,
             YouTubeAPIEnricher,
@@ -499,9 +500,10 @@ async def run_campaign_pipeline(
         try:
             async with async_session() as session:
                 try:
-                    run = await EcosystemEstimator(adapter, session, enricher=enricher).estimate(
-                        campaign_id,
-                    )
+                    campaign = await load_campaign(session, campaign_id)
+                    run = await EcosystemEstimator(
+                        adapter, session, eco_config(campaign), enricher=enricher,
+                    ).estimate(campaign_id)
                     await session.commit()
                 except Exception:
                     await _commit_or_rollback(session)
@@ -525,11 +527,15 @@ async def run_campaign_pipeline(
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "select":
+        from corp.workers.campaign_config import load_campaign, selection_config
         from corp.workers.intelligence.niche_selection import NicheSelector
 
         async with async_session() as session:
             try:
-                run = await NicheSelector(session).select(campaign_id)
+                campaign = await load_campaign(session, campaign_id)
+                run = await NicheSelector(session, selection_config(campaign)).select(
+                    campaign_id
+                )
                 await session.commit()
             except Exception:
                 await _commit_or_rollback(session)
@@ -539,6 +545,7 @@ async def run_campaign_pipeline(
     if kind == "onboard":
         from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
         from corp.workers.adapters.registry import build_search_adapter
+        from corp.workers.campaign_config import load_campaign, onboard_config
         from corp.workers.intelligence.ecosystem_estimator import YouTubeAPIEnricher
 
         adapter = build_search_adapter("youtube")
@@ -548,8 +555,9 @@ async def run_campaign_pipeline(
         try:
             async with async_session() as session:
                 try:
+                    campaign = await load_campaign(session, campaign_id)
                     run = await CreatorOnboarder(
-                        adapter, session, enricher=enricher
+                        adapter, session, onboard_config(campaign), enricher=enricher
                     ).onboard(campaign_id)
                     await session.commit()
                 except Exception:
@@ -560,6 +568,7 @@ async def run_campaign_pipeline(
         return {"run_id": run.id, "status": run.status, "stats": run.stats}
 
     if kind == "research-campaign":
+        from corp.workers.campaign_config import batch_config, load_campaign
         from corp.workers.campaign_research import CampaignResearchBatch
         from corp.workers.orchestrator import ResearchOrchestrator
         from corp.workers.providers.factory import build_provider
@@ -568,8 +577,11 @@ async def run_campaign_pipeline(
         try:
             async with async_session() as session:
                 try:
+                    campaign = await load_campaign(session, campaign_id)
                     orchestrator = ResearchOrchestrator(session, provider, _embedder_factory())
-                    batch = CampaignResearchBatch(orchestrator, session)
+                    batch = CampaignResearchBatch(
+                        orchestrator, session, await batch_config(session, campaign)
+                    )
                     run = await batch.run_campaign(campaign_id)
                     await session.commit()
                 except Exception:

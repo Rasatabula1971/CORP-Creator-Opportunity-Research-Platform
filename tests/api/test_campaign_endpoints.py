@@ -201,6 +201,37 @@ async def test_create_campaign_defaults(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_create_campaign_rejects_an_inverted_follower_band(clean_db: AsyncSession):
+    """Audit fix: the numbers on a campaign now drive every automated
+    stage, so an impossible band must be refused at the door rather than
+    stored and silently onboarding nobody."""
+    session = clean_db
+    async with _make_client(session) as client:
+        resp = await client.post(
+            "/campaigns",
+            json={"name": "Inverted", "creator_min_followers": 90_000,
+                  "creator_max_followers": 20_000},
+        )
+    assert resp.status_code == 422
+    assert "creator_min_followers must not exceed creator_max_followers" in resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "field, value",
+    [("target_niche_count", 0), ("initial_creators_per_niche", 0), ("human_gate_capacity", 0)],
+)
+async def test_create_campaign_rejects_zero_work_counts(
+    clean_db: AsyncSession, field: str, value: int,
+):
+    session = clean_db
+    async with _make_client(session) as client:
+        resp = await client.post("/campaigns", json={"name": "Zero", field: value})
+    assert resp.status_code == 422
+    assert field in resp.text
+
+
+@pytest.mark.asyncio
 async def test_start_campaign_pipeline_unknown_stage(clean_db: AsyncSession):
     session = clean_db
     campaign = Campaign(name="Test")

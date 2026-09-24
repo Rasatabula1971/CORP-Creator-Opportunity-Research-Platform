@@ -88,6 +88,15 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
         self._last_request_at: float | None = None
         self._throttle_lock = asyncio.Lock()
         self.request_count = 0
+        # Single-flight per search term. The niche pipeline calls
+        # fetch_solutions() and fetch_dissatisfaction() for the same query
+        # on the same adapter instance (one call per capability), and both
+        # start with the identical iTunes search -- so every niche cost two
+        # search requests for one result set, and two throttle intervals.
+        # Holding the in-flight Task (not just its result) lets concurrent
+        # callers await the same request instead of each starting their
+        # own; the same pattern as MarketplaceAdapter._collect_tasks.
+        self._search_tasks: dict[str, asyncio.Task[list[dict[str, Any]]]] = {}
 
     @property
     def platform(self) -> str:
@@ -170,6 +179,22 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
         return [str(r["trackId"]) for r in results if "trackId" in r]
 
     async def _search_apps_raw(self, query: str) -> list[dict[str, Any]]:
+        key = query.strip().casefold()
+        task = self._search_tasks.get(key)
+        if task is None:
+            task = asyncio.ensure_future(self._search_apps_uncached(query))
+            self._search_tasks[key] = task
+        try:
+            return await task
+        except BaseException:
+            # A failed search is not a result to share: forget it so the
+            # next caller (or the next pipeline run on this instance) gets
+            # a fresh attempt rather than the cached exception.
+            if self._search_tasks.get(key) is task:
+                del self._search_tasks[key]
+            raise
+
+    async def _search_apps_uncached(self, query: str) -> list[dict[str, Any]]:
         params = {
             "term": query,
             "entity": "software",

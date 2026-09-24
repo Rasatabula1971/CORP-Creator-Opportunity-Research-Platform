@@ -27,6 +27,7 @@ from corp.core.models.intelligence import (
 )
 from corp.core.models.workflow import ResearchRun, RunScope, RunStatus, RunType
 from corp.core.state.transitions import advance, restore
+from corp.workers.failures import describe_failure
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,11 @@ class PipelineStats:
     def fail(self, exc: BaseException) -> None:
         self.attempted += 1
         self.failed += 1
-        self.last_error = str(exc)[:500]
+        # Persisted on the run and read back through the API: never the
+        # exception's own text (DSNs, keyed URLs, paths). The traceback
+        # goes to the log here, so no caller has to remember to.
+        self.last_error = describe_failure(exc)
+        logger.warning("pipeline work unit failed: %s", self.last_error, exc_info=exc)
 
     def skip(self) -> None:
         self.skipped += 1
@@ -142,8 +147,9 @@ async def finish_run(
 
 async def fail_run(session: AsyncSession, run: ResearchRun, exc: BaseException) -> None:
     run.status = RunStatus.FAILED.value
-    run.error_message = str(exc)[:2000]
+    run.error_message = describe_failure(exc)
     run.completed_at = datetime.now(UTC)
+    logger.error("run %s failed: %s", run.id, run.error_message, exc_info=exc)
     await session.flush()
 
 

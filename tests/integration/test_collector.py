@@ -267,7 +267,8 @@ async def test_collect_failure_marks_run_failed(clean_db: AsyncSession):
     )
     run = result.scalar_one()
     assert run.status == "failed"
-    assert "API exploded" in run.error_message
+    assert "RuntimeError" in run.error_message
+    assert "API exploded" not in run.error_message, "exception text stays in the log"
 
 
 @pytest.mark.asyncio

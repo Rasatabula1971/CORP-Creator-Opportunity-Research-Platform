@@ -11,7 +11,10 @@ from corp.workers.scheduler.discovery_scan import (
     AUTONOMOUS_CAMPAIGN_SLUG,
     DiscoveryDeferredError,
     DiscoveryHandle,
+    DiscoveryLockedError,
     DiscoveryScanScheduler,
+    discovery_lock_keys,
+    discovery_pass_lock,
     get_or_create_autonomous_campaign,
     run_discovery_pass,
 )
@@ -202,6 +205,94 @@ async def test_pass_attaches_to_an_explicit_campaign(clean_db, patched_pipeline)
     )
     assert stats.campaign_id == campaign.id
     assert patched_pipeline["discover"] == [(campaign.id, "baking")]
+
+
+# ── One pass at a time per campaign ─────────────────────────────────
+
+
+async def test_a_locked_campaign_refuses_a_second_pass_without_spending(
+    clean_db, patched_pipeline,
+):
+    """Audit fix: the in-process JobRegistry cannot see a scheduler tick
+    (or another API worker) already drilling this campaign. The database
+    lock can. A second pass must be refused before it spends anything, and
+    must succeed as soon as the first one is done."""
+    campaign = Campaign(name="Locked")
+    clean_db.add(campaign)
+    await clean_db.flush()
+
+    async with discovery_pass_lock(clean_db.bind, campaign.id):
+        with pytest.raises(DiscoveryLockedError):
+            await run_discovery_pass(
+                clean_db, _FakeProvider(), topics=["baking"], campaign_id=campaign.id
+            )
+    assert patched_pipeline["discover"] == [], "a refused pass drills nothing"
+
+    stats = await run_discovery_pass(
+        clean_db, _FakeProvider(), topics=["baking"], campaign_id=campaign.id
+    )
+    assert stats.topics_drilled == 1
+
+
+async def test_the_pass_releases_its_lock_even_when_it_fails(clean_db, monkeypatch):
+    class _Boom:
+        def __init__(self, session, provider, rules_path):
+            raise RuntimeError("drill engine failed to start")
+
+    monkeypatch.setattr("corp.workers.scheduler.discovery_scan.RecursiveNicheDiscovery", _Boom)
+    campaign = Campaign(name="Crashing")
+    clean_db.add(campaign)
+    await clean_db.flush()
+
+    with pytest.raises(RuntimeError):
+        await run_discovery_pass(
+            clean_db, _FakeProvider(), topics=["baking"], campaign_id=campaign.id
+        )
+
+    # Nobody holds it any more: taking it ourselves succeeds at once.
+    async with discovery_pass_lock(clean_db.bind, campaign.id):
+        pass
+
+
+async def test_different_campaigns_do_not_block_each_other(clean_db, patched_pipeline):
+    mine = Campaign(name="Mine")
+    theirs = Campaign(name="Theirs")
+    clean_db.add_all([mine, theirs])
+    await clean_db.flush()
+
+    async with discovery_pass_lock(clean_db.bind, theirs.id):
+        stats = await run_discovery_pass(
+            clean_db, _FakeProvider(), topics=["baking"], campaign_id=mine.id
+        )
+    assert stats.topics_drilled == 1
+
+
+def test_lock_keys_are_stable_int4_pairs():
+    a = discovery_lock_keys("11111111-1111-1111-1111-111111111111")
+    assert a == discovery_lock_keys("11111111-1111-1111-1111-111111111111")
+    assert a != discovery_lock_keys("22222222-2222-2222-2222-222222222222")
+    for key in a:
+        assert 0 <= key <= 2**31 - 1, "pg_try_advisory_lock(int4, int4) keys must fit int4"
+
+
+async def test_scheduler_treats_a_locked_pass_as_deferred(clean_db, monkeypatch):
+    async def locked(*args: Any, **kwargs: Any):
+        raise DiscoveryLockedError("a discovery pass is already running for campaign x")
+
+    monkeypatch.setattr("corp.workers.scheduler.discovery_scan.run_discovery_pass", locked)
+    closed = False
+
+    async def _close() -> None:
+        nonlocal closed
+        closed = True
+
+    async def factory():
+        return DiscoveryHandle(_FakeProvider(), None, _close)
+
+    sched = DiscoveryScanScheduler(lambda: clean_db, factory)
+    await sched._tick()
+    assert sched._consecutive_failures == 0, "someone else running the pass is not a failure"
+    assert closed is True
 
 
 # ── Failure containment ──────────────────────────────────────────────

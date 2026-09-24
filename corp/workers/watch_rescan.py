@@ -46,6 +46,7 @@ from corp.core.scoring.niche_qualification import load_rules
 from corp.core.state.gates import mirror_creator_status
 from corp.core.state.transitions import advance
 from corp.workers.dossier.generator import DossierGenerator
+from corp.workers.failures import PipelineFailureError, describe_failure
 from corp.workers.intelligence.runs import PipelineStats, fail_run, finish_run, start_run
 
 logger = logging.getLogger(__name__)
@@ -172,8 +173,10 @@ def decide_resurface(
 # ── Worker ────────────────────────────────────────────────────────────
 
 
-class RescanError(RuntimeError):
-    """A stage of the re-research chain failed; the message names it."""
+class RescanError(PipelineFailureError):
+    """A stage of the re-research chain failed; the message names it (and
+    only it -- the failing stage's own error is already recorded safely on
+    that stage's run, or described via describe_failure)."""
 
 
 _RESEARCHABLE = frozenset(
@@ -378,7 +381,9 @@ class WatchRescanner:
                     await self._session.rollback()
                 run_row = await self._session.get(ResearchRun, run_id)
                 if run_row is not None and run_row.status == "running":
-                    await fail_run(self._session, run_row, RescanError(f"{stage}: {exc}"))
+                    await fail_run(
+                        self._session, run_row, RescanError(f"{stage}: {describe_failure(exc)}"),
+                    )
                 await self._restore_if_in_progress(dossier_id)
             except Exception:
                 logger.exception(

@@ -290,7 +290,10 @@ async def test_naming_failure_keeps_keyword_candidate(clean_db: AsyncSession):
     cands = await _candidates(session, campaign.id)
     assert len(cands) == 2
     assert all(c.naming_method == "keywords" for c in cands)
-    assert all("LLM down" in c.extra["naming_error"] for c in cands)
+    assert all(
+        c.extra["naming_error"] == "niche_naming: RuntimeError; details in the server log"
+        for c in cands
+    ), "the provider's own error text must not be stored on the candidate"
 
 
 @pytest.mark.asyncio

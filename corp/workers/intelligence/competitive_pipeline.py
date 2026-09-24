@@ -21,6 +21,7 @@ from corp.core.models.intelligence import (
     ProblemObservation,
 )
 from corp.core.models.workflow import ResearchRun
+from corp.workers.failures import describe_failure
 from corp.workers.intelligence.runs import active_clusters_for_creator
 from corp.workers.providers.registry import LLMProvider
 
@@ -125,7 +126,7 @@ class CompetitivePipeline:
             run.completed_at = datetime.now(UTC)
         except Exception as exc:
             run.status = "failed"
-            run.error_message = str(exc)[:2000]
+            run.error_message = describe_failure(exc)
             run.completed_at = datetime.now(UTC)
             logger.exception("Competitive pipeline failed for creator %s", creator_id)
             raise
