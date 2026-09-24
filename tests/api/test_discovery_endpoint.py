@@ -69,6 +69,27 @@ async def test_extra_fields_are_rejected(client, captured):
     assert resp.status_code == 422
 
 
+async def test_a_second_campaign_less_run_is_rejected_while_one_is_active(client, captured):
+    """Audit fix: two near-simultaneous autonomous passes could each find
+    the standing autonomous campaign missing and create it twice."""
+    from corp.api import routes_ops
+
+    routes_ops.registry.create("discovery")
+
+    resp = await client.post("/discovery/run")
+    assert resp.status_code == 409
+    assert captured == []
+
+
+async def test_a_campaign_bound_run_is_unaffected_by_an_active_autonomous_pass(client, captured):
+    from corp.api import routes_ops
+
+    routes_ops.registry.create("discovery")
+
+    resp = await client.post("/discovery/run", json={"campaign_id": "no-such-campaign"})
+    assert resp.status_code == 404, "the campaign-lookup check still runs first"
+
+
 async def test_topics_per_pass_is_bounded(client, captured):
     assert (await client.post("/discovery/run", json={"topics_per_pass": 0})).status_code == 422
     assert (await client.post("/discovery/run", json={"topics_per_pass": 99})).status_code == 422
@@ -104,14 +125,19 @@ async def test_blank_topics_per_pass_env_does_not_crash_startup(monkeypatch):
 # ── GET /discovery/status ────────────────────────────────────────────
 
 
-async def test_status_reports_the_crawler_as_off_by_default(client, clean_db):
+async def test_status_reports_the_crawler_as_off_by_default(client, clean_db, monkeypatch):
+    # Force no usable provider, regardless of keys present in a developer's
+    # own .env — this assertion is about the crawler's default state, not
+    # about whichever LLM_PROVIDER happens to be configured locally.
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    monkeypatch.setattr(settings, "groq_api_key", "")
+    monkeypatch.setattr(settings, "fair_enabled", False)
     resp = await client.get("/discovery/status")
     assert resp.status_code == 200
     body = resp.json()
     assert body["enabled"] is False
     assert body["catalogue_size"] > 0
     assert body["topics_per_pass"] >= 1
-    # No LLM key in the test environment, so a pass could not actually run.
     assert body["can_run"] is False
     assert body["provider_detail"]
 

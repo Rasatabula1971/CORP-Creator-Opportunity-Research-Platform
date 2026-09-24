@@ -8,6 +8,7 @@ import pytest
 from corp.core.models.campaign import Campaign, CampaignStatus
 from corp.workers.scheduler.discovery_scan import (
     AUTONOMOUS_CAMPAIGN_NAME,
+    AUTONOMOUS_CAMPAIGN_SLUG,
     DiscoveryDeferredError,
     DiscoveryHandle,
     DiscoveryScanScheduler,
@@ -46,7 +47,7 @@ def patched_pipeline(monkeypatch):
         async def discover(self, campaign_id: str, topic: str):
             calls["discover"].append((campaign_id, topic))
             if topic == "explode":
-                raise RuntimeError("drill failed")
+                raise RuntimeError("connect to postgresql://corp:hunter2@db.internal failed")
             return _FakeRun(run_id=f"run-{topic}")
 
     class _FakeQualifier:
@@ -82,6 +83,72 @@ async def test_autonomous_campaign_matches_case_insensitively(clean_db):
     await clean_db.flush()
     found = await get_or_create_autonomous_campaign(clean_db)
     assert found.name == AUTONOMOUS_CAMPAIGN_NAME.upper()
+
+
+async def test_autonomous_campaign_gets_its_slug_set_on_first_use(clean_db):
+    """A pre-existing row matched by name only (no slug yet, e.g. from
+    before the slug column existed) must be adopted, not left behind for
+    a second campaign to be created alongside it."""
+    legacy = Campaign(name=AUTONOMOUS_CAMPAIGN_NAME)
+    clean_db.add(legacy)
+    await clean_db.flush()
+    assert legacy.slug is None
+
+    found = await get_or_create_autonomous_campaign(clean_db)
+    assert found.id == legacy.id
+    assert found.slug == AUTONOMOUS_CAMPAIGN_SLUG
+
+
+async def test_losing_the_slug_race_returns_the_winners_row(clean_db, monkeypatch):
+    """Audit fix: two near-simultaneous autonomous passes must not each
+    find the campaign missing and insert their own copy. This reproduces
+    the actual race outcome against real Postgres: a rival row is already
+    committed under the unique slug (via a separate, already-closed
+    session/connection — no two transactions are ever open at once here,
+    so this cannot deadlock), but our session's own initial lookups are
+    forced to behave as they would have during the actual race window —
+    both missing it — so get_or_create_autonomous_campaign proceeds to
+    INSERT and must recover from the real IntegrityError that follows."""
+    from tests.conftest import async_test_session
+
+    winner = Campaign(
+        name="pre-existing row from the other session",
+        slug=AUTONOMOUS_CAMPAIGN_SLUG,
+        status=CampaignStatus.ACTIVE,
+    )
+    async with async_test_session() as rival:
+        rival.add(winner)
+        await rival.commit()
+
+    real_execute = clean_db.execute
+    calls = {"n": 0}
+
+    async def execute_first_lookup_as_a_miss(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+
+            class _EmptyResult:
+                def scalar_one_or_none(self) -> None:
+                    return None
+
+            return _EmptyResult()
+        return await real_execute(*args, **kwargs)
+
+    monkeypatch.setattr(clean_db, "execute", execute_first_lookup_as_a_miss)
+
+    found = await get_or_create_autonomous_campaign(clean_db)
+
+    assert found.id == winner.id
+    from sqlalchemy import func, select
+
+    count = (
+        await clean_db.execute(
+            select(func.count()).select_from(Campaign).where(
+                Campaign.slug == AUTONOMOUS_CAMPAIGN_SLUG
+            )
+        )
+    ).scalar_one()
+    assert count == 1
 
 
 # ── User-supplied topics: the alternate entry point ──────────────────
@@ -150,9 +217,22 @@ async def test_one_failing_topic_does_not_sink_the_pass(clean_db, patched_pipeli
     assert stats.topics_failed == 1
     failed = [t for t in stats.topics if t["status"] == "failed"]
     assert len(failed) == 1
-    assert "RuntimeError" in failed[0]["error"]
     # The surviving topics were still qualified.
     assert stats.qualified is True
+
+
+async def test_a_failed_topics_error_never_echoes_the_exception(clean_db, patched_pipeline):
+    """This dict flows into the job's result (GET /jobs/{job_id}), so an
+    adapter/connection exception's own text — which can carry credentials,
+    hostnames, or filesystem paths — must never reach it (same rule
+    /discovery/status already follows; see routes_ops.py)."""
+    stats = await run_discovery_pass(
+        clean_db, _FakeProvider(), topics=["baking", "explode", "yoga"]
+    )
+    [failed] = [t for t in stats.topics if t["status"] == "failed"]
+    assert failed["error"] == "drilling this topic failed; details in the server log"
+    dumped = repr(stats.as_dict())
+    assert "hunter2" not in dumped and "db.internal" not in dumped
 
 
 async def test_qualification_failure_leaves_the_drilled_niches(clean_db, monkeypatch):

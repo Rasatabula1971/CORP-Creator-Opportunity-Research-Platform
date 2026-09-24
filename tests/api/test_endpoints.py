@@ -258,6 +258,25 @@ async def test_get_opportunities(clean_db: AsyncSession):
     data = resp.json()
     assert len(data) == 1
     assert data[0]["aggregate_score"] == 0.65
+    # Audit fix: all 14 scoring_v2 components must round-trip through the
+    # API, including the four T21 market-evidence ones that used to be
+    # silently dropped by a stale response schema.
+    assert set(data[0]["component_scores"]) == {
+        "audience_problem_frequency",
+        "recency_trend",
+        "commercial_intent_strength",
+        "evidence_depth",
+        "creator_reach",
+        "competition_saturation",
+        "competitor_saturation",
+        "engagement_velocity",
+        "creator_content_alignment",
+        "cross_platform_consistency",
+        "external_demand_strength",
+        "solution_saturation",
+        "purchase_intent",
+        "audience_dissatisfaction",
+    }
 
 
 @pytest.mark.asyncio

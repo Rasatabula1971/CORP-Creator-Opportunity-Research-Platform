@@ -321,7 +321,10 @@ async def test_t21_evidence_type_counts_flow_from_niche_runs(clean_db: AsyncSess
                 source_type="adapter",
                 source_id=f"{et.value}_{i}",
                 source_platform="test",
-                raw_text=f"{et.value} evidence #{i}",
+                # Must overlap the "Screen Issues" cluster's own text: the
+                # relevance filter (_relevant_evidence_count) only counts
+                # market evidence whose text is actually about the cluster.
+                raw_text=f"Screen issues {et.value} evidence #{i}",
                 access_method=AccessMethod.OPEN,
                 compliance_status=ComplianceStatus.COMPLIANT,
                 research_run_id=niche_run.id,
@@ -364,6 +367,78 @@ async def test_t21_no_niche_evidence_gives_neutral_components(clean_db: AsyncSes
     assert opp.component_scores["solution_saturation"] == 0.5
     assert opp.component_scores["purchase_intent"] == 0.0
     assert opp.component_scores["audience_dissatisfaction"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_market_evidence_does_not_leak_across_unrelated_clusters(clean_db: AsyncSession):
+    """Audit finding: external evidence must attach to the problem it is
+    actually about, not to every problem cluster the creator happens to
+    have. Two clusters, one creator, one niche: transaction evidence about
+    pricing must raise pricing's purchase_intent without touching
+    scheduling's, even though both clusters share a research run."""
+    session = clean_db
+    from corp.core.models.niche import Niche
+
+    creator = Creator(name="TwoProblems", niche="freelance", discovery_source="manual")
+    session.add(creator)
+    await session.flush()
+
+    niche = Niche(canonical_name="freelance-business-problems")
+    session.add(niche)
+    await session.flush()
+    session.add(CreatorNiche(creator_id=creator.id, niche_id=niche.id))
+
+    niche_run = ResearchRun(
+        niche_id=niche.id,
+        status="completed",
+        run_type="niche_discovery",
+        config_snapshot={},
+        prompt_versions={},
+        model_versions={},
+    )
+    session.add(niche_run)
+    await session.flush()
+
+    pricing = ProblemCluster(
+        label="Pricing your service",
+        description="Audience struggles with pricing their freelance work",
+        frequency=10,
+        recency_score=0.8,
+        creator_id=creator.id,
+    )
+    scheduling = ProblemCluster(
+        label="Scheduling customers",
+        description="Audience struggles with booking and calendar conflicts",
+        frequency=10,
+        recency_score=0.8,
+        creator_id=creator.id,
+    )
+    session.add_all([pricing, scheduling])
+    await session.flush()
+
+    # Strong marketplace/purchase evidence, but only about pricing.
+    for i in range(5):
+        session.add(Evidence(
+            source_type="adapter",
+            source_id=f"pricing_txn_{i}",
+            source_platform="marketplace",
+            raw_text=f"Pricing calculator tool for freelance service purchased #{i}",
+            access_method=AccessMethod.OPEN,
+            compliance_status=ComplianceStatus.COMPLIANT,
+            research_run_id=niche_run.id,
+            evidence_type=EvidenceType.TRANSACTION,
+            origin=EvidenceOrigin.OBSERVATION,
+        ))
+    await session.flush()
+
+    pipeline = ScoringPipeline(session)
+    await pipeline.run(creator.id)
+
+    scores = (await session.execute(select(OpportunityScore))).scalars().all()
+    by_cluster = {s.problem_cluster_id: s for s in scores}
+
+    assert by_cluster[pricing.id].component_scores["purchase_intent"] > 0.0
+    assert by_cluster[scheduling.id].component_scores["purchase_intent"] == 0.0
 
 
 @pytest.mark.asyncio

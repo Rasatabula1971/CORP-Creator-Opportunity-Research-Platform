@@ -128,7 +128,6 @@ jobs:
         run: npm run build
 
       - name: Dependency audit
-        continue-on-error: true
         run: npm audit --audit-level=high
 
   python-dependency-audit:
@@ -147,7 +146,6 @@ jobs:
         run: pip install pip-audit
 
       - name: Audit CORP runtime dependencies
-        continue-on-error: true
         run: pip-audit .
 
   semgrep:
@@ -166,7 +164,6 @@ jobs:
         run: pip install semgrep
 
       - name: Scan Python source
-        continue-on-error: true
         run: |
           semgrep scan \
             --config p/python \

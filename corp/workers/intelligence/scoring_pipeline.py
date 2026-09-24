@@ -7,7 +7,7 @@ the score but never hashed.
 
 import logging
 import math
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -68,6 +68,17 @@ SCORING_RULE_VERSION = "scoring_v2"
 ALIGNMENT_THRESHOLD = 0.2  # jaccard between a creator observation and the cluster
 COMMERCE_KINDS = {"shop", "course", "product", "membership"}
 
+# The four T21 components read only these evidence types; the rest (PROBLEM,
+# PLANNING_INTENT, MONETISATION) never inform them, so there's no reason to
+# pull their (often much larger) raw_text volume into memory per creator.
+_MARKET_EVIDENCE_TYPES = (
+    EvidenceType.TREND,
+    EvidenceType.SEARCH_INTENT,
+    EvidenceType.SOLUTION,
+    EvidenceType.TRANSACTION,
+    EvidenceType.DISSATISFACTION,
+)
+
 
 @dataclass
 class CreatorContext:
@@ -81,7 +92,12 @@ class CreatorContext:
     monetisation: dict[str, int]
     engagement_rate_by_platform: dict[str, float]
     follower_growth: float | None
-    evidence_type_counts: dict[str, int]
+    # Tokenized raw_text of each niche-discovery evidence row, by evidence
+    # type — kept per-row (not pre-counted) so _score_opportunity can count
+    # only the rows relevant to each specific cluster's text, instead of
+    # crediting every cluster with every market signal gathered anywhere in
+    # the creator's niches (see ADR on cluster-scoped market evidence).
+    market_evidence_tokens: dict[str, list[frozenset[str]]]
 
 
 @dataclass
@@ -219,17 +235,17 @@ class ScoringPipeline:
         niche_runs = select(ResearchRun.id).where(
             ResearchRun.niche_id.in_(niche_ids),
         )
-        type_rows = (
+        market_rows = (
             await self._session.execute(
-                select(Evidence.evidence_type, func.count())
-                .where(
+                select(Evidence.evidence_type, Evidence.raw_text).where(
                     Evidence.research_run_id.in_(niche_runs),
-                    Evidence.evidence_type.isnot(None),
+                    Evidence.evidence_type.in_(_MARKET_EVIDENCE_TYPES),
                 )
-                .group_by(Evidence.evidence_type)
             )
         ).all()
-        evidence_type_counts = {et.value: count for et, count in type_rows}
+        market_evidence_tokens: dict[str, list[frozenset[str]]] = defaultdict(list)
+        for et, raw_text in market_rows:
+            market_evidence_tokens[et.value].append(tokens(raw_text))
 
         return CreatorContext(
             subscriber_count=subscriber_count,
@@ -240,7 +256,7 @@ class ScoringPipeline:
             monetisation=dict(monetisation),
             engagement_rate_by_platform=await self._engagement_rates(creator_id),
             follower_growth=await self._follower_growth(accounts),
-            evidence_type_counts=evidence_type_counts,
+            market_evidence_tokens=dict(market_evidence_tokens),
         )
 
     async def _engagement_rates(self, creator_id: str) -> dict[str, float]:
@@ -454,17 +470,30 @@ class ScoringPipeline:
                 platforms_with, len(creator.audience_platforms)
             ),
             "external_demand_strength": score_external_demand_strength(
-                creator.evidence_type_counts.get(EvidenceType.TREND.value, 0),
-                creator.evidence_type_counts.get(EvidenceType.SEARCH_INTENT.value, 0),
+                _relevant_evidence_count(
+                    ctx.text_tokens, creator.market_evidence_tokens.get(EvidenceType.TREND.value)
+                ),
+                _relevant_evidence_count(
+                    ctx.text_tokens,
+                    creator.market_evidence_tokens.get(EvidenceType.SEARCH_INTENT.value),
+                ),
             ),
             "solution_saturation": score_solution_saturation(
-                creator.evidence_type_counts.get(EvidenceType.SOLUTION.value, 0),
+                _relevant_evidence_count(
+                    ctx.text_tokens, creator.market_evidence_tokens.get(EvidenceType.SOLUTION.value)
+                ),
             ),
             "purchase_intent": score_purchase_intent(
-                creator.evidence_type_counts.get(EvidenceType.TRANSACTION.value, 0),
+                _relevant_evidence_count(
+                    ctx.text_tokens,
+                    creator.market_evidence_tokens.get(EvidenceType.TRANSACTION.value),
+                ),
             ),
             "audience_dissatisfaction": score_audience_dissatisfaction(
-                creator.evidence_type_counts.get(EvidenceType.DISSATISFACTION.value, 0),
+                _relevant_evidence_count(
+                    ctx.text_tokens,
+                    creator.market_evidence_tokens.get(EvidenceType.DISSATISFACTION.value),
+                ),
             ),
         }
         components = {k: round(v, 6) for k, v in components.items()}
@@ -587,6 +616,23 @@ class ScoringPipeline:
 # instead — comfortably past every confidence-band threshold, so it's still
 # scored conservatively, just not confused with a specific measured age.
 _UNKNOWN_RECENCY_DAYS = 3650
+
+
+def _relevant_evidence_count(
+    cluster_tokens: frozenset[str], evidence_tokens: list[frozenset[str]] | None
+) -> int:
+    """How many of a creator's market-evidence rows are actually about this
+    cluster's problem, judged by token containment against the cluster's own
+    text (label + description + member observations) — the same lexical-
+    overlap approach already used for creator-content alignment and
+    commerce overlap above. Evidence gathered for one problem (e.g. pricing)
+    must not inflate the score of an unrelated one (e.g. scheduling) just
+    because both belong to the same creator's niche."""
+    if not evidence_tokens or not cluster_tokens:
+        return 0
+    return sum(
+        1 for ev in evidence_tokens if containment(cluster_tokens, ev) >= ALIGNMENT_THRESHOLD
+    )
 
 
 def _days_from_recency(recency_score: float) -> int:

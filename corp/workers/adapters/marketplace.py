@@ -105,6 +105,15 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
         self._last_request_at: float | None = None
         self._throttle_lock = asyncio.Lock()
         self.request_count = 0
+        # Single-flight cache: fetch_transactions() and fetch_solutions()
+        # (and collect() itself) can all be called with the same identifier
+        # for the same keyword within one niche-discovery pass (T3 fans out
+        # every capability an adapter implements). Without this, that fans
+        # out into duplicate HTTP requests to every marketplace for
+        # identical data. Keyed by identifier, not query text, and holding
+        # the in-flight Task (not just its result) so concurrent callers
+        # await the same fetch instead of each starting their own.
+        self._collect_tasks: dict[str, asyncio.Task[list[NormalizedContent]]] = {}
 
     @property
     def platform(self) -> str:
@@ -123,6 +132,13 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
         return ComplianceStatus.VERIFY
 
     async def collect(self, identifier: str) -> list[NormalizedContent]:
+        task = self._collect_tasks.get(identifier)
+        if task is None:
+            task = asyncio.ensure_future(self._collect_uncached(identifier))
+            self._collect_tasks[identifier] = task
+        return await task
+
+    async def _collect_uncached(self, identifier: str) -> list[NormalizedContent]:
         identifier = identifier.strip()
 
         for prefix in ("gumroad:", "etsy:", "udemy:"):
@@ -138,13 +154,18 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
             await self._client.aclose()
 
     # ── Capability interfaces (CORP1 Stage 4/5, T2) ────────────────────
-    # Both delegate to the same collect() unchanged — a marketplace
-    # listing IS a transaction signal (people already pay) and IS a
-    # solution signal (this is what's already competing), from the same
-    # listing data.
+    # Every listing IS a solution signal (this is what's already
+    # competing) — but a listing existing is not proof anyone paid for
+    # it, so fetch_transactions (audit fix) keeps only listings that
+    # carry an actual purchase-count signal.
 
     async def fetch_transactions(self, query: str) -> list[NormalizedContent]:
-        return await self.collect(query)
+        """Listings with real purchase evidence only — Udemy's subscriber
+        count and Etsy's review/sales count both require a completed sale
+        to exist. Gumroad listings carry no such signal today and are
+        never counted as transaction evidence, only as SOLUTION."""
+        listings = await self.collect(query)
+        return [item for item in listings if _has_transaction_evidence(item)]
 
     async def fetch_solutions(self, query: str) -> list[NormalizedContent]:
         return await self.collect(query)
@@ -293,6 +314,17 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
         resp.raise_for_status()
         check_response_size(resp, "marketplace")
         return resp.json()  # type: ignore[no-any-return]
+
+
+def _has_transaction_evidence(item: NormalizedContent) -> bool:
+    """Whether this listing carries a real signal that someone paid,
+    not just that a product page exists."""
+    marketplace = item.metadata.get("marketplace")
+    if marketplace == "udemy":
+        return bool(item.metadata.get("subscriber_count"))
+    if marketplace == "etsy":
+        return bool(item.metadata.get("review_count"))
+    return False
 
 
 def _parse_gumroad_listings(html: str, query: str) -> list[NormalizedContent]:
@@ -527,7 +559,12 @@ def _parse_etsy_api_response(
                     "price": price,
                     "currency": currency,
                     "rating": None,
-                    "review_count": item.get("num_favorers"),
+                    # num_favorers is a wishlist count, not a purchase count —
+                    # keep it separate from review_count (which the scraped
+                    # HTML path reports honestly) so it never counts as
+                    # transaction evidence in _has_transaction_evidence.
+                    "review_count": None,
+                    "favorite_count": item.get("num_favorers"),
                     "views": item.get("views"),
                     "tags": item.get("tags", [])[:5],
                 },

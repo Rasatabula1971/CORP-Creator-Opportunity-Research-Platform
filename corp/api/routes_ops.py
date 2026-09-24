@@ -527,6 +527,15 @@ async def start_discovery_scan(
                 status_code=409,
                 detail=f"A job is already running for this campaign: {active.id}",
             )
+    elif (active := registry.active_of_kind("discovery")) is not None:
+        # Campaign-less runs all resolve to the same standing "Autonomous
+        # discovery" campaign (get_or_create_autonomous_campaign): two of
+        # them in flight at once can each find it missing and insert their
+        # own copy, and double whatever LLM/source quota one pass uses.
+        raise HTTPException(
+            status_code=409,
+            detail=f"An autonomous discovery pass is already running: {active.id}",
+        )
 
     per_pass = body.topics_per_pass if body else None
     job = registry.create("discovery", campaign_id=campaign_id)

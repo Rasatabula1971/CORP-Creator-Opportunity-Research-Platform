@@ -15,7 +15,15 @@ class ComponentScores(BaseModel):
     Competitor list) counts how many DIRECT/SUBSTITUTE competitors exist
     per cluster. They contribute to the aggregate side by side; either can
     be 0.0 if that signal wasn't gathered.
+
+    extra="forbid": all 14 of scoring_pipeline.py's components must be
+    listed here explicitly. Without this, a component added to the engine
+    but not to this schema is silently dropped from every typed API
+    response instead of failing a test (audit finding: this schema still
+    listed only 10 when the engine already produced 14).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     audience_problem_frequency: float = 0.0
     recency_trend: float = 0.0
@@ -33,6 +41,11 @@ class ComponentScores(BaseModel):
     engagement_velocity: float = 0.0
     creator_content_alignment: float = 0.0
     cross_platform_consistency: float = 0.0
+    # T21: the four market-evidence components (24% combined weight).
+    external_demand_strength: float = 0.0
+    solution_saturation: float = 0.0
+    purchase_intent: float = 0.0
+    audience_dissatisfaction: float = 0.0
 
 
 class ScoreResponse(BaseModel):

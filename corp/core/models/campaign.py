@@ -26,10 +26,18 @@ class Campaign(TimestampMixin, Base):
     """
 
     __tablename__ = "campaigns"
-    __table_args__ = (Index("ix_campaigns_status", "status"),)
+    __table_args__ = (
+        Index("ix_campaigns_status", "status"),
+        Index("ix_campaigns_slug", "slug", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Stable machine identity for a campaign a code path must find-or-create
+    # exactly once (e.g. the standing autonomous-discovery campaign) —
+    # unlike `name`, which is user-editable display text and not unique.
+    # NULL (not unique-constrained in Postgres) for every ordinary campaign.
+    slug: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[CampaignStatus] = mapped_column(
         Enum(CampaignStatus),
         default=CampaignStatus.DRAFT,

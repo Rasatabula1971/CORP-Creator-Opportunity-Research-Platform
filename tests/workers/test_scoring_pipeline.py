@@ -23,6 +23,13 @@ class FakeSession:
         pass
 
 
+# The relevance filter only credits a cluster with evidence whose text
+# overlaps the cluster's own tokens (see _relevant_evidence_count), so
+# fixtures built from raw counts need evidence text the mocked cluster
+# context will actually match.
+_CLUSTER_TOKENS: frozenset[str] = frozenset({"widget", "topic"})
+
+
 def _creator_context(
     evidence_type_counts: dict[str, int] | None = None,
 ) -> CreatorContext:
@@ -35,7 +42,9 @@ def _creator_context(
         monetisation={},
         engagement_rate_by_platform={},
         follower_growth=None,
-        evidence_type_counts=evidence_type_counts or {},
+        market_evidence_tokens={
+            et: [_CLUSTER_TOKENS] * count for et, count in (evidence_type_counts or {}).items()
+        },
     )
 
 
@@ -84,7 +93,10 @@ def _make_pipe_and_helpers(monkeypatch):
 
     async def _cluster_ctx(cluster):
         return ClusterContext(
-            member_count=4, platforms={"youtube"}, compliant_platforms={"youtube"}
+            member_count=4,
+            platforms={"youtube"},
+            compliant_platforms={"youtube"},
+            text_tokens=_CLUSTER_TOKENS,
         )
 
     async def _strengths(cluster_id):
