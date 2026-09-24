@@ -78,25 +78,23 @@ async def test_autonomous_campaign_is_created_once(clean_db):
     assert second.id == first.id, "a second pass must reuse the campaign, not fork one"
 
 
-async def test_autonomous_campaign_matches_case_insensitively(clean_db):
-    clean_db.add(Campaign(name=AUTONOMOUS_CAMPAIGN_NAME.upper()))
+async def test_a_same_named_human_campaign_is_never_adopted(clean_db):
+    """A person is free to create their own campaign named "Autonomous
+    discovery" (or any casing of it) for unrelated work. Matching it by
+    name here would silently repurpose it -- and everything already in
+    it -- as the standing target for every future unattended pass. A
+    pre-existing row without the slug (e.g. from before this column
+    existed) is a one-time migration-time backfill, not a runtime
+    lookup -- see migration 8fb35dc16e35."""
+    human = Campaign(name=AUTONOMOUS_CAMPAIGN_NAME.upper())
+    clean_db.add(human)
     await clean_db.flush()
-    found = await get_or_create_autonomous_campaign(clean_db)
-    assert found.name == AUTONOMOUS_CAMPAIGN_NAME.upper()
-
-
-async def test_autonomous_campaign_gets_its_slug_set_on_first_use(clean_db):
-    """A pre-existing row matched by name only (no slug yet, e.g. from
-    before the slug column existed) must be adopted, not left behind for
-    a second campaign to be created alongside it."""
-    legacy = Campaign(name=AUTONOMOUS_CAMPAIGN_NAME)
-    clean_db.add(legacy)
-    await clean_db.flush()
-    assert legacy.slug is None
 
     found = await get_or_create_autonomous_campaign(clean_db)
-    assert found.id == legacy.id
+
+    assert found.id != human.id
     assert found.slug == AUTONOMOUS_CAMPAIGN_SLUG
+    assert human.slug is None, "the human's campaign must be left untouched"
 
 
 async def test_losing_the_slug_race_returns_the_winners_row(clean_db, monkeypatch):
@@ -400,6 +398,24 @@ async def test_scheduler_gives_up_after_max_consecutive_failures(clean_db):
     assert sched._consecutive_failures == sched.MAX_CONSECUTIVE_FAILURES
     # _run_forever's guard means the loop exits rather than spinning.
     await asyncio.wait_for(sched._run_forever(), timeout=5)
+
+
+async def test_giving_up_returns_immediately_without_a_backoff_sleep(clean_db):
+    """Regression: the tick that first hits MAX_CONSECUTIVE_FAILURES used
+    to fall through to the backoff sleep (up to interval_seconds * 32)
+    before the loop's while-condition was re-checked, leaving the task
+    alive -- and start() a no-op, since it only returns early while
+    self._task is not None -- for a very long time after already having
+    logged that it gave up. A large interval must not make _run_forever
+    hang once the limit is hit on this tick."""
+    async def factory():
+        raise RuntimeError("always broken")
+
+    sched = DiscoveryScanScheduler(lambda: clean_db, factory, interval_seconds=3600)
+    sched._consecutive_failures = sched.MAX_CONSECUTIVE_FAILURES - 1
+    await sched._tick()
+    assert sched._consecutive_failures == sched.MAX_CONSECUTIVE_FAILURES
+    await asyncio.wait_for(sched._run_forever(), timeout=1)
 
 
 # ── Momentum source selection ────────────────────────────────────────

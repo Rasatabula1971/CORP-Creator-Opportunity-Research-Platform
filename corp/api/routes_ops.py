@@ -422,7 +422,7 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
     """
     from corp.workers.intelligence.trend_scan import TrendScanConfig, TrendScanner
     from corp.workers.scheduler.discovery_scan import (
-        AUTONOMOUS_CAMPAIGN_NAME,
+        AUTONOMOUS_CAMPAIGN_SLUG,
         momentum_readiness,
     )
 
@@ -478,9 +478,7 @@ async def discovery_status(session: AsyncSession = Depends(get_session)) -> dict
     momentum_source, momentum_available, momentum_detail = momentum_readiness(settings)
 
     result = await session.execute(
-        select(Campaign.id).where(
-            func.lower(Campaign.name) == AUTONOMOUS_CAMPAIGN_NAME.lower()
-        ).limit(1)
+        select(Campaign.id).where(Campaign.slug == AUTONOMOUS_CAMPAIGN_SLUG).limit(1)
     )
     return {
         "enabled": settings.discovery_enabled,

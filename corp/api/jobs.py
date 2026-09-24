@@ -171,12 +171,9 @@ registry = JobRegistry()
 
 
 async def _close(obj: object) -> None:
-    close = getattr(obj, "close", None)
-    if close is not None:
-        try:
-            await close()
-        except Exception:
-            logger.exception("cleanup close() failed for %s", type(obj).__name__)
+    from corp.workers.adapters.base import close_quietly
+
+    await close_quietly(obj)
 
 
 async def _commit_or_rollback(session: Any) -> None:

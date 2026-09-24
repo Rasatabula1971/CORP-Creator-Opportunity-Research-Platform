@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 async def _close(obj: object) -> None:
-    close = getattr(obj, "close", None)
-    if close is not None:
-        await close()
+    from corp.workers.adapters.base import close_quietly
+
+    await close_quietly(obj)
 
 
 async def _run_collect(platform: str, identifier: str, creator_id: str) -> int:

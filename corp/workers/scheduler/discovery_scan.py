@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -172,13 +172,18 @@ async def get_or_create_autonomous_campaign(
 ) -> Campaign:
     """The standing campaign for unattended passes, created on first use.
 
-    Matched first by slug (Campaign.slug, unique-constrained — see
+    Matched only by slug (Campaign.slug, unique-constrained — see
     migration 8fb35dc16e35), which is what makes two near-simultaneous
     passes safe: only one of two concurrent inserts can win that
     constraint, and the loser fetches the winner's row instead of leaving
-    a duplicate campaign behind. Falls back to a case-insensitive name
-    match for a row from before that migration, or created by a different
-    code path, and backfills its slug so it takes the fast path next time.
+    a duplicate campaign behind. A row that already existed when that
+    migration ran was backfilled by the migration itself (matched
+    case-insensitively on name, once, at migration time) — this function
+    deliberately does NOT repeat that name match at runtime: a person is
+    free to create their own campaign named "Autonomous discovery" for
+    unrelated work, and adopting it by name here would silently
+    repurpose it (and everything already in it) as the standing target
+    for every future unattended pass.
 
     Must be the first thing this function's caller does with ``session``:
     losing the race rolls the whole session back (a failed flush leaves
@@ -192,15 +197,6 @@ async def get_or_create_autonomous_campaign(
     )
     campaign = result.scalar_one_or_none()
     if campaign is not None:
-        return campaign
-
-    result = await session.execute(
-        select(Campaign).where(func.lower(Campaign.name) == name.lower()).limit(1)
-    )
-    campaign = result.scalar_one_or_none()
-    if campaign is not None:
-        campaign.slug = AUTONOMOUS_CAMPAIGN_SLUG
-        await session.flush()
         return campaign
 
     campaign = Campaign(
@@ -297,7 +293,17 @@ async def run_discovery_pass(
             )
             logger.exception("Discovery pass: drilling %r failed", seed.topic)
             continue
-        stats.topics_drilled += 1
+        # A drill that produced nothing (every evidence source errored for
+        # this keyword) finishes via finish_run/fail_run without raising --
+        # status is the signal, same convention as ResearchOrchestrator.step.
+        # Counting that as "drilled" would run the whole downstream chain
+        # (canonicalize..research) believing this topic contributed
+        # something, and report a clean "qualified: true" over what was
+        # really a total source outage for it.
+        if run.status == "failed":
+            stats.topics_failed += 1
+        else:
+            stats.topics_drilled += 1
         stats.topics.append(
             {
                 "topic": seed.topic,
@@ -355,6 +361,7 @@ async def _advance_campaign_to_gate(
     failure never loses earlier progress.
     """
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
+    from corp.workers.adapters.base import close_quietly
     from corp.workers.adapters.registry import build_search_adapter
     from corp.workers.campaign_research import CampaignResearchBatch
     from corp.workers.intelligence.ecosystem_estimator import (
@@ -382,7 +389,11 @@ async def _advance_campaign_to_gate(
             }
             return False
         pipeline[name] = {"run_id": run.id, "status": run.status}
-        return True
+        # A stage can finish without raising and still report "failed"
+        # (finish_run/fail_run's status is the signal, same convention as
+        # ResearchOrchestrator.step) -- stop the chain there too, not just
+        # on an exception.
+        return bool(run.status != "failed")
 
     recheck_days = DiscoveryConfig.from_rules(niche_rules_path).recheck_days
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
@@ -400,7 +411,7 @@ async def _advance_campaign_to_gate(
         if not await stage("estimate_ecosystem", estimator.estimate(campaign_id)):
             return pipeline
     finally:
-        await _safe_close(youtube)
+        await close_quietly(youtube)
 
     qualifier = NicheQualifier(session, qualification_rules_path)
     if not await stage("qualify", qualifier.qualify_campaign(campaign_id)):
@@ -418,21 +429,12 @@ async def _advance_campaign_to_gate(
         if not await stage("onboard", onboarder.onboard(campaign_id)):
             return pipeline
     finally:
-        await _safe_close(onboard_adapter)
+        await close_quietly(onboard_adapter)
 
     orchestrator = ResearchOrchestrator(session, provider, lambda: embedder)
     batch = CampaignResearchBatch(orchestrator, session)
     await stage("research_campaign", batch.run_campaign(campaign_id))
     return pipeline
-
-
-async def _safe_close(obj: object) -> None:
-    close = getattr(obj, "close", None)
-    if close is not None:
-        try:
-            await close()
-        except Exception:
-            logger.exception("Discovery pass: cleanup close() failed for %s", type(obj).__name__)
 
 
 # Per tick: an LLM provider to drill with, None when none is configured
@@ -503,6 +505,14 @@ class DiscoveryScanScheduler:
     async def _run_forever(self) -> None:
         while self._consecutive_failures < self.MAX_CONSECUTIVE_FAILURES:
             await self._tick()
+            # Check again right after the tick that may have just pushed us
+            # over the limit: falling through to the sleep below first
+            # would leave the task alive (and start() a no-op, since it
+            # only returns early when self._task is not None) for up to
+            # interval_seconds * 32 -- 32 days at the default interval --
+            # after already having logged that it gave up.
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                break
             delay = self._interval_seconds
             if self._consecutive_failures > 0:
                 delay = min(
