@@ -1,0 +1,34 @@
+---
+# CORP already uses Ruff, mypy, pytest, Semgrep, CodeQL and Oxc/TypeScript.
+# MegaLinter is intentionally focused on repository-level gaps rather than
+# duplicating those checks.
+ENABLE_LINTERS:
+  - ACTION_ACTIONLINT
+  - YAML_YAMLLINT
+  - JSON_JSONLINT
+  - COPYPASTE_JSCPD
+  - MARKDOWN_MARKDOWNLINT
+
+SHOW_ELAPSED_TIME: true
+PRINT_ALPACA: false
+FLAVOR_SUGGESTIONS: false
+
+EXCLUDED_DIRECTORIES:
+  - .git
+  - .venv
+  - venv
+  - node_modules
+  - htmlcov
+  - megalinter-reports
+  - graphify-out
+
+# TypeScript tsconfig files are JSONC (comments are valid there) and are
+# already parsed by the TypeScript production build. Strict jsonlint should
+# still block malformed ordinary JSON without false-failing on tsconfig.
+JSON_JSONLINT_FILTER_REGEX_EXCLUDE: "(^|/)tsconfig(\\..*)?\\.json$"
+
+# First integration: report existing style/duplication debt without allowing
+# it to hide structural errors in GitHub Actions or ordinary JSON.
+YAML_YAMLLINT_DISABLE_ERRORS: true
+MARKDOWN_MARKDOWNLINT_DISABLE_ERRORS: true
+COPYPASTE_JSCPD_DISABLE_ERRORS: true
