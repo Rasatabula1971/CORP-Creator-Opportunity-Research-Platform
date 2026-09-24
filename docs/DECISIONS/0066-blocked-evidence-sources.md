@@ -40,9 +40,13 @@ probe, and the run stats read like an outage rather than a decision.
 
 1. **Udemy is removed from the default `MARKETPLACE_SITES`**, and the
    registry drops it with a warning if it is still listed. Dead endpoint.
-2. **Etsy is used only through the official API.** Without `ETSY_API_KEY`
-   the registry leaves Etsy out (with a warning naming the variable)
-   instead of scraping into DataDome. With a key, nothing changes.
+2. **Etsy is used only through the official API, and is off by default.**
+   The official Etsy Open API requires an approved developer app, which is
+   not currently available to this operator, so `etsy` was removed from the
+   default `MARKETPLACE_SITES` (now `gumroad` only). Without `ETSY_API_KEY`
+   the registry still leaves Etsy out (with a warning naming the variable)
+   rather than scraping into DataDome; add `etsy` back to `MARKETPLACE_SITES`
+   only once a key is obtained. With a key, rows are tagged `COMPLIANT`.
 3. **The crowdfunding source is off by default** via a new setting,
    `DISCOVERY_DISABLED_SOURCES` (default `crowdfunding`). A disabled
    platform is recorded in `run.stats.extra.skipped_sources` as
@@ -76,6 +80,8 @@ Not done, and why:
 ## Follow-ups
 
 - Evaluate Indiegogo's Public API (registration, search support, terms).
-- Register an Etsy app and set `ETSY_API_KEY` on the laptop.
+- Etsy developer-app approval was not granted, so Etsy stays out of the
+  default marketplace list. Revisit `ETSY_API_KEY` if an approved app is
+  obtained later.
 - The stale `niche_discovery_platforms` setting (its consumer was deleted
   in ADR-0065) can go in a later hygiene pass.

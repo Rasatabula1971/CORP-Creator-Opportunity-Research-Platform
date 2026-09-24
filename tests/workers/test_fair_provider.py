@@ -512,6 +512,38 @@ def test_build_fair_provider_trims_unknown_kwargs_and_retries(stub_fair, caplog)
     assert provider._fair.kwargs["quality_level"] == "standard"
 
 
+def test_old_fair_dropping_attestation_fails_closed(stub_fair):
+    """If the operator attested free-only providers but the installed FAIR is
+    too old to accept confirmed_free_providers, we must NOT silently continue:
+    that old FAIR has no free-only gate and could route to a keyed provider
+    without a cost check."""
+
+    class OldFair(_WorkingFair):
+        def __init__(
+            self,
+            *,
+            gemini_api_key=None,
+            groq_api_key=None,
+            quality_level="standard",
+            timeout_seconds=30.0,
+            cache_enabled=True,
+        ):
+            super().__init__(
+                gemini_api_key=gemini_api_key,
+                groq_api_key=groq_api_key,
+                env_file=None,
+                quality_level=quality_level,
+                timeout_seconds=timeout_seconds,
+                cache_enabled=cache_enabled,
+            )
+
+    stub_fair(OldFair)
+    cfg = _cfg()
+    cfg.fair_confirmed_free_providers = "google_gemini_api,groq"
+    with pytest.raises(FairUnavailableError, match="confirmed_free_providers"):
+        build_fair_provider(cfg)
+
+
 def test_build_fair_provider_unrecoverable_signature_mismatch_raises_unavailable(stub_fair):
     """Signature so different that no kwargs match — must raise
     FairUnavailableError so the factory's auto path falls back to the pool."""

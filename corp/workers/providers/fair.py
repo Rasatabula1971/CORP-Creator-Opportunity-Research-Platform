@@ -215,6 +215,18 @@ def build_fair_provider(cfg: Settings) -> FairProvider:
             trimmed = {k: v for k, v in kwargs.items() if k in accepted}
         except (TypeError, ValueError):
             trimmed = {}
+        # Fail closed on the free-only guarantee: if the operator attested
+        # specific providers as free-only (confirmed_free_providers) but the
+        # installed FAIR is too old to accept that kwarg, it also predates the
+        # free-only routing gate and could dispatch to a keyed provider with no
+        # cost check. Never silently drop the attestation and continue.
+        if confirmed and "confirmed_free_providers" not in trimmed:
+            raise FairUnavailableError(
+                "installed fair package does not support confirmed_free_providers; "
+                "it cannot honour FAIR_CONFIRMED_FREE_PROVIDERS and may route to a "
+                "keyed provider without the free-only check. Update the fair package "
+                "to match CORP, or clear FAIR_CONFIRMED_FREE_PROVIDERS to opt out."
+            ) from exc
         if trimmed and trimmed != kwargs:
             try:
                 router = FAIR(**trimmed)

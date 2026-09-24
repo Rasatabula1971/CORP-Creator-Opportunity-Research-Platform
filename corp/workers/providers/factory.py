@@ -80,6 +80,16 @@ def build_provider(cfg: Settings | None = None) -> LLMProvider:
         try:
             return build_fair_provider(cfg)
         except FairUnavailableError as exc:
+            if cfg.fair_required:
+                # Free-only enforcement: the raw pool bypasses FAIR's cost
+                # check, so refuse rather than risk dispatching to a billable
+                # provider. Fail closed instead of falling back.
+                raise ProviderConfigError(
+                    f"FAIR_REQUIRED=true but FAIR is unusable ({exc}); refusing to "
+                    "fall back to the raw Gemini/Groq pool, which bypasses FAIR's "
+                    "free-only check. Fix FAIR or set FAIR_REQUIRED=false to allow "
+                    "the pool fallback."
+                ) from exc
             logger.warning("FAIR is installed but unusable (%s); falling back to the pool", exc)
 
     if choice == "gemini":

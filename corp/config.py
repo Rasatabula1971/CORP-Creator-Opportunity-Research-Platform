@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # endpoint) was discontinued on 2025-01-01 and returns 403 for good; the
     # registry drops it with a warning if it is listed (ADR-0066).
     marketplace_max_listings: int = 30
-    marketplace_sites: str = "gumroad,etsy"
+    marketplace_sites: str = "gumroad"
     # Etsy Open API v3 key (Personal App tier). REQUIRED for Etsy: the HTML
     # search page sits behind DataDome, which answers every non-browser
     # client with 403, so without a key the registry leaves Etsy out rather
@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     llm_max_wait_seconds: float = 300.0
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
 
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-20b"
@@ -147,6 +147,13 @@ class Settings(BaseSettings):
     # GEMINI_API_KEY/GROQ_API_KEY from the settings above; FAIR_ENV_FILE points
     # at FAIR's own .env for the keys of its other free providers.
     fair_enabled: bool = True
+    # Free-only enforcement. When true, LLM_PROVIDER=auto will NOT fall back to
+    # the raw Gemini/Groq pool if FAIR is unusable: the raw providers bypass
+    # FAIR's free-only attestation, so a key on a billable account could incur
+    # charges. With it true, an LLM call fails closed instead. Left false by
+    # default to preserve the pool fallback; set FAIR_REQUIRED=true to guarantee
+    # every call goes through FAIR's cost check.
+    fair_required: bool = False
     fair_env_file: str = ""
     fair_client_id: str = "corp"
     # FAIR routes to a recurring free-tier provider (Gemini, Groq, Mistral,
