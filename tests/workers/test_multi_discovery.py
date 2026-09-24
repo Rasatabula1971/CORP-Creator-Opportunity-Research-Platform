@@ -445,5 +445,5 @@ async def test_all_sources_skipped_is_a_failed_run(
     assert stats.attempted == stats.failed == 1
     assert resolve_status(stats, 0.5) == "failed"
     assert "hackernews=disconnected" in stats.last_error
-    assert "wikipedia=build_error: no api key" in stats.last_error
+    assert "wikipedia=build_error: RuntimeError; details in the server log" in stats.last_error
     assert mock_record.call_count == 0

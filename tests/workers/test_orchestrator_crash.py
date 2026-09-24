@@ -101,7 +101,7 @@ async def test_dossier_crash_creates_and_fails_its_own_run(
     ]
     assert len(dossier_runs) == 1
     assert dossier_runs[0].status == "failed"
-    assert "dossier boom" in dossier_runs[0].error_message
+    assert dossier_runs[0].error_message == "RuntimeError; details in the server log"
 
     # Still research memory: the crash-persist commit went through, not rolled back.
     assert session.commit.await_count >= 1

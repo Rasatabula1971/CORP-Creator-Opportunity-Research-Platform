@@ -33,6 +33,7 @@ from corp.core.models.niche_candidate import (
 )
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.state.research_run import validate_run_type
+from corp.workers.failures import describe_failure
 from corp.workers.intelligence.clustering import ClusteringConfig, cluster_observations
 from corp.workers.intelligence.embeddings import Embedder, embed_texts_async
 from corp.workers.intelligence.errors import LLMCallError
@@ -140,7 +141,7 @@ class NicheCandidateGenerator:
                         )
                     except LLMCallError as exc:
                         llm_failures += 1
-                        candidate.extra = {"naming_error": str(exc)[:500]}
+                        candidate.extra = {"naming_error": describe_failure(exc)}
                     else:
                         candidate.naming_prompt_version = NAMING_PROMPT_VERSION
                         candidate.naming_model_version = self._provider.model_name

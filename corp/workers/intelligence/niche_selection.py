@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -81,6 +81,17 @@ class NicheSelector:
                 ),
             )
 
+            # top_n caps the campaign's SELECTED niches in total, not per
+            # invocation. The standing autonomous campaign is cumulative --
+            # every pass adds newly VERIFIED candidates to a list that
+            # already holds earlier winners -- so counting from zero each
+            # time would let it grow 5 -> 10 -> 15 selected niches, each
+            # automatically onboarded and researched. Earlier winners keep
+            # their place (they may already have creators researched under
+            # them); new candidates compete only for the remaining headroom.
+            already_selected = await self._selected_count(campaign_id)
+            headroom = max(0, self._cfg.top_n - already_selected)
+
             results: list[dict[str, Any]] = []
             selected_count = 0
             for rank, (cn, niche) in enumerate(ranked, start=1):
@@ -102,7 +113,7 @@ class NicheSelector:
                     cn.selected = False
                     cn.rationale = reason
                     selected = False
-                elif selected_count < self._cfg.top_n:
+                elif selected_count < headroom:
                     reason = f"ranked #{rank} of {len(ranked)} by qualification_score"
                     cn.status = CampaignNicheStatus.SELECTED
                     cn.selected = True
@@ -111,7 +122,8 @@ class NicheSelector:
                     selected_count += 1
                 else:
                     reason = (
-                        f"ranked #{rank} of {len(ranked)}, outside top {self._cfg.top_n}"
+                        f"ranked #{rank} of {len(ranked)}, outside top {self._cfg.top_n} "
+                        f"({already_selected} already selected in this campaign)"
                     )
                     cn.status = CampaignNicheStatus.REJECTED
                     cn.selected = False
@@ -137,6 +149,9 @@ class NicheSelector:
                 niches_ranked=len(ranked),
                 selected=selected_count,
                 rejected=len(ranked) - selected_count,
+                already_selected=already_selected,
+                total_selected=already_selected + selected_count,
+                cap=self._cfg.top_n,
                 results=results,
             )
             return await finish_run(self._session, run, stats)
@@ -147,6 +162,17 @@ class NicheSelector:
                 "Niche selection failed for campaign %s", campaign_id,
             )
             raise
+
+    async def _selected_count(self, campaign_id: str) -> int:
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(CampaignNiche)
+            .where(
+                CampaignNiche.campaign_id == campaign_id,
+                CampaignNiche.status == CampaignNicheStatus.SELECTED,
+            )
+        )
+        return int(result.scalar_one())
 
     async def _qualified_niches(
         self, campaign_id: str,

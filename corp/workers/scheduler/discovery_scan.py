@@ -35,14 +35,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+import zlib
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+)
 
 from corp.config import Settings, settings
 from corp.core.models.campaign import Campaign, CampaignStatus
@@ -73,6 +80,16 @@ AUTONOMOUS_CAMPAIGN_NAME = "Autonomous discovery"
 # editable display text a person could rename, breaking a name-based
 # lookup silently.
 AUTONOMOUS_CAMPAIGN_SLUG = "autonomous-discovery"
+
+
+# Postgres advisory-lock namespace for "a discovery pass is running on
+# this campaign" (the two-int4 form of pg_try_advisory_lock; this is the
+# class id, the campaign's hash is the object id).
+DISCOVERY_LOCK_CLASS = 0x434F5250  # "CORP"
+
+
+class DiscoveryLockedError(Exception):
+    """Another discovery pass holds this campaign's lock right now."""
 
 
 class DiscoveryDeferredError(Exception):
@@ -223,6 +240,65 @@ async def get_or_create_autonomous_campaign(
     return campaign
 
 
+def discovery_lock_keys(campaign_id: str) -> tuple[int, int]:
+    """(class, object) int4 keys identifying one campaign's pass lock."""
+    return DISCOVERY_LOCK_CLASS, zlib.crc32(campaign_id.encode()) & 0x7FFFFFFF
+
+
+def _engine_of(session: AsyncSession) -> AsyncEngine:
+    bind = session.bind
+    if isinstance(bind, AsyncEngine):
+        return bind
+    if isinstance(bind, AsyncConnection):
+        return bind.engine
+    raise TypeError(f"discovery lock needs an engine-bound session, got bind={bind!r}")
+
+
+@asynccontextmanager
+async def discovery_pass_lock(engine: AsyncEngine, campaign_id: str) -> AsyncIterator[None]:
+    """Hold this campaign's pass lock for the block, or raise
+    :class:`DiscoveryLockedError` at once if another pass holds it.
+
+    The in-process JobRegistry only sees jobs this process started; the
+    scheduler tick and the manual POST /discovery/run can still overlap
+    (and two API workers cannot see each other at all), each drilling
+    the same topics against the same campaign and spending the LLM and
+    source quota twice. A database-level lock is the one arbiter every
+    caller shares.
+
+    Session-level (not transaction-level) on purpose, on its own
+    connection: the pass's session commits and rolls back along the way
+    (ResearchOrchestrator does both per creator), which would drop a
+    pg_advisory_xact_lock long before the pass ends. A connection-scoped
+    lock lives exactly as long as this block, and dies with the
+    connection if the process does -- so a crash never leaves the
+    campaign locked. The connection is invalidated (not pooled) if the
+    unlock cannot be confirmed, since a pooled connection would carry
+    the lock into whoever borrows it next.
+    """
+    cls, obj = discovery_lock_keys(campaign_id)
+    async with engine.connect() as conn:
+        acquired = await conn.scalar(
+            text("SELECT pg_try_advisory_lock(:cls, :obj)"), {"cls": cls, "obj": obj},
+        )
+        if not acquired:
+            raise DiscoveryLockedError(
+                f"a discovery pass is already running for campaign {campaign_id}"
+            )
+        try:
+            yield
+        finally:
+            try:
+                released = await conn.scalar(
+                    text("SELECT pg_advisory_unlock(:cls, :obj)"), {"cls": cls, "obj": obj},
+                )
+            except Exception:  # noqa: BLE001 -- never let the unlock mask the pass's own error
+                logger.exception("Discovery pass: releasing the campaign lock failed")
+                released = False
+            if not released:
+                await conn.invalidate()
+
+
 async def run_discovery_pass(
     session: AsyncSession,
     provider: LLMProvider,
@@ -243,6 +319,10 @@ async def run_discovery_pass(
     the drill engine rather than a parallel one, so a hand-picked niche
     produces exactly the same evidence, lineage and dossier as a
     discovered one.
+
+    Raises :class:`DiscoveryLockedError` without drilling anything when
+    another pass (this process or any other) is already running on the
+    same campaign -- see :func:`discovery_pass_lock`.
     """
     stats = DiscoveryPassStats()
 
@@ -251,6 +331,34 @@ async def run_discovery_pass(
         campaign_id = campaign.id
     stats.campaign_id = campaign_id
 
+    async with discovery_pass_lock(_engine_of(session), campaign_id):
+        return await _run_locked_pass(
+            session,
+            provider,
+            stats,
+            campaign_id,
+            trend_provider=trend_provider,
+            niche_rules_path=niche_rules_path,
+            qualification_rules_path=qualification_rules_path,
+            topics_per_pass=topics_per_pass,
+            topics=topics,
+            broad_topics_path=broad_topics_path,
+        )
+
+
+async def _run_locked_pass(
+    session: AsyncSession,
+    provider: LLMProvider,
+    stats: DiscoveryPassStats,
+    campaign_id: str,
+    *,
+    trend_provider: TrendProvider | None,
+    niche_rules_path: str,
+    qualification_rules_path: str,
+    topics_per_pass: int | None,
+    topics: list[str] | None,
+    broad_topics_path: str,
+) -> DiscoveryPassStats:
     if topics:
         seeds = [SeedTopic(topic=t.strip().lower(), momentum=None, reason="user_supplied")
                  for t in topics if t and t.strip()]
@@ -363,6 +471,7 @@ async def _advance_campaign_to_gate(
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
     from corp.workers.adapters.base import close_quietly
     from corp.workers.adapters.registry import build_search_adapter
+    from corp.workers.campaign_config import batch_config, load_campaign, stage_configs
     from corp.workers.campaign_research import CampaignResearchBatch
     from corp.workers.intelligence.ecosystem_estimator import (
         EcosystemEstimator,
@@ -395,6 +504,14 @@ async def _advance_campaign_to_gate(
         # on an exception.
         return bool(run.status != "failed")
 
+    # The campaign's own knobs (target niche count, creator follower band,
+    # creators per niche, human-gate capacity) configure every stage that
+    # has one -- the same mapping POST /campaigns/{id}/{stage} uses, so a
+    # pass on a campaign behaves as that campaign's row says, not as the
+    # worker defaults say.
+    campaign = await load_campaign(session, campaign_id)
+    configs = stage_configs(campaign)
+
     recheck_days = DiscoveryConfig.from_rules(niche_rules_path).recheck_days
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
     canon = NicheCanonicalizer(embedder, session, CanonConfig(recheck_days=recheck_days))
@@ -407,7 +524,9 @@ async def _advance_campaign_to_gate(
     youtube = build_search_adapter("youtube")
     enricher = YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
     try:
-        estimator = EcosystemEstimator(youtube, session, enricher=enricher)
+        estimator = EcosystemEstimator(
+            youtube, session, configs.ecosystem, enricher=enricher,
+        )
         if not await stage("estimate_ecosystem", estimator.estimate(campaign_id)):
             return pipeline
     finally:
@@ -417,7 +536,8 @@ async def _advance_campaign_to_gate(
     if not await stage("qualify", qualifier.qualify_campaign(campaign_id)):
         return pipeline
 
-    if not await stage("select", NicheSelector(session).select(campaign_id)):
+    selector = NicheSelector(session, configs.selection)
+    if not await stage("select", selector.select(campaign_id)):
         return pipeline
 
     onboard_adapter = build_search_adapter("youtube")
@@ -425,14 +545,18 @@ async def _advance_campaign_to_gate(
         YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
     )
     try:
-        onboarder = CreatorOnboarder(onboard_adapter, session, enricher=onboard_enricher)
+        onboarder = CreatorOnboarder(
+            onboard_adapter, session, configs.onboarding, enricher=onboard_enricher,
+        )
         if not await stage("onboard", onboarder.onboard(campaign_id)):
             return pipeline
     finally:
         await close_quietly(onboard_adapter)
 
     orchestrator = ResearchOrchestrator(session, provider, lambda: embedder)
-    batch = CampaignResearchBatch(orchestrator, session)
+    # Counted now, after onboard, so the limit reflects the gate as it
+    # stands when research starts.
+    batch = CampaignResearchBatch(orchestrator, session, await batch_config(session, campaign))
     await stage("research_campaign", batch.run_campaign(campaign_id))
     return pipeline
 
@@ -553,6 +677,13 @@ class DiscoveryScanScheduler:
                             broad_topics_path=self._broad_topics_path,
                         )
                         await session.commit()
+                    except DiscoveryLockedError as why:
+                        # A manual run (or another worker's tick) got there
+                        # first: nothing was spent, nothing is wrong.
+                        await session.rollback()
+                        logger.info("Discovery pass deferred: %s", why)
+                        self._consecutive_failures = 0
+                        return
                     except Exception:
                         await session.rollback()
                         raise

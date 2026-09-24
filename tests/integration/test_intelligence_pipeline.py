@@ -199,7 +199,8 @@ async def test_pipeline_failure_marks_run_failed(clean_db: AsyncSession):
     run = result.scalar_one()
     assert run is returned
     assert run.status == "failed"
-    assert "LLM down" in run.error_message
+    assert "details in the server log" in run.error_message
+    assert "LLM down" not in run.error_message, "exception text stays in the log"
     assert run.completed_at is not None
 
 

@@ -32,6 +32,7 @@ from corp.workers.acquisition.slug import slugify
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent
 from corp.workers.adapters.health import SourceHealthTracker
 from corp.workers.adapters.registry import build_adapter
+from corp.workers.failures import PipelineFailureError, describe_failure
 from corp.workers.intelligence.runs import (
     PipelineStats,
     finish_run,
@@ -117,7 +118,7 @@ class MultiSourceDiscovery:
             # family): nothing was attempted, so stats would read 0/0 and the
             # run would close "completed" having done no work. Fail it and
             # name why each source was passed over.
-            stats.fail(RuntimeError(
+            stats.fail(PipelineFailureError(
                 "no niche source was available: "
                 + ", ".join(f"{p}={s.get('reason')}" for p, s in per_source.items())
             ))
@@ -179,7 +180,7 @@ class MultiSourceDiscovery:
         except Exception as exc:
             logger.warning("Could not build adapter for %s: %s", platform, exc)
             stats.skip()
-            return {"status": "skipped", "reason": f"build_error: {exc}"}
+            return {"status": "skipped", "reason": f"build_error: {describe_failure(exc)}"}
 
         if adapter.family != AdapterFamily.NICHE:
             stats.skip()
@@ -197,12 +198,12 @@ class MultiSourceDiscovery:
                 source=platform,
                 query=query,
                 status=ResearchQueryStatus.FAILED,
-                error=str(exc)[:2000],
+                error=describe_failure(exc),
             )
             stats.fail(exc)
             return {
                 "status": "failed",
-                "error": str(exc)[:500],
+                "error": describe_failure(exc),
                 "health": self._health.get_status(platform),
             }
         finally:

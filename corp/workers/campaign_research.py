@@ -29,6 +29,7 @@ from corp.core.models.campaign_niche import CampaignNiche, CampaignNicheStatus
 from corp.core.models.creator import Creator, CreatorStatus
 from corp.core.models.creator_niche import CreatorNiche
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
+from corp.workers.failures import describe_failure
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -130,7 +131,7 @@ class CampaignResearchBatch:
                         "creator_id": creator_id,
                         "name": name,
                         "outcome": "errored",
-                        "reason": str(exc)[:500],
+                        "reason": describe_failure(exc),
                     })
                     stats.fail(exc)
                     logger.warning(
