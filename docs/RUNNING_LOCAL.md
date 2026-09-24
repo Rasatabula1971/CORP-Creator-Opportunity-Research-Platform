@@ -134,6 +134,30 @@ into niches, and the chain runs through to dossiers at the human gate. Set
 LLM key (`GEMINI_API_KEY` or `GROQ_API_KEY`); without one the script says so
 and exits, and the API and dashboard keep running.
 
+### FAIR (the LLM router)
+
+CORP's LLM calls go through FAIR, installed as an editable package from its own
+clone (`pip install -e <path to FAIR-Free-AI-Router>`; branch `main`). Pulling
+that clone updates it; no reinstall. Three things in CORP's `.env` matter:
+
+- `FAIR_CONFIRMED_FREE_PROVIDERS` — FAIR routes to a recurring free-tier
+  provider (Gemini, Groq, Mistral, Z.ai, Cloudflare Workers AI) only when you
+  attest the account is free-only and cannot auto-bill. Comma-separated FAIR
+  provider ids, e.g. `google_gemini_api,groq,mistral,zai_free,cloudflare_workers_ai`.
+  A keyed provider missing here is skipped, and `GET /providers/health` says so
+  under `skipped`. OpenRouter Free and Kilo Free need no confirmation.
+- `FAIR_ENV_FILE=fair.env` — the keys for FAIR's other providers (see
+  `fair.env.example`).
+- `FAIR_MAX_UNANSWERED_ATTEMPTS` (default 6) — models that never answered
+  tolerated per solve before FAIR escalates.
+
+`GET /providers/health` runs one probe solve and reports each provider's
+governor status (`ACTIVE`, `THROTTLED`, `OUTAGE`, `QUOTA_EXHAUSTED`) plus the
+skipped ones with FAIR's reason; `start_corp.bat` prints the same before it
+starts a discovery pass. FAIR's routing events (a failed attempt with its
+cause, an escalation with its reason) are logged at warning level in the API
+window.
+
 Dashboard (defaults to calling `http://localhost:8010`; override it in
 Settings → API base URL if you moved the API):
 

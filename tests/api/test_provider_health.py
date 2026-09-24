@@ -27,13 +27,23 @@ class _FakeFair(FairProvider):
     FAIR call is needed. It IS a FairProvider so isinstance() still routes
     the endpoint through the FAIR branch."""
 
-    def __init__(self, ping_result: PingResult, member_names: list[str]):
-        # Skip real __init__: the router isn't touched by the endpoint.
+    def __init__(
+        self,
+        ping_result: PingResult,
+        member_names: list[str],
+        skipped: dict[str, str] | None = None,
+        providers: list[dict] | None = None,
+    ):
+        # Skip real __init__: only the diagnostics read the router, and they
+        # need just ``skipped`` and ``providers()``.
+        from types import SimpleNamespace
+
         self._ping = ping_result
         self._members = member_names
         self._closed = False
         self._last_model = "gemini-3.6-flash"
         self._used = set()
+        self._fair = SimpleNamespace(skipped=skipped or {}, providers=lambda: providers or [])
 
     @property
     def model_name(self) -> str:
@@ -211,3 +221,31 @@ async def test_non_fair_provider_with_close_is_closed(client, monkeypatch):
     assert resp.status_code == 200
     assert "fair" not in resp.json()
     assert fake.closed is True
+
+
+async def test_fair_health_lists_skipped_providers_and_statuses(client, monkeypatch):
+    """A keyed provider FAIR refuses (free-tier confirmation missing) and the
+    governor's view of the accepted ones are the operator's first stop when
+    'Gemini is configured but never answers'. No network for either."""
+    ping = PingResult(ok=True, provider_count=1, provider_ids=["openrouter_free"])
+    fake = _FakeFair(
+        ping,
+        member_names=["fair-router"],
+        skipped={"google_gemini_api": "explicit free-tier account confirmation required"},
+        providers=[
+            {"provider_id": "openrouter_free", "status": "ACTIVE", "models": ["a", "b"]},
+            {"provider_id": "groq", "status": "THROTTLED", "models": ["c"]},
+        ],
+    )
+    monkeypatch.setattr(ops, "build_provider", lambda: fake)
+
+    resp = await client.get("/providers/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["skipped"] == {
+        "google_gemini_api": "explicit free-tier account confirmation required"
+    }
+    assert body["providers"] == [
+        {"provider_id": "openrouter_free", "status": "ACTIVE", "models": 2},
+        {"provider_id": "groq", "status": "THROTTLED", "models": 1},
+    ]

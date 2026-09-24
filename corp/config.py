@@ -149,6 +149,19 @@ class Settings(BaseSettings):
     fair_enabled: bool = True
     fair_env_file: str = ""
     fair_client_id: str = "corp"
+    # FAIR routes to a recurring free-tier provider (Gemini, Groq, Mistral,
+    # Z.ai, Cloudflare Workers AI) only when the operator attests that the
+    # account behind the key is free-only and cannot auto-bill. Comma-separated
+    # FAIR provider ids: google_gemini_api, groq, mistral, zai_free,
+    # cloudflare_workers_ai. A keyed provider missing from this list is left
+    # out by FAIR with a "confirmation required" reason (see
+    # /providers/health). OpenRouter Free and Kilo Free need no confirmation:
+    # FAIR verifies a zero price on every call.
+    fair_confirmed_free_providers: str = ""
+    # Models that never answered (down, slow, throttled) tolerated per FAIR
+    # solve before it escalates; separate from FAIR's max_attempts, which
+    # counts answers its quality gate judged.
+    fair_max_unanswered_attempts: int = 6
     # commodity | standard | advanced | high_impact_support. Schema-validated
     # answers (what CORP's prompts produce) pass at commodity/standard only.
     fair_quality_level: str = "standard"
