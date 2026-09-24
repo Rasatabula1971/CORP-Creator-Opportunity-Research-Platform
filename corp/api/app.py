@@ -168,11 +168,16 @@ async def _close_quietly(obj: object | None) -> None:
 def _discovery_busy() -> bool:
     """Stand the crawler down while the console is already running a
     campaign job, so an unattended pass never races a human-initiated one
-    for the same LLM quota."""
+    for the same LLM quota. Also stands down for another in-flight
+    "discovery" job specifically (campaign-less or not): a manual
+    POST /discovery/run and this scheduler's own tick both resolve to the
+    same standing autonomous campaign, so letting both run at once can
+    create it twice and double whatever quota one pass uses."""
     from corp.api.jobs import JobStatus, registry
 
     return any(
-        j.campaign_id is not None and j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+        j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+        and (j.campaign_id is not None or j.kind == "discovery")
         for j in registry.list(limit=500)
     )
 

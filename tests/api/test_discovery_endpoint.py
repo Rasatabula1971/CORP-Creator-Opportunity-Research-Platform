@@ -69,6 +69,27 @@ async def test_extra_fields_are_rejected(client, captured):
     assert resp.status_code == 422
 
 
+async def test_a_second_campaign_less_run_is_rejected_while_one_is_active(client, captured):
+    """Audit fix: two near-simultaneous autonomous passes could each find
+    the standing autonomous campaign missing and create it twice."""
+    from corp.api import routes_ops
+
+    routes_ops.registry.create("discovery")
+
+    resp = await client.post("/discovery/run")
+    assert resp.status_code == 409
+    assert captured == []
+
+
+async def test_a_campaign_bound_run_is_unaffected_by_an_active_autonomous_pass(client, captured):
+    from corp.api import routes_ops
+
+    routes_ops.registry.create("discovery")
+
+    resp = await client.post("/discovery/run", json={"campaign_id": "no-such-campaign"})
+    assert resp.status_code == 404, "the campaign-lookup check still runs first"
+
+
 async def test_topics_per_pass_is_bounded(client, captured):
     assert (await client.post("/discovery/run", json={"topics_per_pass": 0})).status_code == 422
     assert (await client.post("/discovery/run", json={"topics_per_pass": 99})).status_code == 422

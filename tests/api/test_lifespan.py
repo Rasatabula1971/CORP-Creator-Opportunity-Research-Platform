@@ -156,3 +156,44 @@ async def test_lifespan_degrades_gracefully_when_scheduler_init_fails():
         app = FastAPI()
         async with lifespan(app):
             pass
+
+
+# ---------- Audit fix: _discovery_busy sees a campaign-less discovery job ----------
+
+
+def test_discovery_busy_true_for_a_campaign_less_discovery_job(monkeypatch):
+    """Two near-simultaneous autonomous passes (the scheduler's own tick and
+    a manual POST /discovery/run with no campaign_id) can each find the
+    standing autonomous campaign missing and create it twice. The scheduler
+    must stand down for the other one, even though neither job carries a
+    campaign_id."""
+    from corp.api.app import _discovery_busy
+    from corp.api.jobs import JobRegistry
+
+    fresh = JobRegistry()
+    fresh.create("discovery")  # no campaign_id, exactly like an autonomous pass
+    monkeypatch.setattr("corp.api.jobs.registry", fresh)
+
+    assert _discovery_busy() is True
+
+
+def test_discovery_busy_false_when_only_unrelated_jobs_are_active(monkeypatch):
+    from corp.api.app import _discovery_busy
+    from corp.api.jobs import JobRegistry
+
+    fresh = JobRegistry()
+    fresh.create("research", creator_id="creator-1")
+    monkeypatch.setattr("corp.api.jobs.registry", fresh)
+
+    assert _discovery_busy() is False
+
+
+def test_discovery_busy_still_true_for_a_campaign_bound_job(monkeypatch):
+    from corp.api.app import _discovery_busy
+    from corp.api.jobs import JobRegistry
+
+    fresh = JobRegistry()
+    fresh.create("research", campaign_id="c1")
+    monkeypatch.setattr("corp.api.jobs.registry", fresh)
+
+    assert _discovery_busy() is True
