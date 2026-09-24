@@ -16,6 +16,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from corp.workers.failures import describe_failure
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DEGRADE_AFTER = 3
@@ -123,7 +125,7 @@ class SourceHealthTracker:
         rec.consecutive_failures += 1
         rec.total_failures += 1
         rec.last_failure_at = time.time()
-        rec.last_error = str(exc)[:500]
+        rec.last_error = describe_failure(exc)
 
         if rec.consecutive_failures >= self._disconnect_after:
             if rec.status != SourceStatus.DISCONNECTED:

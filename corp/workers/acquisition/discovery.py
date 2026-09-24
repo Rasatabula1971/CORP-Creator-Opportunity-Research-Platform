@@ -26,6 +26,7 @@ from corp.core.state.research_run import validate_run_type
 from corp.warmstore.sync import mirror_evidence
 from corp.workers.acquisition.slug import slugify
 from corp.workers.adapters.base import NormalizedContent, SourceAdapter
+from corp.workers.failures import describe_failure
 from corp.workers.intelligence.runs import (
     PipelineStats,
     fail_run,
@@ -78,7 +79,7 @@ class NicheDiscoveryCollector:
                 source=source,
                 query=query,
                 status=ResearchQueryStatus.FAILED,
-                error=str(exc)[:2000],
+                error=describe_failure(exc),
             )
             await fail_run(self._session, run, exc)
             return run

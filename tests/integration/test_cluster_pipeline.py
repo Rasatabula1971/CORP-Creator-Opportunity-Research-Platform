@@ -213,4 +213,5 @@ async def test_cluster_pipeline_failure_marks_run_failed(clean_db: AsyncSession)
     )
     run = result.scalar_one()
     assert run.status == "failed"
-    assert "Embedder crashed" in run.error_message
+    assert "RuntimeError" in run.error_message
+    assert "Embedder crashed" not in run.error_message, "exception text stays in the log"

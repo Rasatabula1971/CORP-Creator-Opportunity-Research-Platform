@@ -28,7 +28,8 @@ def test_stats_counts_and_rate():
     s.skip()
     assert (s.attempted, s.succeeded, s.failed, s.skipped) == (3, 2, 1, 1)
     assert s.failure_rate == pytest.approx(1 / 3)
-    assert s.last_error == "boom"
+    # Never the exception's own text (it can carry DSNs, keyed URLs, paths)
+    assert s.last_error == "RuntimeError; details in the server log"
     d = s.to_dict()
     assert d["failure_rate"] == pytest.approx(0.3333, abs=1e-4)
 
@@ -79,7 +80,8 @@ async def test_finish_run_partial_records_reason():
     await finish_run(FakeSession(), run, stats, max_failure_rate=0.2)
     assert run.status == "partial"
     assert "4/10" in run.error_message
-    assert "provider timeout" in run.error_message
+    assert "RuntimeError" in run.error_message
+    assert "provider timeout" not in run.error_message
 
 
 async def test_finish_run_all_failed_returns_failed_run_without_raising():
@@ -94,7 +96,8 @@ async def test_finish_run_all_failed_returns_failed_run_without_raising():
     returned = await finish_run(session, run, stats)
     assert returned is run
     assert run.status == "failed"
-    assert "LLM down" in run.error_message
+    assert "RuntimeError" in run.error_message
+    assert "LLM down" not in run.error_message
     assert run.completed_at is not None
     assert session.flushes == 1
 

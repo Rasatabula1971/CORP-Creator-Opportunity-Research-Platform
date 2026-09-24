@@ -234,11 +234,11 @@ async def test_adapter_failure_records_failed_query_and_fails_run(
     assert returned.status == "failed"
     run = (await session.execute(select(ResearchRun))).scalar_one()
     assert run.id == returned.id
-    assert "source unreachable" in run.error_message
+    assert run.error_message == "RuntimeError; details in the server log"
     assert run.completed_at is not None
     q = (await session.execute(select(ResearchQuery))).scalar_one()
     assert q.status == ResearchQueryStatus.FAILED
-    assert q.error == "source unreachable"
+    assert q.error == "RuntimeError; details in the server log"
     assert q.research_run_id == run.id
     assert (await session.execute(select(Evidence))).scalars().all() == []
 
