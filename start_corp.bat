@@ -14,7 +14,12 @@ REM    5. Apply any pending alembic migrations
 REM    6. Read API_PORT from .env (default 8000) and refuse to start if
 REM       something is already listening there (e.g. FAIR, or a stale
 REM       CORP instance that never shut down)
-REM    7. Launch uvicorn on http://127.0.0.1:%API_PORT% (blocks until Ctrl+C)
+REM    7. Launch uvicorn on http://127.0.0.1:%API_PORT% and the dashboard,
+REM       each in its own window
+REM    8. Start one autonomous discovery pass (the LLM picks the topics
+REM       and the chain runs through to the human gate) and follow it in
+REM       this window. AUTO_DISCOVERY=false in .env skips this step;
+REM       POST /discovery/run does the same thing by hand.
 REM
 REM  Requirements: Python on PATH, Postgres 16 installed under the default
 REM  ``C:\Program Files\PostgreSQL\16\``, project deps installed
@@ -91,14 +96,21 @@ if exist fair.env (
 )
 
 REM -- Pick the API port: API_PORT from .env, else 8010 --------------
+REM    Also read API_KEY (sent as X-API-Key when the API requires it) and
+REM    AUTO_DISCOVERY (default true).
 set "API_PORT=8010"
+set "API_KEY="
+set "AUTO_DISCOVERY=true"
 if exist .env (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="API_PORT" set "API_PORT=%%B"
+    if /i "%%A"=="API_KEY" set "API_KEY=%%B"
+    if /i "%%A"=="AUTO_DISCOVERY" set "AUTO_DISCOVERY=%%B"
   )
 )
-REM Strip any stray whitespace from the value
+REM Strip any stray whitespace from the values
 for /f "tokens=1" %%A in ("!API_PORT!") do set "API_PORT=%%A"
+for /f "tokens=1" %%A in ("!AUTO_DISCOVERY!") do set "AUTO_DISCOVERY=%%A"
 
 REM -- Refuse to start if the port is already taken -------------------
 set "PORT_PID="
@@ -140,4 +152,14 @@ echo [corp] API:       http://127.0.0.1:!API_PORT!
 echo [corp] Dashboard: http://localhost:5173
 echo [corp] Close the "CORP API" and "CORP Dashboard" windows to stop.
 echo.
+
+REM -- Run the frozen flow: one autonomous discovery pass, followed here --
+if /i "!AUTO_DISCOVERY!"=="false" (
+  echo [corp] AUTO_DISCOVERY=false: not starting a discovery pass.
+) else (
+  echo [corp] Starting an autonomous discovery pass ...
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start_discovery.ps1" -Port !API_PORT! -ApiKey "!API_KEY!"
+)
+echo.
+pause
 endlocal
