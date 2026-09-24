@@ -397,10 +397,20 @@ class FairProvider(LLMProvider):
         """Map a non-accepted SolveResponse onto the pool's error vocabulary."""
         attempts = list(getattr(result, "attempts", []) or [])
         errors = [getattr(a, "error_type", None) for a in attempts]
+        # error_detail (FAIR >= the unanswered-attempts change) says why an
+        # attempt failed in FAIR's own words -- "HTTP_503", "TimeoutError" --
+        # which is what an operator needs to tell down from slow. Older FAIR
+        # attempts lack it; getattr keeps this working against both.
         detail = ", ".join(
             f"{getattr(a, 'provider_id', '?')}/{getattr(a, 'model_id', '?')}:"
             f"{getattr(a, 'disposition', '?')}"
-            + (f"({a.error_type})" if getattr(a, "error_type", None) else "")
+            + (
+                f"({a.error_type}"
+                + (f": {a.error_detail}" if getattr(a, "error_detail", None) else "")
+                + ")"
+                if getattr(a, "error_type", None)
+                else ""
+            )
             for a in attempts
         )
         reason = getattr(result, "reason_code", "UNKNOWN")

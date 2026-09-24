@@ -32,6 +32,7 @@ class Attempt:
     model_id: str
     disposition: str
     error_type: str | None = None
+    error_detail: str | None = None
 
 
 @dataclass
@@ -560,3 +561,31 @@ def test_build_fair_provider_missing_skipped_attribute_is_tolerated(stub_fair):
     stub_fair(NoSkippedFair)
     provider = build_fair_provider(_cfg())
     assert isinstance(provider, FairProvider)
+
+
+async def test_classify_names_the_failure_detail_when_fair_provides_it():
+    """FAIR's Attempt.error_detail ("HTTP_503", "TimeoutError") is the
+    difference between a provider that is down and one that is slow; it
+    must reach the log line. Attempts without it (older FAIR) still work."""
+    fair = FakeFair(
+        Solve(
+            status="ESCALATION_REQUIRED",
+            reason_code="ALL_FREE_MODELS_UNAVAILABLE",
+            output=None,
+            attempts=[
+                Attempt(
+                    "google_gemini_api", "gemini-3.5-flash-lite", "INFRA_FAILURE",
+                    error_type="PROVIDER_UNAVAILABLE", error_detail="HTTP_503",
+                ),
+                Attempt(
+                    "groq", "openai/gpt-oss-20b", "INFRA_FAILURE",
+                    error_type="PROVIDER_UNAVAILABLE",
+                ),
+            ],
+        )
+    )
+    with pytest.raises(ProviderUnavailableError) as info:
+        await FairProvider(fair).generate_json("p", schema=SCHEMA)
+    text = str(info.value)
+    assert "gemini-3.5-flash-lite:INFRA_FAILURE(PROVIDER_UNAVAILABLE: HTTP_503)" in text
+    assert "gpt-oss-20b:INFRA_FAILURE(PROVIDER_UNAVAILABLE)" in text
