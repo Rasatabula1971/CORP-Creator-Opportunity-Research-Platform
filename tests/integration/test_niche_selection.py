@@ -213,6 +213,74 @@ async def test_all_niches_fit_within_top_n(clean_db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_cap_is_cumulative_across_passes(clean_db: AsyncSession):
+    """Audit fix: top_n bounds the campaign's SELECTED total, not each
+    invocation. The standing autonomous campaign runs select() on every
+    pass over a list that already holds earlier winners; counting from
+    zero each time grew it 5 -> 10 -> 15, each tier automatically
+    onboarded and researched. Five already selected plus three newly
+    verified must leave exactly five."""
+    session = clean_db
+    campaign = Campaign(name="Cumulative")
+    session.add(campaign)
+    await session.flush()
+
+    prior = [
+        await _make_niche(
+            session, campaign, f"Prior {i}", score=0.9,
+            status=CampaignNicheStatus.SELECTED,
+        )
+        for i in range(5)
+    ]
+    fresh = [
+        await _make_niche(session, campaign, f"Fresh {i}", score=0.95) for i in range(3)
+    ]
+
+    run = await NicheSelector(session, SelectionConfig(top_n=5)).select(campaign.id)
+
+    extra = run.stats["extra"]
+    assert extra["already_selected"] == 5
+    assert extra["selected"] == 0
+    assert extra["rejected"] == 3
+    assert extra["total_selected"] == 5
+    for cn in fresh:
+        await session.refresh(cn)
+        assert cn.status == CampaignNicheStatus.REJECTED
+        assert "5 already selected" in cn.rationale
+    for cn in prior:
+        await session.refresh(cn)
+        assert cn.status == CampaignNicheStatus.SELECTED, "earlier winners keep their place"
+
+
+@pytest.mark.asyncio
+async def test_new_candidates_fill_only_the_remaining_headroom(clean_db: AsyncSession):
+    session = clean_db
+    campaign = Campaign(name="Headroom")
+    session.add(campaign)
+    await session.flush()
+
+    for i in range(3):
+        await _make_niche(
+            session, campaign, f"Prior {i}", score=0.9,
+            status=CampaignNicheStatus.SELECTED,
+        )
+    best = await _make_niche(session, campaign, "Best", score=0.99)
+    mid = await _make_niche(session, campaign, "Mid", score=0.80)
+    worst = await _make_niche(session, campaign, "Worst", score=0.60)
+
+    run = await NicheSelector(session, SelectionConfig(top_n=5)).select(campaign.id)
+
+    assert run.stats["extra"]["selected"] == 2
+    assert run.stats["extra"]["total_selected"] == 5
+    await session.refresh(best)
+    await session.refresh(mid)
+    await session.refresh(worst)
+    assert best.status == CampaignNicheStatus.SELECTED
+    assert mid.status == CampaignNicheStatus.SELECTED
+    assert worst.status == CampaignNicheStatus.REJECTED
+
+
+@pytest.mark.asyncio
 async def test_rejected_niches_marked_terminal(clean_db: AsyncSession):
     session = clean_db
     campaign = Campaign(name="Test")
