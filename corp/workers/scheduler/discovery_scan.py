@@ -1,19 +1,23 @@
 """The autonomous discovery crawler — CORP1 Step 1 with no user input.
 
-One pass is: Level 0 trend scan → recursive niche drill-down per seed
-topic → qualification of everything the campaign now holds. That is the
-front of the spec's pipeline running on a timer instead of on a request.
-
-**Where a pass stops.** After qualification. It deliberately does not go
-on to select/onboard/research: those spend YouTube quota and a research
-run per creator, and the point of an unattended crawler is that you see
-what it found before it spends that. The qualified niches sit on the
-campaign dashboard; taking one further is a normal campaign-stage call.
+One pass runs the entire frozen product flow unattended: Level 0 trend
+scan → recursive niche drill-down per seed topic → canonicalize → verify
+→ estimate-ecosystem → qualify → select → onboard → research (collect →
+intelligence → cluster → intent → score → dossier, ending at
+``HUMAN_REVIEW``). The only human touchpoint is the decision gate on the
+dossiers this produces (Reject / Research More / Watch / Approve) — a
+person never clicks through the intermediate campaign-pipeline stages by
+hand for a pass this function ran; those per-stage endpoints
+(``POST /campaigns/{id}/{stage}``) exist for re-running one stage by hand
+(e.g. after fixing a rules file), not as a required part of the flow.
 
 **Off by default.** ``settings.discovery_enabled`` gates the scheduler, so
-installing this does not silently start burning LLM quota. The manual
-trigger (``POST /discovery/run``) works either way, which is the intended
-way to watch one pass end to end before switching the timer on.
+installing this does not silently start burning LLM/YouTube quota. The
+manual trigger (``POST /discovery/run``) works either way, which is the
+intended way to run one pass end to end before switching the timer on —
+be aware that a pass which drills anything will, unattended, go all the
+way to onboarding creators and researching them (real API/LLM spend), not
+stop for review before that.
 
 **Idempotence across passes** is the research registry's job, not a lock
 here: :func:`~corp.workers.intelligence.niche_discovery.registry_fresh`
@@ -36,13 +40,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from corp.config import Settings
+from corp.config import Settings, settings
 from corp.core.models.campaign import Campaign, CampaignStatus
-from corp.workers.intelligence.niche_discovery import RecursiveNicheDiscovery
+from corp.workers.intelligence.niche_discovery import DiscoveryConfig, RecursiveNicheDiscovery
 from corp.workers.intelligence.niche_qualification import NicheQualifier
 from corp.workers.intelligence.trend_scan import (
     DEFAULT_BROAD_TOPICS_PATH,
@@ -86,6 +90,13 @@ class DiscoveryPassStats:
     campaign_id: str | None = None
     scan: dict[str, Any] = field(default_factory=dict)
     topics: list[dict[str, Any]] = field(default_factory=list)
+    # Outcome of canonicalize/verify/estimate_ecosystem/qualify/select/
+    # onboard/research_campaign, keyed by stage name -- see
+    # _advance_campaign_to_gate. Each entry is either {"run_id", "status"}
+    # on success or {"status": "failed", "error": <safe message>} on a
+    # stage that raised (never the exception's own text — this dict flows
+    # into the job's result, readable from GET /jobs/{job_id}).
+    pipeline: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -96,6 +107,7 @@ class DiscoveryPassStats:
             "campaign_id": self.campaign_id,
             "scan": self.scan,
             "topics": self.topics,
+            "pipeline": self.pipeline,
         }
 
 
@@ -160,13 +172,18 @@ async def get_or_create_autonomous_campaign(
 ) -> Campaign:
     """The standing campaign for unattended passes, created on first use.
 
-    Matched first by slug (Campaign.slug, unique-constrained — see
+    Matched only by slug (Campaign.slug, unique-constrained — see
     migration 8fb35dc16e35), which is what makes two near-simultaneous
     passes safe: only one of two concurrent inserts can win that
     constraint, and the loser fetches the winner's row instead of leaving
-    a duplicate campaign behind. Falls back to a case-insensitive name
-    match for a row from before that migration, or created by a different
-    code path, and backfills its slug so it takes the fast path next time.
+    a duplicate campaign behind. A row that already existed when that
+    migration ran was backfilled by the migration itself (matched
+    case-insensitively on name, once, at migration time) — this function
+    deliberately does NOT repeat that name match at runtime: a person is
+    free to create their own campaign named "Autonomous discovery" for
+    unrelated work, and adopting it by name here would silently
+    repurpose it (and everything already in it) as the standing target
+    for every future unattended pass.
 
     Must be the first thing this function's caller does with ``session``:
     losing the race rolls the whole session back (a failed flush leaves
@@ -180,15 +197,6 @@ async def get_or_create_autonomous_campaign(
     )
     campaign = result.scalar_one_or_none()
     if campaign is not None:
-        return campaign
-
-    result = await session.execute(
-        select(Campaign).where(func.lower(Campaign.name) == name.lower()).limit(1)
-    )
-    campaign = result.scalar_one_or_none()
-    if campaign is not None:
-        campaign.slug = AUTONOMOUS_CAMPAIGN_SLUG
-        await session.flush()
         return campaign
 
     campaign = Campaign(
@@ -285,7 +293,17 @@ async def run_discovery_pass(
             )
             logger.exception("Discovery pass: drilling %r failed", seed.topic)
             continue
-        stats.topics_drilled += 1
+        # A drill that produced nothing (every evidence source errored for
+        # this keyword) finishes via finish_run/fail_run without raising --
+        # status is the signal, same convention as ResearchOrchestrator.step.
+        # Counting that as "drilled" would run the whole downstream chain
+        # (canonicalize..research) believing this topic contributed
+        # something, and report a clean "qualified: true" over what was
+        # really a total source outage for it.
+        if run.status == "failed":
+            stats.topics_failed += 1
+        else:
+            stats.topics_drilled += 1
         stats.topics.append(
             {
                 "topic": seed.topic,
@@ -296,15 +314,15 @@ async def run_discovery_pass(
             }
         )
 
-    # Qualify once for the campaign rather than per topic: qualification
-    # ranks the campaign's niches against each other, so running it after
-    # every drill would score early topics against a half-built field.
+    # Run the rest of the campaign pipeline once for the campaign rather
+    # than per topic: qualification (and everything after it) ranks/acts
+    # on the campaign's niches against each other, so running it after
+    # every drill would work against a half-built field.
     if stats.topics_drilled:
-        try:
-            await NicheQualifier(session, qualification_rules_path).qualify_campaign(campaign_id)
-            stats.qualified = True
-        except Exception:  # noqa: BLE001 — the drilled niches are already durable
-            logger.exception("Discovery pass: qualification failed; niches are still saved")
+        stats.pipeline = await _advance_campaign_to_gate(
+            session, provider, campaign_id, niche_rules_path, qualification_rules_path,
+        )
+        stats.qualified = "run_id" in stats.pipeline.get("qualify", {})
 
     logger.info(
         "Discovery pass: selected=%d drilled=%d failed=%d qualified=%s campaign=%s",
@@ -315,6 +333,108 @@ async def run_discovery_pass(
         campaign_id,
     )
     return stats
+
+
+async def _advance_campaign_to_gate(
+    session: AsyncSession,
+    provider: LLMProvider,
+    campaign_id: str,
+    niche_rules_path: str,
+    qualification_rules_path: str,
+) -> dict[str, Any]:
+    """Carries newly-drilled niches the rest of the frozen flow's
+    distance: canonicalize -> verify -> estimate-ecosystem -> qualify ->
+    select -> onboard -> research (through to Dossier / HUMAN_REVIEW).
+    These are the same worker calls ``POST /campaigns/{id}/{stage}`` makes
+    by hand; chaining them here is what makes a pass end-to-end
+    unattended, so the only human touchpoint is the decision gate on the
+    dossiers it produces, not clicking each stage in turn.
+
+    A dependency chain, not an independent checklist: canonicalize's
+    PROMOTED niches feed verify, verify's VERIFIED CampaignNiche rows feed
+    estimate-ecosystem and qualify, qualify's score feeds select, select's
+    SELECTED rows feed onboard, and onboard's Creator rows feed
+    research-campaign. A stage that fails stops the chain there rather
+    than running the next one against incomplete input — but everything
+    that DID complete is already durable (each stage commits its own
+    ResearchRun via flush; the caller commits the whole pass), so a later
+    failure never loses earlier progress.
+    """
+    from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
+    from corp.workers.adapters.base import close_quietly
+    from corp.workers.adapters.registry import build_search_adapter
+    from corp.workers.campaign_research import CampaignResearchBatch
+    from corp.workers.intelligence.ecosystem_estimator import (
+        EcosystemEstimator,
+        YouTubeAPIEnricher,
+    )
+    from corp.workers.intelligence.embeddings import SentenceTransformerEmbedder
+    from corp.workers.intelligence.niche_canonicalization import CanonConfig, NicheCanonicalizer
+    from corp.workers.intelligence.niche_selection import NicheSelector
+    from corp.workers.intelligence.niche_verification import NicheVerifier
+    from corp.workers.orchestrator import ResearchOrchestrator
+
+    pipeline: dict[str, Any] = {}
+
+    async def stage(name: str, work: Awaitable[Any]) -> bool:
+        try:
+            run = await work
+        except Exception:
+            logger.exception(
+                "Discovery pass: %s failed for campaign %s", name, campaign_id,
+            )
+            pipeline[name] = {
+                "status": "failed",
+                "error": f"{name} failed; details in the server log",
+            }
+            return False
+        pipeline[name] = {"run_id": run.id, "status": run.status}
+        # A stage can finish without raising and still report "failed"
+        # (finish_run/fail_run's status is the signal, same convention as
+        # ResearchOrchestrator.step) -- stop the chain there too, not just
+        # on an exception.
+        return bool(run.status != "failed")
+
+    recheck_days = DiscoveryConfig.from_rules(niche_rules_path).recheck_days
+    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    canon = NicheCanonicalizer(embedder, session, CanonConfig(recheck_days=recheck_days))
+    if not await stage("canonicalize", canon.canonicalize(campaign_id)):
+        return pipeline
+
+    if not await stage("verify", NicheVerifier(session).verify(campaign_id)):
+        return pipeline
+
+    youtube = build_search_adapter("youtube")
+    enricher = YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
+    try:
+        estimator = EcosystemEstimator(youtube, session, enricher=enricher)
+        if not await stage("estimate_ecosystem", estimator.estimate(campaign_id)):
+            return pipeline
+    finally:
+        await close_quietly(youtube)
+
+    qualifier = NicheQualifier(session, qualification_rules_path)
+    if not await stage("qualify", qualifier.qualify_campaign(campaign_id)):
+        return pipeline
+
+    if not await stage("select", NicheSelector(session).select(campaign_id)):
+        return pipeline
+
+    onboard_adapter = build_search_adapter("youtube")
+    onboard_enricher = (
+        YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
+    )
+    try:
+        onboarder = CreatorOnboarder(onboard_adapter, session, enricher=onboard_enricher)
+        if not await stage("onboard", onboarder.onboard(campaign_id)):
+            return pipeline
+    finally:
+        await close_quietly(onboard_adapter)
+
+    orchestrator = ResearchOrchestrator(session, provider, lambda: embedder)
+    batch = CampaignResearchBatch(orchestrator, session)
+    await stage("research_campaign", batch.run_campaign(campaign_id))
+    return pipeline
 
 
 # Per tick: an LLM provider to drill with, None when none is configured
@@ -385,6 +505,14 @@ class DiscoveryScanScheduler:
     async def _run_forever(self) -> None:
         while self._consecutive_failures < self.MAX_CONSECUTIVE_FAILURES:
             await self._tick()
+            # Check again right after the tick that may have just pushed us
+            # over the limit: falling through to the sleep below first
+            # would leave the task alive (and start() a no-op, since it
+            # only returns early when self._task is not None) for up to
+            # interval_seconds * 32 -- 32 days at the default interval --
+            # after already having logged that it gave up.
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                break
             delay = self._interval_seconds
             if self._consecutive_failures > 0:
                 delay = min(

@@ -14,6 +14,19 @@ logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 10_000_000  # 10 MB
 
 
+async def close_quietly(obj: object) -> None:
+    """Call ``obj.close()`` if it has one, logging rather than raising on
+    failure. Cleanup must never mask (or crash alongside) the outcome of
+    the work that just finished — shared so every caller in the api and
+    workers layers follows the same rule instead of drifting apart."""
+    close = getattr(obj, "close", None)
+    if close is not None:
+        try:
+            await close()
+        except Exception:
+            logger.exception("cleanup close() failed for %s", type(obj).__name__)
+
+
 def check_response_size(resp: httpx.Response, label: str = "") -> None:
     """Raise if the response body exceeds the safety limit."""
     size = len(resp.content)

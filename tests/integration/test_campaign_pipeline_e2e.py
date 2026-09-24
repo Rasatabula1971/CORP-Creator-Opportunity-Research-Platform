@@ -39,8 +39,10 @@ from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunitySc
 from corp.workers.adapters.base import NormalizedContent
 from corp.workers.dossier.generator import DossierGenerator
 from corp.workers.intelligence.embeddings import EMBEDDING_DIM
+from corp.workers.intelligence.runs import PipelineStats, finish_run, start_run
 from corp.workers.providers.capabilities import TrendProvider
 from corp.workers.providers.registry import LLMProvider
+from corp.workers.scheduler.discovery_scan import run_discovery_pass
 
 pytestmark = pytest.mark.asyncio
 
@@ -328,3 +330,152 @@ async def test_campaign_pipeline_discover_to_dossier(clean_db: AsyncSession, mon
     assert dossier_data.creator_score is not None
     assert len(dossier_data.opportunities) == 1
     assert dossier_data.opportunities[0].cluster.label == "Gear questions"
+
+
+async def test_run_discovery_pass_auto_chains_the_whole_flow(
+    clean_db: AsyncSession, monkeypatch,
+):
+    """The frozen flow's whole point: one call — the same one an
+    unattended scheduler tick or a single POST /discovery/run makes —
+    must carry a campaign all the way from a scan to onboarded, researched
+    creators, with nobody clicking through canonicalize/verify/estimate-
+    ecosystem/qualify/select/onboard/research-campaign by hand. Reuses the
+    exact fakes test_campaign_pipeline_discover_to_dossier above already
+    validates those stages against, driving them through
+    run_discovery_pass (discovery_scan.py's _advance_campaign_to_gate)
+    instead of jobs.run_campaign_pipeline called once per stage."""
+    session = clean_db
+
+    fake_niche_adapter = _FakeTrendDiscoveryAdapter()
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter",
+        lambda platform: fake_niche_adapter,
+    )
+    monkeypatch.setattr(
+        "corp.workers.intelligence.embeddings.SentenceTransformerEmbedder",
+        lambda model_name: FakeEmbedder(),
+    )
+    fake_youtube = FakeYouTubeSearchAdapter()
+    monkeypatch.setattr(
+        "corp.workers.adapters.registry.build_search_adapter",
+        lambda platform, cfg=None: fake_youtube,
+    )
+    # Real key present in this dev checkout's .env would otherwise make a
+    # live YouTube Data API call trying to enrich a fake channel id.
+    monkeypatch.setattr(settings, "youtube_api_key", "")
+
+    # research-campaign's real path drives a full ResearchOrchestrator
+    # (collect -> intelligence -> cluster -> intent -> score -> dossier);
+    # like the manual-stage test above, that internal chain is out of
+    # scope here and already covered by its own test suite. Fake only
+    # this one call, so the assertion below is "did the auto-chain reach
+    # and invoke research-campaign with the onboarded creator", not a
+    # re-derivation of what that stage does internally.
+    researched: list[str] = []
+
+    async def fake_run_campaign(self: Any, campaign_id: str) -> Any:
+        creators = (await session.execute(select(Creator))).scalars().all()
+        researched.extend(c.id for c in creators)
+        run = await start_run(
+            session, pipeline="fake-research-campaign", creator_id=None,
+            campaign_id=campaign_id,
+        )
+        return await finish_run(session, run, PipelineStats())
+
+    monkeypatch.setattr(
+        "corp.workers.campaign_research.CampaignResearchBatch.run_campaign",
+        fake_run_campaign,
+    )
+
+    campaign = Campaign(
+        name="Auto-chain Campaign",
+        creator_min_followers=10_000,
+        creator_max_followers=200_000,
+    )
+    session.add(campaign)
+    await session.commit()
+
+    stats = await run_discovery_pass(
+        session, ScriptedProvider(), topics=[TOPIC], campaign_id=campaign.id,
+    )
+    await session.commit()
+
+    assert stats.topics_drilled == 1
+    for stage in (
+        "canonicalize",
+        "verify",
+        "estimate_ecosystem",
+        "qualify",
+        "select",
+        "onboard",
+        "research_campaign",
+    ):
+        entry = stats.pipeline.get(stage)
+        assert entry and "run_id" in entry, f"{stage} did not complete: {entry}"
+
+    niche = (
+        await session.execute(select(Niche).where(Niche.canonical_name == NICHE_LABEL))
+    ).scalar_one()
+    cn = (
+        await session.execute(
+            select(CampaignNiche).where(
+                CampaignNiche.campaign_id == campaign.id, CampaignNiche.niche_id == niche.id
+            )
+        )
+    ).scalar_one()
+    assert cn.status == CampaignNicheStatus.SELECTED
+
+    creator = (await session.execute(select(Creator))).scalars().first()
+    assert creator is not None
+    creator_niche = (
+        await session.execute(
+            select(CreatorNiche).where(
+                CreatorNiche.creator_id == creator.id, CreatorNiche.niche_id == niche.id
+            )
+        )
+    ).scalar_one_or_none()
+    assert creator_niche is not None
+    assert creator.id in researched, "research-campaign must have run against the onboarded creator"
+
+
+async def test_run_discovery_pass_stops_the_chain_on_a_stage_failure(
+    clean_db: AsyncSession, monkeypatch,
+):
+    """A stage that raises must stop the chain there — not run a later
+    stage against incomplete input — and must not leak the exception's
+    own text into stats.pipeline (that dict flows into the job's result,
+    readable from GET /jobs/{job_id})."""
+    session = clean_db
+
+    fake_niche_adapter = _FakeTrendDiscoveryAdapter()
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter",
+        lambda platform: fake_niche_adapter,
+    )
+    monkeypatch.setattr(
+        "corp.workers.intelligence.embeddings.SentenceTransformerEmbedder",
+        lambda model_name: FakeEmbedder(),
+    )
+
+    async def broken_verify(self: Any, campaign_id: str) -> Any:
+        raise RuntimeError("connect to postgresql://corp:hunter2@db.internal failed")
+
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_verification.NicheVerifier.verify", broken_verify,
+    )
+
+    campaign = Campaign(name="Broken-stage Campaign")
+    session.add(campaign)
+    await session.commit()
+
+    stats = await run_discovery_pass(
+        session, ScriptedProvider(), topics=[TOPIC], campaign_id=campaign.id,
+    )
+    await session.commit()
+
+    assert "run_id" in stats.pipeline["canonicalize"]
+    assert stats.pipeline["verify"]["status"] == "failed"
+    assert "hunter2" not in str(stats.pipeline) and "db.internal" not in str(stats.pipeline)
+    assert "estimate_ecosystem" not in stats.pipeline, "later stages must not run past a failure"
+    assert "qualify" not in stats.pipeline
+    assert stats.qualified is False
