@@ -52,3 +52,6 @@ graphify-out/cache/
 .graphify_chunks.json
 .graphify_detect.json
 .graphify_semantic_parts/
+
+# Local product spec kept at the repo root (ADR-0061); never committed.
+/CORP1_Product_Spec_Build_Plan.pdf

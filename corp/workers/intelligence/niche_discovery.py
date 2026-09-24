@@ -22,8 +22,7 @@ Two design decisions made here, not fully settled by the frozen spec:
    arbitrary topic string -- calling ``fetch_problems("home espresso")``
    on ``YouTubeAdapter`` would try to resolve "home espresso" as a channel
    and fail. Excluding creator-bound adapters from topic-keyword fan-out
-   is the same guard :class:`corp.workers.acquisition.multi_discovery.
-   MultiSourceDiscovery` already uses, applied here for the same reason.
+   is a deliberate guard, not an oversight.
 
 2. **The T2-flagged duplicate-evidence risk** (ADR-0032): Reddit, AppStore
    and Marketplace each implement two capabilities that delegate to the
@@ -62,7 +61,9 @@ from corp.core.models.niche_candidate import (
 from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.scoring.niche_qualification import load_rules
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
+from corp.workers.adapters.health import SourceHealthTracker, get_shared_tracker
 from corp.workers.adapters.registry import build_adapter
+from corp.workers.failures import PipelineFailureError, describe_failure
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.niche_naming import check_grounding
 from corp.workers.intelligence.runs import PipelineStats, fail_run, finish_run, start_run
@@ -308,10 +309,15 @@ class RecursiveNicheDiscovery:
         provider: LLMProvider,
         rules_path: str,
         config: DiscoveryConfig | None = None,
+        health: SourceHealthTracker | None = None,
     ) -> None:
         self._session = session
         self._provider = provider
         self._config = config or DiscoveryConfig.from_rules(rules_path)
+        # Process-wide by default: this engine is rebuilt per job and per
+        # watch re-scan, so a per-engine tracker would never accumulate
+        # enough consecutive failures to trip a breaker (R15).
+        self._health = health if health is not None else get_shared_tracker()
 
     async def discover(self, campaign_id: str, topic: str) -> ResearchRun:
         if await self._session.get(Campaign, campaign_id) is None:
@@ -349,6 +355,11 @@ class RecursiveNicheDiscovery:
                 await fail_run(self._session, run, exc)
             logger.exception("Recursive niche discovery failed for campaign %s", campaign_id)
             raise
+        finally:
+            # Once per run, not once per keyword: a drill can visit ~150
+            # keywords, and every write is another window for two concurrent
+            # fan-outs to collide on the state file (ADR-0065 Stage 8).
+            await self._health.save_async()
 
     async def research_more(self, niche_id: str, campaign_id: str) -> ResearchRun:
         """CORP1 Stage 5, T8's "Research More" decision outcome: resume
@@ -440,6 +451,8 @@ class RecursiveNicheDiscovery:
                 await fail_run(self._session, run, exc)
             logger.exception("Research More failed for niche %s", niche_id)
             raise
+        finally:
+            await self._health.save_async()
 
     # ── The recursive step ──────────────────────────────────────────────
 
@@ -623,18 +636,45 @@ class RecursiveNicheDiscovery:
         two different capabilities on one adapter (Reddit/AppStore/
         Marketplace, T2) is persisted once per distinct evidence_type --
         never duplicated within one type. See module docstring point 2."""
-        adapters: list[SourceAdapter] = []
+        adapters: list[tuple[str, SourceAdapter]] = []
+        skipped_sources: dict[str, str] = {}
         for platform in NICHE_FAN_OUT_PLATFORMS:
+            # Circuit breaker: a source that has failed repeatedly is skipped
+            # until its probe cooldown elapses, rather than being retried on
+            # every keyword of every drill (spec: "monitored, and after
+            # continued no response they are disconnected").
+            if not self._health.is_available(platform):
+                logger.info(
+                    "Source %s is %s; skipping for %r",
+                    platform,
+                    self._health.get_status(platform),
+                    keyword,
+                )
+                # Counted in stats.extra, not stats.skip(): everywhere else in
+                # this engine skip() means "a keyword/candidate was passed
+                # over", and mixing platform-skips into the same persisted
+                # counter makes run.stats unreadable for an operator.
+                skipped_sources[platform] = self._health.get_status(platform)
+                continue
             try:
-                adapters.append(build_adapter(platform))
+                adapters.append((platform, build_adapter(platform)))
             except Exception as exc:
                 logger.warning("Could not build adapter %s: %s", platform, exc)
+                self._health.record_failure(platform, exc)
+                # run.stats is API-visible: the type, not the exception text.
+                skipped_sources[platform] = f"build failed: {describe_failure(exc)}"
 
         tasks: list[Any] = []
-        task_meta: list[tuple[SourceAdapter, type[EvidenceProvider]]] = []
-        for adapter in adapters:
+        task_meta: list[tuple[str, SourceAdapter, type[EvidenceProvider]]] = []
+        for platform, adapter in adapters:
             if adapter.family != AdapterFamily.NICHE:
+                # Unreachable with today's registry, but recorded anyway so
+                # "tasks is empty => every platform has a stated reason" holds
+                # by construction rather than by coincidence: otherwise a
+                # future family change fails the run with an empty reason list.
+                skipped_sources[platform] = "not a NICHE-family adapter"
                 continue
+            before = len(tasks)
             for capability_cls in CAPABILITY_INTERFACES:
                 if not isinstance(adapter, capability_cls):
                     continue
@@ -642,7 +682,9 @@ class RecursiveNicheDiscovery:
                 if method is None:
                     continue
                 tasks.append(method(keyword))
-                task_meta.append((adapter, capability_cls))
+                task_meta.append((platform, adapter, capability_cls))
+            if len(tasks) == before:
+                skipped_sources[platform] = "no capability method"
 
         results = await _gather_safely(tasks)
 
@@ -654,7 +696,14 @@ class RecursiveNicheDiscovery:
         # must never starve a later call of evidence it needs to see --
         # only the DB write is deduplicated, not what synthesis is shown.
         evidence_pool: list[Evidence] = []
-        for (adapter, capability_cls), outcome in zip(task_meta, results, strict=True):
+        # One health verdict per platform, not per capability call: AppStore
+        # and Marketplace each expose two capabilities, and a partial failure
+        # must not both trip and reset the same breaker in one keyword.
+        platform_ok: dict[str, bool] = {}
+        platform_error: dict[str, BaseException] = {}
+        for (platform, adapter, capability_cls), outcome in zip(
+            task_meta, results, strict=True
+        ):
             if isinstance(outcome, BaseException):
                 logger.warning(
                     "%s.%s failed for %r: %s",
@@ -664,7 +713,10 @@ class RecursiveNicheDiscovery:
                     outcome,
                 )
                 stats.fail(outcome)
+                platform_ok.setdefault(platform, False)
+                platform_error.setdefault(platform, outcome)
                 continue
+            platform_ok[platform] = True
             evidence_type = capability_cls.evidence_type
             for item in outcome:
                 key = (evidence_type, item.source_platform, item.external_id)
@@ -681,7 +733,44 @@ class RecursiveNicheDiscovery:
                 evidence_pool.append(ev)
             stats.ok()
 
-        for adapter in adapters:
+        transitioned = False
+        for platform, healthy in platform_ok.items():
+            was = self._health.get_status(platform)
+            if healthy:
+                self._health.record_success(platform)
+            else:
+                self._health.record_failure(platform, platform_error[platform])
+            transitioned = transitioned or self._health.get_status(platform) != was
+        if transitioned:
+            # Persist immediately on healthy->degraded->disconnected (and
+            # recovery). The bulk save is once per run, so a crash or a
+            # cancelled job would otherwise lose a whole drill's accounting
+            # and a breaker could never trip across restarts. Transitions are
+            # rare -- a handful per run at most -- so this costs little.
+            await self._health.save_async()
+
+        if skipped_sources:
+            seen_skips = stats.extra.setdefault("skipped_sources", {})
+            if isinstance(seen_skips, dict):
+                seen_skips.update(skipped_sources)
+        if not tasks:
+            # Nothing was even attempted -- every source was circuit-broken or
+            # failed to build. stats would read 0/0 and the run would close
+            # "completed" having done no work, so a total outage would look
+            # identical to a quiet success. Fail it and name why, the guard
+            # the superseded engine carried (ADR-0065).
+            # PipelineFailureError, not RuntimeError: describe_failure keeps a
+            # summary the pipeline composed itself, so the per-source reasons
+            # reach run.error_message instead of "RuntimeError; details in
+            # the server log".
+            stats.fail(
+                PipelineFailureError(
+                    "no niche source was available: "
+                    + ", ".join(f"{p}={why}" for p, why in sorted(skipped_sources.items()))
+                )
+            )
+
+        for _platform, adapter in adapters:
             if hasattr(adapter, "close"):
                 try:
                     await adapter.close()
