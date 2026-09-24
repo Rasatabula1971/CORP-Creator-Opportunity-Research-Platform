@@ -384,24 +384,141 @@ async def test_all_marketplaces_failing_raises(mock_client):
         await adapter.collect("python")
 
 
-async def test_implements_transaction_and_solution_provider(monkeypatch):
-    """CORP1 Stage 4/5, T2: Marketplace is TransactionProvider + SolutionProvider,
-    both delegating to the same collect()."""
+def test_implements_transaction_and_solution_provider():
+    """CORP1 Stage 4/5, T2: Marketplace is both TransactionProvider and
+    SolutionProvider, but (audit fix) fetch_transactions no longer treats
+    every listing as a sale — see the tests below."""
     from corp.workers.providers.capabilities import SolutionProvider, TransactionProvider
 
     adapter = MarketplaceAdapter()
     assert isinstance(adapter, TransactionProvider)
     assert isinstance(adapter, SolutionProvider)
 
-    sentinel: list[object] = []
-    calls: list[str] = []
 
-    async def fake_collect(identifier: str) -> list[object]:
-        calls.append(identifier)
-        return sentinel
+async def test_fetch_solutions_returns_every_listing(mock_client):
+    """A listing existing is solution evidence regardless of sales proof."""
+    adapter = MarketplaceAdapter(marketplaces=["gumroad"], client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_html(GUMROAD_HTML))
 
-    monkeypatch.setattr(adapter, "collect", fake_collect)
+    results = await adapter.fetch_solutions("python")
+    assert len(results) == 2
 
-    assert await adapter.fetch_transactions("invoicing template") is sentinel
-    assert await adapter.fetch_solutions("invoicing template") is sentinel
-    assert calls == ["invoicing template", "invoicing template"]
+
+async def test_fetch_transactions_excludes_gumroad_listings(mock_client):
+    """Gumroad's discover page carries no purchase-count signal, so a
+    Gumroad listing alone must never count as a transaction."""
+    adapter = MarketplaceAdapter(marketplaces=["gumroad"], client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_html(GUMROAD_HTML))
+
+    assert await adapter.fetch_transactions("python") == []
+
+
+async def test_fetch_transactions_keeps_udemy_courses_with_subscribers(mock_client):
+    adapter = MarketplaceAdapter(marketplaces=["udemy"], client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_json(UDEMY_RESPONSE))
+
+    results = await adapter.fetch_transactions("python")
+    assert len(results) == 2
+    assert all(r.metadata["subscriber_count"] for r in results)
+
+
+async def test_fetch_transactions_excludes_udemy_courses_without_subscribers(mock_client):
+    no_subs = {
+        "results": [
+            {
+                "id": 1,
+                "title": "Brand New Course",
+                "headline": "Just published",
+                "url": "/course/brand-new/",
+                "price_detail": {"amount": 9.99, "price_string": "$9.99"},
+                "num_subscribers": 0,
+                "visible_instructors": [],
+            }
+        ]
+    }
+    adapter = MarketplaceAdapter(marketplaces=["udemy"], client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_json(no_subs))
+
+    assert await adapter.fetch_transactions("python") == []
+
+
+async def test_fetch_transactions_keeps_etsy_listings_with_reviews(mock_client):
+    adapter = MarketplaceAdapter(marketplaces=["etsy"], client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp_html(ETSY_HTML))
+
+    results = await adapter.fetch_transactions("python")
+    # Only the first ETSY_HTML listing has a parsed review count.
+    assert len(results) == 1
+    assert results[0].metadata["review_count"] == 1234
+
+
+async def test_fetch_transactions_excludes_etsy_api_favorites(mock_client):
+    """num_favorers is a wishlist count, not a sale — must not leak into
+    review_count and get counted as a transaction."""
+    from corp.workers.adapters.marketplace import _parse_etsy_api_response
+
+    data = {
+        "results": [
+            {
+                "listing_id": 1,
+                "title": "Popular but unsold",
+                "num_favorers": 500,
+                "price": {"amount": 1000, "divisor": 100},
+            }
+        ]
+    }
+    [item] = _parse_etsy_api_response(data, "python")
+    assert item.metadata["review_count"] is None
+    assert item.metadata["favorite_count"] == 500
+
+    from corp.workers.adapters.marketplace import _has_transaction_evidence
+
+    assert _has_transaction_evidence(item) is False
+
+
+async def test_collect_is_single_flight_across_capabilities(mock_client):
+    """T3 fans a keyword out across every capability an adapter implements;
+    fetch_solutions and fetch_transactions must not each trigger their own
+    full round of marketplace HTTP requests for the same identifier."""
+    import asyncio
+
+    adapter = MarketplaceAdapter(marketplaces=["gumroad", "etsy", "udemy"], client=mock_client)
+    call_count = 0
+
+    async def mock_get(url, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        url_str = str(url)
+        if "gumroad" in url_str:
+            return _mock_resp_html(GUMROAD_HTML)
+        if "etsy" in url_str:
+            return _mock_resp_html(ETSY_HTML)
+        return _mock_resp_json(UDEMY_RESPONSE)
+
+    mock_client.get = mock_get
+
+    solutions, transactions = await asyncio.gather(
+        adapter.fetch_solutions("python"), adapter.fetch_transactions("python")
+    )
+
+    assert len(solutions) == 6
+    assert {r.metadata["marketplace"] for r in transactions} == {"etsy", "udemy"}
+    assert call_count == 3, "one request per marketplace, not one per capability"
+
+
+async def test_fetch_transactions_mixed_marketplaces(mock_client):
+    adapter = MarketplaceAdapter(marketplaces=["gumroad", "etsy", "udemy"], client=mock_client)
+
+    async def mock_get(url, **kwargs):
+        url_str = str(url)
+        if "gumroad" in url_str:
+            return _mock_resp_html(GUMROAD_HTML)
+        if "etsy" in url_str:
+            return _mock_resp_html(ETSY_HTML)
+        return _mock_resp_json(UDEMY_RESPONSE)
+
+    mock_client.get = mock_get
+
+    results = await adapter.fetch_transactions("python")
+    marketplaces = {r.metadata["marketplace"] for r in results}
+    assert marketplaces == {"etsy", "udemy"}, "gumroad listings must never appear here"
