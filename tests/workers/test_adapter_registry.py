@@ -72,8 +72,13 @@ def test_marketplace_with_no_usable_site_is_a_config_error():
         build_adapter("marketplace", cfg)
 
 
-def test_default_marketplace_sites_no_longer_include_udemy():
-    assert "udemy" not in Settings().marketplace_sites
+def test_default_marketplace_sites_are_gumroad_only():
+    # Udemy's API is dead and Etsy needs an approved developer app that is not
+    # currently available, so neither is queried by default (ADR-0066).
+    sites = Settings().marketplace_sites
+    assert "udemy" not in sites
+    assert "etsy" not in sites
+    assert "gumroad" in sites
     assert "crowdfunding" in Settings().discovery_disabled_sources
 
 

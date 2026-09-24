@@ -446,3 +446,95 @@ async def test_scoring_pipeline_bad_rules_raises(clean_db: AsyncSession):
     session = clean_db
     with pytest.raises(FileNotFoundError):
         ScoringPipeline(session, rules_path="nonexistent.yaml")
+
+
+@pytest.mark.asyncio
+async def test_only_compliant_and_verify_sources_count_toward_confidence(
+    clean_db: AsyncSession,
+):
+    """Audit finding: PII_PRESENT and TOS_RISK evidence must not inflate the
+    compliant-source count that feeds the confidence band. Only COMPLIANT and
+    VERIFY sources corroborate a cluster; every status is still counted in the
+    compliance_counts breakdown."""
+    session = clean_db
+    creator = Creator(name="ComplianceTest", niche="tech", discovery_source="manual")
+    session.add(creator)
+    await session.flush()
+
+    run = ResearchRun(
+        creator_id=creator.id,
+        status="completed",
+        config_snapshot={},
+        prompt_versions={},
+        model_versions={},
+    )
+    session.add(run)
+    await session.flush()
+
+    cluster = ProblemCluster(
+        label="Mixed compliance",
+        description="Evidence spanning every compliance status",
+        frequency=8,
+        recency_score=0.7,
+        evidence_strength=0.6,
+        model_version="test",
+    )
+    session.add(cluster)
+    await session.flush()
+
+    # One distinct platform per compliance status.
+    statuses = {
+        "plat_compliant": ComplianceStatus.COMPLIANT,
+        "plat_verify": ComplianceStatus.VERIFY,
+        "plat_pii": ComplianceStatus.PII_PRESENT,
+        "plat_tos": ComplianceStatus.TOS_RISK,
+    }
+    for i, (platform, status) in enumerate(statuses.items()):
+        evidence = Evidence(
+            source_type="comment",
+            source_id=f"cmpl_{i}",
+            source_platform=platform,
+            raw_text=f"signal {i}",
+            access_method=AccessMethod.OFFICIAL,
+            compliance_status=status,
+            research_run_id=run.id,
+            origin=EvidenceOrigin.OBSERVATION,
+            evidence_type=EvidenceType.PROBLEM,
+        )
+        session.add(evidence)
+        await session.flush()
+        obs = ProblemObservation(
+            evidence_id=evidence.id,
+            text=f"signal {i}",
+            category="problem",
+            is_inferred=False,
+            extraction_prompt_version="extract_v1",
+            model_version="test",
+            confidence=0.9,
+        )
+        session.add(obs)
+        await session.flush()
+        session.add(
+            ProblemClusterMember(
+                cluster_id=cluster.id, observation_id=obs.id, similarity_score=0.9
+            )
+        )
+    await session.flush()
+
+    await ScoringPipeline(session).run(creator.id)
+
+    opp = (
+        await session.execute(
+            select(OpportunityScore).where(
+                OpportunityScore.problem_cluster_id == cluster.id
+            )
+        )
+    ).scalar_one()
+    source_mix = opp.diagnostics["source_mix"]
+    assert source_mix["compliant_platforms"] == ["plat_compliant", "plat_verify"]
+    assert source_mix["compliance_counts"] == {
+        "compliant": 1,
+        "verify": 1,
+        "pii_present": 1,
+        "tos_risk": 1,
+    }

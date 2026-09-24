@@ -106,6 +106,7 @@ class ClusterContext:
     access_counts: dict[str, int] = field(default_factory=dict)
     platforms: set[str] = field(default_factory=set)
     compliant_platforms: set[str] = field(default_factory=set)
+    compliance_counts: Counter[str] = field(default_factory=Counter)
     interaction_likes: int = 0
     reply_count: int = 0
     content_growth: float | None = None
@@ -332,7 +333,12 @@ class ScoringPipeline:
         for text, source_id, platform, access_method, compliance in rows:
             access[access_method.value] += 1
             ctx.platforms.add(platform)
-            if compliance != ComplianceStatus.TOS_RISK:
+            ctx.compliance_counts[compliance.value] += 1
+            # Only compliant and public-verifiable sources corroborate a
+            # cluster for confidence. TOS_RISK evidence is off-policy, and
+            # PII_PRESENT is a compliance problem in its own right; neither
+            # should raise the confidence band (audit finding).
+            if compliance in (ComplianceStatus.COMPLIANT, ComplianceStatus.VERIFY):
                 ctx.compliant_platforms.add(platform)
             source_ids.add(source_id)
             text_parts.append(text)
@@ -524,6 +530,7 @@ class ScoringPipeline:
             "source_mix": {
                 "platforms": sorted(ctx.platforms),
                 "compliant_platforms": sorted(ctx.compliant_platforms),
+                "compliance_counts": dict(ctx.compliance_counts),
                 "access_methods": ctx.access_counts,
             },
             "content_view_growth": ctx.content_growth,

@@ -87,6 +87,20 @@ def test_auto_falls_back_to_pool_when_fair_unusable(monkeypatch, stub_genai):
     assert isinstance(provider, PooledProvider)
 
 
+def test_fair_required_fails_closed_instead_of_pool(monkeypatch, stub_genai):
+    """With FAIR_REQUIRED=true, auto must not fall back to the raw pool, which
+    bypasses FAIR's free-only check."""
+    def build(cfg):
+        raise FairUnavailableError("no provider keys")
+
+    monkeypatch.setattr(factory, "fair_available", lambda: True)
+    monkeypatch.setattr(factory, "build_fair_provider", build)
+    with pytest.raises(ProviderConfigError, match="FAIR_REQUIRED=true"):
+        build_provider(
+            _settings(fair_required=True, gemini_api_key="g", groq_api_key="q")
+        )
+
+
 def test_auto_falls_back_to_gemini(no_fair, stub_genai):
     cfg = _settings(gemini_api_key="g")
     assert isinstance(build_provider(cfg), GeminiProvider)
@@ -127,7 +141,7 @@ def test_auto_pools_gemini_and_groq_in_configured_order(no_fair, stub_genai):
     provider = build_provider(cfg)
     assert isinstance(provider, PooledProvider)
     names = [p.model_name for p in provider.available()]
-    assert names == ["gemini-2.0-flash", "groq/openai/gpt-oss-20b"]
+    assert names == ["gemini-3.5-flash-lite", "groq/openai/gpt-oss-20b"]
 
 
 def test_provider_order_is_honoured(no_fair, stub_genai):
@@ -135,7 +149,7 @@ def test_provider_order_is_honoured(no_fair, stub_genai):
         gemini_api_key="g", groq_api_key="q", llm_provider_order="groq, gemini"
     )
     names = [p.model_name for p in build_provider(cfg).available()]
-    assert names == ["groq/openai/gpt-oss-20b", "gemini-2.0-flash"]
+    assert names == ["groq/openai/gpt-oss-20b", "gemini-3.5-flash-lite"]
 
 
 def test_auto_with_only_groq_returns_bare_groq(no_fair):

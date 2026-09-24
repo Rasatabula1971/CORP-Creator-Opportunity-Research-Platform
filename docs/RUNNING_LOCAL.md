@@ -150,6 +150,11 @@ that clone updates it; no reinstall. Three things in CORP's `.env` matter:
   `fair.env.example`).
 - `FAIR_MAX_UNANSWERED_ATTEMPTS` (default 6) — models that never answered
   tolerated per solve before FAIR escalates.
+- `FAIR_REQUIRED` (default `false`) — when `true`, `LLM_PROVIDER=auto` will not
+  fall back to the raw Gemini/Groq pool if FAIR is unusable. The raw pool
+  bypasses FAIR's free-only check, so with this set an LLM call fails closed
+  rather than risk a charge on a key attached to a billable account. Leave it
+  `false` to keep the pool fallback.
 
 `GET /providers/health` runs one probe solve and reports each provider's
 governor status (`ACTIVE`, `THROTTLED`, `OUTAGE`, `QUOTA_EXHAUSTED`) plus the
