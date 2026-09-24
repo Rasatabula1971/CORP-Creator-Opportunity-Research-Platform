@@ -142,7 +142,10 @@ class SourceHealthTracker:
                 try:
                     tmp.unlink(missing_ok=True)
                 except OSError:
-                    pass
+                    # Best effort: the save already failed and was logged
+                    # above; an orphaned temp file is cosmetic, not a
+                    # reason to raise out of a finally block.
+                    logger.debug("Could not remove temp health file %s", tmp, exc_info=True)
 
     async def save_async(self) -> None:
         """``save()`` off the event loop — callers are async pipelines."""
