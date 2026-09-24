@@ -363,6 +363,7 @@ async def _advance_campaign_to_gate(
     from corp.workers.acquisition.creator_onboarding import CreatorOnboarder
     from corp.workers.adapters.base import close_quietly
     from corp.workers.adapters.registry import build_search_adapter
+    from corp.workers.campaign_config import batch_config, load_campaign, stage_configs
     from corp.workers.campaign_research import CampaignResearchBatch
     from corp.workers.intelligence.ecosystem_estimator import (
         EcosystemEstimator,
@@ -395,6 +396,14 @@ async def _advance_campaign_to_gate(
         # on an exception.
         return bool(run.status != "failed")
 
+    # The campaign's own knobs (target niche count, creator follower band,
+    # creators per niche, human-gate capacity) configure every stage that
+    # has one -- the same mapping POST /campaigns/{id}/{stage} uses, so a
+    # pass on a campaign behaves as that campaign's row says, not as the
+    # worker defaults say.
+    campaign = await load_campaign(session, campaign_id)
+    configs = stage_configs(campaign)
+
     recheck_days = DiscoveryConfig.from_rules(niche_rules_path).recheck_days
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
     canon = NicheCanonicalizer(embedder, session, CanonConfig(recheck_days=recheck_days))
@@ -407,7 +416,9 @@ async def _advance_campaign_to_gate(
     youtube = build_search_adapter("youtube")
     enricher = YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
     try:
-        estimator = EcosystemEstimator(youtube, session, enricher=enricher)
+        estimator = EcosystemEstimator(
+            youtube, session, configs.ecosystem, enricher=enricher,
+        )
         if not await stage("estimate_ecosystem", estimator.estimate(campaign_id)):
             return pipeline
     finally:
@@ -417,7 +428,8 @@ async def _advance_campaign_to_gate(
     if not await stage("qualify", qualifier.qualify_campaign(campaign_id)):
         return pipeline
 
-    if not await stage("select", NicheSelector(session).select(campaign_id)):
+    selector = NicheSelector(session, configs.selection)
+    if not await stage("select", selector.select(campaign_id)):
         return pipeline
 
     onboard_adapter = build_search_adapter("youtube")
@@ -425,14 +437,18 @@ async def _advance_campaign_to_gate(
         YouTubeAPIEnricher(settings.youtube_api_key) if settings.youtube_api_key else None
     )
     try:
-        onboarder = CreatorOnboarder(onboard_adapter, session, enricher=onboard_enricher)
+        onboarder = CreatorOnboarder(
+            onboard_adapter, session, configs.onboarding, enricher=onboard_enricher,
+        )
         if not await stage("onboard", onboarder.onboard(campaign_id)):
             return pipeline
     finally:
         await close_quietly(onboard_adapter)
 
     orchestrator = ResearchOrchestrator(session, provider, lambda: embedder)
-    batch = CampaignResearchBatch(orchestrator, session)
+    # Counted now, after onboard, so the limit reflects the gate as it
+    # stands when research starts.
+    batch = CampaignResearchBatch(orchestrator, session, await batch_config(session, campaign))
     await stage("research_campaign", batch.run_campaign(campaign_id))
     return pipeline
 

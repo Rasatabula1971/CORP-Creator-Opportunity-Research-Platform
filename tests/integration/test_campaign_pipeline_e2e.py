@@ -36,6 +36,7 @@ from corp.core.models.intelligence import ProblemCluster
 from corp.core.models.niche import Niche
 from corp.core.models.niche_candidate import NicheCandidate, NicheCandidateStatus
 from corp.core.models.scoring import ConfidenceBand, CreatorScore, OpportunityScore
+from corp.core.models.workflow import ResearchRun
 from corp.workers.adapters.base import NormalizedContent
 from corp.workers.dossier.generator import DossierGenerator
 from corp.workers.intelligence.embeddings import EMBEDDING_DIM
@@ -205,13 +206,24 @@ async def test_campaign_pipeline_discover_to_dossier(clean_db: AsyncSession, mon
     # live YouTube Data API call trying to enrich a fake channel id.
     monkeypatch.setattr(settings, "youtube_api_key", "")
 
+    # Non-default knobs, so the assertions below prove each stage read the
+    # campaign's row rather than its worker's dataclass defaults (the
+    # fake creator's 50k followers sits inside this band too).
     campaign = Campaign(
         name="E2E Campaign",
-        creator_min_followers=10_000,
-        creator_max_followers=200_000,
+        target_niche_count=3,
+        initial_creators_per_niche=4,
+        creator_min_followers=20_000,
+        creator_max_followers=150_000,
+        human_gate_capacity=7,
     )
     session.add(campaign)
     await session.commit()
+
+    async def run_config(run_id: str) -> dict[str, Any]:
+        run = await session.get(ResearchRun, run_id)
+        assert run is not None
+        return dict(run.config_snapshot or {})
 
     # 1. discover (T4: now RecursiveNicheDiscovery, not the old collector)
     result = await jobs.run_campaign_pipeline("discover", campaign.id, query=TOPIC)
@@ -240,17 +252,20 @@ async def test_campaign_pipeline_discover_to_dossier(clean_db: AsyncSession, mon
     result = await jobs.run_campaign_pipeline("verify", campaign.id)
     assert result["status"] == "completed"
 
-    # 4. estimate-ecosystem (existing, unchanged)
+    # 4. estimate-ecosystem: target band is the campaign's follower band
     result = await jobs.run_campaign_pipeline("estimate-ecosystem", campaign.id)
     assert result["status"] == "completed"
+    eco_cfg = await run_config(result["run_id"])
+    assert (eco_cfg["min_followers"], eco_cfg["max_followers"]) == (20_000, 150_000)
 
     # 5. qualify (existing, unchanged, rules-driven, no external deps)
     result = await jobs.run_campaign_pipeline("qualify", campaign.id)
     assert result["status"] == "completed"
 
-    # 6. select (existing, unchanged)
+    # 6. select: the cap is the campaign's target_niche_count
     result = await jobs.run_campaign_pipeline("select", campaign.id)
     assert result["status"] == "completed"
+    assert (await run_config(result["run_id"]))["top_n"] == 3
 
     cn = (
         await session.execute(
@@ -261,9 +276,12 @@ async def test_campaign_pipeline_discover_to_dossier(clean_db: AsyncSession, mon
     ).scalar_one()
     assert cn.status == CampaignNicheStatus.SELECTED
 
-    # 7. onboard (existing, unchanged)
+    # 7. onboard: per-niche cap and band come from the campaign
     result = await jobs.run_campaign_pipeline("onboard", campaign.id)
     assert result["status"] == "completed"
+    onboard_cfg = await run_config(result["run_id"])
+    assert onboard_cfg["max_creators_per_niche"] == 4
+    assert (onboard_cfg["min_followers"], onboard_cfg["max_followers"]) == (20_000, 150_000)
 
     creator = (
         await session.execute(select(Creator))
@@ -436,6 +454,86 @@ async def test_run_discovery_pass_auto_chains_the_whole_flow(
     ).scalar_one_or_none()
     assert creator_niche is not None
     assert creator.id in researched, "research-campaign must have run against the onboarded creator"
+
+
+async def test_run_discovery_pass_honours_the_campaign_follower_band(
+    clean_db: AsyncSession, monkeypatch,
+):
+    """Audit fix: the unattended chain must configure each stage from the
+    campaign's row. Same fakes as the auto-chain test above, but the
+    campaign's band starts above the fake channel's 50k followers, so
+    onboard must reject it and research must have nobody to run on --
+    instead of onboarding it under the worker's default (unbounded) band
+    as before."""
+    session = clean_db
+
+    fake_niche_adapter = _FakeTrendDiscoveryAdapter()
+    monkeypatch.setattr(
+        "corp.workers.intelligence.niche_discovery.build_adapter",
+        lambda platform: fake_niche_adapter,
+    )
+    monkeypatch.setattr(
+        "corp.workers.intelligence.embeddings.SentenceTransformerEmbedder",
+        lambda model_name: FakeEmbedder(),
+    )
+    fake_youtube = FakeYouTubeSearchAdapter()
+    monkeypatch.setattr(
+        "corp.workers.adapters.registry.build_search_adapter",
+        lambda platform, cfg=None: fake_youtube,
+    )
+    monkeypatch.setattr(settings, "youtube_api_key", "")
+
+    researched: list[str] = []
+    seen_limits: list[int | None] = []
+
+    async def fake_run_campaign(self: Any, campaign_id: str) -> Any:
+        seen_limits.append(self._cfg.limit)
+        creators = (await session.execute(select(Creator))).scalars().all()
+        researched.extend(c.id for c in creators)
+        run = await start_run(
+            session, pipeline="fake-research-campaign", creator_id=None,
+            campaign_id=campaign_id,
+        )
+        return await finish_run(session, run, PipelineStats())
+
+    monkeypatch.setattr(
+        "corp.workers.campaign_research.CampaignResearchBatch.run_campaign",
+        fake_run_campaign,
+    )
+
+    campaign = Campaign(
+        name="Narrow-band Campaign",
+        target_niche_count=2,
+        creator_min_followers=60_000,
+        creator_max_followers=200_000,
+        human_gate_capacity=9,
+    )
+    session.add(campaign)
+    await session.commit()
+
+    stats = await run_discovery_pass(
+        session, ScriptedProvider(), topics=[TOPIC], campaign_id=campaign.id,
+    )
+    await session.commit()
+
+    assert stats.topics_drilled == 1
+    for stage in ("select", "onboard", "research_campaign"):
+        entry = stats.pipeline.get(stage)
+        assert entry and "run_id" in entry, f"{stage} did not complete: {entry}"
+
+    select_run = await session.get(ResearchRun, stats.pipeline["select"]["run_id"])
+    assert select_run is not None and select_run.config_snapshot is not None
+    assert select_run.config_snapshot["top_n"] == 2
+
+    onboard_run = await session.get(ResearchRun, stats.pipeline["onboard"]["run_id"])
+    assert onboard_run is not None and onboard_run.config_snapshot is not None
+    assert onboard_run.config_snapshot["min_followers"] == 60_000
+    assert onboard_run.stats["extra"]["creators_created"] == 0
+
+    assert (await session.execute(select(Creator))).scalars().all() == []
+    assert researched == []
+    # Nobody is waiting at the gate yet, so research may fill it entirely.
+    assert seen_limits == [9]
 
 
 async def test_run_discovery_pass_stops_the_chain_on_a_stage_failure(
