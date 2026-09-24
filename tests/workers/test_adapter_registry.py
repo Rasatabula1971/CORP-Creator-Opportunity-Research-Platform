@@ -75,3 +75,20 @@ def test_marketplace_with_no_usable_site_is_a_config_error():
 def test_default_marketplace_sites_no_longer_include_udemy():
     assert "udemy" not in Settings().marketplace_sites
     assert "crowdfunding" in Settings().discovery_disabled_sources
+
+
+def test_blocked_marketplace_notice_is_logged_once_per_process(caplog):
+    """The adapter is rebuilt per keyword; the notice must not repeat per build."""
+    import logging
+
+    from corp.workers.adapters import registry
+
+    registry._warned_marketplace_sites.clear()
+    cfg = Settings(marketplace_sites="gumroad,etsy,udemy", etsy_api_key="")
+    with caplog.at_level(logging.WARNING, logger="corp.workers.adapters.registry"):
+        build_adapter("marketplace", cfg)
+        build_adapter("marketplace", cfg)
+        build_adapter("marketplace", cfg)
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert sorted(r.getMessage().split(" ")[2] for r in warnings) == ["'etsy'", "'udemy'"]

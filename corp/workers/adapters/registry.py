@@ -52,19 +52,35 @@ def _usable_marketplaces(cfg: Settings) -> list[str]:
     usable: list[str] = []
     for site in sites:
         if site == "udemy":
-            logger.warning(
+            _warn_once(
+                "udemy",
                 "Marketplace site 'udemy' ignored: Udemy's Affiliate API was "
-                "discontinued on 2025-01-01 and the endpoint returns 403"
+                "discontinued on 2025-01-01 and the endpoint returns 403",
             )
             continue
         if site == "etsy" and not cfg.etsy_api_key:
-            logger.warning(
+            _warn_once(
+                "etsy",
                 "Marketplace site 'etsy' ignored: the search page is bot-blocked "
-                "(DataDome); set ETSY_API_KEY to use the official Open API instead"
+                "(DataDome); set ETSY_API_KEY to use the official Open API instead",
             )
             continue
         usable.append(site)
     return usable
+
+
+# The marketplace adapter is rebuilt for every keyword of every drill, so a
+# configuration notice that repeated on each build drowned the API log.
+# Once per site per process is enough; later builds log it at debug.
+_warned_marketplace_sites: set[str] = set()
+
+
+def _warn_once(site: str, message: str) -> None:
+    if site in _warned_marketplace_sites:
+        logger.debug(message)
+        return
+    _warned_marketplace_sites.add(site)
+    logger.warning(message)
 
 
 def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
