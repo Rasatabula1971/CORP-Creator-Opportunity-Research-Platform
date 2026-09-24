@@ -109,7 +109,13 @@ class ClusterContext:
     interaction_likes: int = 0
     reply_count: int = 0
     content_growth: float | None = None
+    # label + description + every member observation: the cluster's whole
+    # vocabulary, for symmetric (jaccard) alignment against a creator's own
+    # observations and for containment against a large commerce page.
     text_tokens: frozenset[str] = frozenset()
+    # label + description only: the short query market evidence is matched
+    # against (see _relevant_evidence_count).
+    query_tokens: frozenset[str] = frozenset()
 
 
 class ScoringPipeline:
@@ -332,6 +338,7 @@ class ScoringPipeline:
             text_parts.append(text)
         ctx.access_counts = dict(access)
         ctx.text_tokens = tokens(" ".join(text_parts))
+        ctx.query_tokens = tokens(f"{cluster.label} {cluster.description or ''}")
 
         if source_ids:
             interactions = (
@@ -471,27 +478,28 @@ class ScoringPipeline:
             ),
             "external_demand_strength": score_external_demand_strength(
                 _relevant_evidence_count(
-                    ctx.text_tokens, creator.market_evidence_tokens.get(EvidenceType.TREND.value)
+                    ctx.query_tokens, creator.market_evidence_tokens.get(EvidenceType.TREND.value)
                 ),
                 _relevant_evidence_count(
-                    ctx.text_tokens,
+                    ctx.query_tokens,
                     creator.market_evidence_tokens.get(EvidenceType.SEARCH_INTENT.value),
                 ),
             ),
             "solution_saturation": score_solution_saturation(
                 _relevant_evidence_count(
-                    ctx.text_tokens, creator.market_evidence_tokens.get(EvidenceType.SOLUTION.value)
+                    ctx.query_tokens,
+                    creator.market_evidence_tokens.get(EvidenceType.SOLUTION.value),
                 ),
             ),
             "purchase_intent": score_purchase_intent(
                 _relevant_evidence_count(
-                    ctx.text_tokens,
+                    ctx.query_tokens,
                     creator.market_evidence_tokens.get(EvidenceType.TRANSACTION.value),
                 ),
             ),
             "audience_dissatisfaction": score_audience_dissatisfaction(
                 _relevant_evidence_count(
-                    ctx.text_tokens,
+                    ctx.query_tokens,
                     creator.market_evidence_tokens.get(EvidenceType.DISSATISFACTION.value),
                 ),
             ),
@@ -619,19 +627,25 @@ _UNKNOWN_RECENCY_DAYS = 3650
 
 
 def _relevant_evidence_count(
-    cluster_tokens: frozenset[str], evidence_tokens: list[frozenset[str]] | None
+    query_tokens: frozenset[str], evidence_tokens: list[frozenset[str]] | None
 ) -> int:
     """How many of a creator's market-evidence rows are actually about this
-    cluster's problem, judged by token containment against the cluster's own
-    text (label + description + member observations) — the same lexical-
-    overlap approach already used for creator-content alignment and
-    commerce overlap above. Evidence gathered for one problem (e.g. pricing)
-    must not inflate the score of an unrelated one (e.g. scheduling) just
-    because both belong to the same creator's niche."""
-    if not evidence_tokens or not cluster_tokens:
+    cluster's problem, judged by how much of the cluster's label +
+    description a row contains. Evidence gathered for one problem (e.g.
+    pricing) must not inflate the score of an unrelated one (e.g.
+    scheduling) just because both belong to the same creator's niche.
+
+    The query is deliberately the short label + description, not the
+    cluster's whole vocabulary: containment divides by the query's size,
+    so matching against label + description + every member observation
+    (hundreds of tokens for a mature cluster) meant a single evidence row
+    could never contain 20% of it, and the four market components scored
+    zero for exactly the clusters with the most audience evidence.
+    """
+    if not evidence_tokens or not query_tokens:
         return 0
     return sum(
-        1 for ev in evidence_tokens if containment(cluster_tokens, ev) >= ALIGNMENT_THRESHOLD
+        1 for ev in evidence_tokens if containment(query_tokens, ev) >= ALIGNMENT_THRESHOLD
     )
 
 

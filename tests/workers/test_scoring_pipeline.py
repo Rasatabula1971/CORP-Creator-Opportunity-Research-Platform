@@ -97,6 +97,7 @@ def _make_pipe_and_helpers(monkeypatch):
             platforms={"youtube"},
             compliant_platforms={"youtube"},
             text_tokens=_CLUSTER_TOKENS,
+            query_tokens=_CLUSTER_TOKENS,
         )
 
     async def _strengths(cluster_id):
@@ -180,3 +181,45 @@ async def test_t21_aggregate_uses_all_fourteen_weights(monkeypatch):
     weights = load_scoring_rules("rules/scoring.yaml")["weights"]
     total_weight = sum(weights.get(k, 0.0) for k in opp.component_scores)
     assert abs(total_weight - 1.0) < 0.001
+
+
+# ── Evidence relevance is judged against the label + description ─────
+
+
+def test_relevant_evidence_matches_the_label_not_the_whole_member_vocabulary():
+    """Audit fix: containment divides by the query's size. Matching a
+    single evidence row against label + description + every member
+    observation meant a mature cluster (hundreds of distinct tokens)
+    could never be credited with any market evidence, so the four market
+    components scored zero for exactly the best-evidenced clusters."""
+    from corp.core.scoring.text import tokens
+    from corp.workers.intelligence.scoring_pipeline import _relevant_evidence_count
+
+    label = "Screen flicker on external monitor"
+    description = "Viewers report the external monitor flickering after sleep"
+    members = " ".join(
+        f"observation number {i} mentions completely unrelated words like "
+        f"cable{i} adapter{i} dock{i} firmware{i} warranty{i} refund{i}"
+        for i in range(40)
+    )
+    whole_vocabulary = tokens(f"{label} {description} {members}")
+    query = tokens(f"{label} {description}")
+
+    evidence = [
+        tokens("how to fix external monitor flicker after sleep"),
+        tokens("monitor flickering on wake, screen goes black"),
+        tokens("best budget coffee grinder for espresso"),
+    ]
+
+    # Old behaviour: nothing is ever relevant once the cluster is mature.
+    assert _relevant_evidence_count(whole_vocabulary, evidence) == 0
+    # New behaviour: the two on-topic rows count, the coffee one does not.
+    assert _relevant_evidence_count(query, evidence) == 2
+
+
+def test_relevant_evidence_count_handles_empty_inputs():
+    from corp.workers.intelligence.scoring_pipeline import _relevant_evidence_count
+
+    assert _relevant_evidence_count(frozenset(), [frozenset({"a"})]) == 0
+    assert _relevant_evidence_count(frozenset({"a"}), None) == 0
+    assert _relevant_evidence_count(frozenset({"a"}), []) == 0
