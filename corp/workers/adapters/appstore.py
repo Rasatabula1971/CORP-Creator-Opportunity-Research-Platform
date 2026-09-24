@@ -45,10 +45,16 @@ from corp.workers.providers.capabilities import DissatisfactionProvider, Solutio
 logger = logging.getLogger(__name__)
 
 ITUNES_SEARCH = "https://itunes.apple.com/search"
+ITUNES_LOOKUP = "https://itunes.apple.com/lookup"
 REVIEWS_RSS = (
     "https://itunes.apple.com/{country}/rss/customerreviews/"
     "id={app_id}/sortBy=mostRecent/json"
 )
+
+# Audit fix: fetch_dissatisfaction() must not count a 5-star review as
+# dissatisfaction evidence. 1-3 stars is the conventional "not satisfied"
+# cutoff for app-store ratings; configurable per adapter instance.
+DEFAULT_DISSATISFACTION_MAX_STARS = 3
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -71,12 +77,14 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
         country: str = "us",
         request_interval_seconds: float = 1.0,
         client: httpx.AsyncClient | None = None,
+        dissatisfaction_max_stars: int = DEFAULT_DISSATISFACTION_MAX_STARS,
     ) -> None:
         self._max_reviews = max_reviews
         self._max_apps = max_apps
         self._country = country
         self._interval = request_interval_seconds
         self._client = client
+        self._dissatisfaction_max_stars = dissatisfaction_max_stars
         self._last_request_at: float | None = None
         self._throttle_lock = asyncio.Lock()
         self.request_count = 0
@@ -112,15 +120,36 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
             await self._client.aclose()
 
     # ── Capability interfaces (CORP1 Stage 4/5, T2) ────────────────────
-    # Both delegate to the same collect() unchanged — the apps found ARE
-    # the existing solutions (competitive landscape), and their low-star
-    # reviews ARE the dissatisfaction signal, from the same collection.
+    # These must NOT both delegate to collect(): that would turn every
+    # review of one app into a distinct "solution" (ten reviews looks like
+    # ten competitors) and let a 5-star review count as dissatisfaction.
+    # fetch_solutions returns one item per app (the competitive landscape);
+    # fetch_dissatisfaction returns only reviews at or below the configured
+    # star-rating threshold.
 
     async def fetch_solutions(self, query: str) -> list[NormalizedContent]:
-        return await self.collect(query)
+        """One NormalizedContent per app found for `query` — the existing
+        solutions themselves, not their individual reviews."""
+        query = query.strip()
+        if query.startswith("id:"):
+            app_id = query[3:].strip()
+            app = await self._lookup_app(app_id)
+            return [_parse_app_result(app)] if app else []
+        search_query = query[7:].strip() if query.startswith("search:") else query
+        results = await self._search_apps_raw(search_query)
+        return [_parse_app_result(a) for a in results if "trackId" in a]
 
     async def fetch_dissatisfaction(self, query: str) -> list[NormalizedContent]:
-        return await self.collect(query)
+        """Reviews at or below ``dissatisfaction_max_stars`` only. An
+        unparseable rating can't be confirmed as dissatisfaction, so it is
+        excluded rather than assumed."""
+        reviews = await self.collect(query)
+        return [
+            r
+            for r in reviews
+            if (rating := r.metadata.get("star_rating")) is not None
+            and rating <= self._dissatisfaction_max_stars
+        ]
 
     async def _collect_by_search(self, query: str) -> list[NormalizedContent]:
         app_ids = await self._search_apps(query)
@@ -137,6 +166,10 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
         return results
 
     async def _search_apps(self, query: str) -> list[str]:
+        results = await self._search_apps_raw(query)
+        return [str(r["trackId"]) for r in results if "trackId" in r]
+
+    async def _search_apps_raw(self, query: str) -> list[dict[str, Any]]:
         params = {
             "term": query,
             "entity": "software",
@@ -144,11 +177,12 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
             "country": self._country,
         }
         data = await self._get_json(ITUNES_SEARCH, params)
-        return [
-            str(r["trackId"])
-            for r in data.get("results", [])
-            if "trackId" in r
-        ]
+        return data.get("results", [])  # type: ignore[no-any-return]
+
+    async def _lookup_app(self, app_id: str) -> dict[str, Any] | None:
+        data = await self._get_json(ITUNES_LOOKUP, {"id": app_id, "country": self._country})
+        results = data.get("results", [])
+        return results[0] if results else None
 
     async def _collect_reviews(
         self, app_id: str, limit: int | None = None
@@ -195,6 +229,40 @@ class AppStoreAdapter(SourceAdapter, SolutionProvider, DissatisfactionProvider):
         resp.raise_for_status()
         check_response_size(resp, "appstore")
         return resp.json()  # type: ignore[no-any-return]
+
+
+def _parse_app_result(app: dict[str, Any]) -> NormalizedContent:
+    """One iTunes Search/Lookup result → one SOLUTION evidence item: the
+    app itself, not any of its reviews."""
+    app_id = str(app.get("trackId", ""))
+    name = app.get("trackName", "")
+    description = (app.get("description") or "")[:500]
+    text = f"{name}\n\n{description}".strip() if description else name
+
+    seller = app.get("sellerName") or app.get("artistName")
+    release = app.get("currentVersionReleaseDate") or app.get("releaseDate")
+    timestamp = _parse_iso(release) or datetime.now(tz=UTC)
+
+    return NormalizedContent(
+        source_platform="appstore",
+        content_type="app_listing",
+        external_id=f"app_{app_id}" if app_id else stable_id("app_", name),
+        text=text,
+        author=seller,
+        timestamp=timestamp,
+        url=app.get("trackViewUrl"),
+        access_method=AccessMethod.OPEN,
+        compliance_status=ComplianceStatus.COMPLIANT,
+        metadata={
+            "app_id": app_id,
+            "app_name": name,
+            "price": app.get("price"),
+            "formatted_price": app.get("formattedPrice"),
+            "average_rating": app.get("averageUserRating"),
+            "rating_count": app.get("userRatingCount"),
+            "seller": seller,
+        },
+    )
 
 
 def _parse_review_feed(

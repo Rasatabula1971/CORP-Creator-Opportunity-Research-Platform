@@ -261,24 +261,142 @@ async def test_close(mock_client):
     mock_client.aclose.assert_called_once()
 
 
-async def test_implements_solution_and_dissatisfaction_provider(monkeypatch):
-    """CORP1 Stage 4/5, T2: App Store is SolutionProvider + DissatisfactionProvider,
-    both delegating to the same collect()."""
+def test_implements_solution_and_dissatisfaction_provider():
+    """CORP1 Stage 4/5, T2: App Store is both SolutionProvider and
+    DissatisfactionProvider, but (audit fix) each has its own semantics —
+    see the tests below, not identical delegation to collect()."""
     from corp.workers.providers.capabilities import DissatisfactionProvider, SolutionProvider
 
     adapter = AppStoreAdapter()
     assert isinstance(adapter, SolutionProvider)
     assert isinstance(adapter, DissatisfactionProvider)
 
-    sentinel: list[object] = []
-    calls: list[str] = []
 
-    async def fake_collect(identifier: str) -> list[object]:
-        calls.append(identifier)
-        return sentinel
+# ── fetch_solutions: one item per app, not per review ────────────────
 
-    monkeypatch.setattr(adapter, "collect", fake_collect)
 
-    assert await adapter.fetch_solutions("budget tracker") is sentinel
-    assert await adapter.fetch_dissatisfaction("budget tracker") is sentinel
-    assert calls == ["budget tracker", "budget tracker"]
+async def test_fetch_solutions_by_search_returns_one_item_per_app(mock_client):
+    adapter = AppStoreAdapter(max_apps=2, client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp(SEARCH_RESPONSE))
+
+    results = await adapter.fetch_solutions("search:cool app")
+
+    assert len(results) == 2
+    assert all(r.content_type == "app_listing" for r in results)
+    assert {r.metadata["app_id"] for r in results} == {"123456", "789012"}
+    # Never hits the reviews endpoint at all for this path.
+    called_urls = [str(c.args[0]) for c in mock_client.get.await_args_list]
+    assert all("rss/customerreviews" not in u for u in called_urls)
+
+
+async def test_fetch_solutions_by_id_uses_lookup_not_reviews(mock_client):
+    adapter = AppStoreAdapter(client=mock_client)
+    lookup_result = {
+        "results": [{"trackId": 123456, "trackName": "CoolApp Pro", "sellerName": "Acme"}]
+    }
+    mock_client.get = AsyncMock(return_value=_mock_resp(lookup_result))
+
+    results = await adapter.fetch_solutions("id:123456")
+
+    assert len(results) == 1
+    assert results[0].content_type == "app_listing"
+    assert results[0].metadata["app_id"] == "123456"
+    assert results[0].author == "Acme"
+    called_url = str(mock_client.get.await_args.args[0])
+    assert "lookup" in called_url
+
+
+async def test_fetch_solutions_bare_keyword_matches_search_semantics(mock_client):
+    adapter = AppStoreAdapter(max_apps=5, client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp(SEARCH_RESPONSE))
+
+    results = await adapter.fetch_solutions("productivity")
+    assert len(results) == 2
+
+
+async def test_fetch_solutions_unknown_app_id_is_empty(mock_client):
+    adapter = AppStoreAdapter(client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp({"results": []}))
+
+    assert await adapter.fetch_solutions("id:999999") == []
+
+
+# ── fetch_dissatisfaction: only low-star reviews ─────────────────────
+
+MIXED_RATING_FEED = {
+    "feed": {
+        "entry": [
+            {
+                "id": {"label": "1"},
+                "title": {"label": "Love it"},
+                "content": {"label": "Five stars, no notes."},
+                "im:rating": {"label": "5"},
+                "author": {"name": {"label": "Happy"}},
+                "im:name": {"label": "CoolApp Pro"},
+            },
+            {
+                "id": {"label": "2"},
+                "title": {"label": "It's fine"},
+                "content": {"label": "Does the job."},
+                "im:rating": {"label": "4"},
+                "author": {"name": {"label": "Neutral"}},
+                "im:name": {"label": "CoolApp Pro"},
+            },
+            {
+                "id": {"label": "3"},
+                "title": {"label": "Frustrating"},
+                "content": {"label": "Missing basic features."},
+                "im:rating": {"label": "2"},
+                "author": {"name": {"label": "Unhappy"}},
+                "im:name": {"label": "CoolApp Pro"},
+            },
+            {
+                "id": {"label": "4"},
+                "title": {"label": "Terrible"},
+                "content": {"label": "Crashes constantly."},
+                "im:rating": {"label": "1"},
+                "author": {"name": {"label": "Furious"}},
+                "im:name": {"label": "CoolApp Pro"},
+            },
+        ]
+    }
+}
+
+
+async def test_fetch_dissatisfaction_excludes_high_star_reviews(mock_client):
+    adapter = AppStoreAdapter(client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp(MIXED_RATING_FEED))
+
+    results = await adapter.fetch_dissatisfaction("id:123456")
+
+    ratings = {r.metadata["star_rating"] for r in results}
+    assert ratings == {2, 1}, "a 5-star or 4-star review must not count as dissatisfaction"
+
+
+async def test_dissatisfaction_max_stars_is_configurable(mock_client):
+    adapter = AppStoreAdapter(client=mock_client, dissatisfaction_max_stars=1)
+    mock_client.get = AsyncMock(return_value=_mock_resp(MIXED_RATING_FEED))
+
+    results = await adapter.fetch_dissatisfaction("id:123456")
+
+    assert {r.metadata["star_rating"] for r in results} == {1}
+
+
+async def test_fetch_dissatisfaction_excludes_unparseable_ratings(mock_client):
+    feed = {
+        "feed": {
+            "entry": [
+                {
+                    "id": {"label": "1"},
+                    "title": {"label": "App Info"},
+                    "content": {"label": "no rating field parses"},
+                    "im:rating": {"label": "not-a-number"},
+                    "im:name": {"label": "CoolApp Pro"},
+                },
+            ]
+        }
+    }
+    adapter = AppStoreAdapter(client=mock_client)
+    mock_client.get = AsyncMock(return_value=_mock_resp(feed))
+
+    assert await adapter.fetch_dissatisfaction("id:123456") == []
