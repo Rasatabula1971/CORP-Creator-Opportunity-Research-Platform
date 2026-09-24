@@ -3,6 +3,7 @@
 import pytest
 
 from corp.config import Settings
+from corp.workers.adapters.marketplace import MarketplaceAdapter
 from corp.workers.adapters.registry import (
     AdapterConfigError,
     build_adapter,
@@ -46,3 +47,31 @@ def test_build_search_adapter_unsupported_platform():
     cfg = Settings()
     with pytest.raises(AdapterConfigError):
         build_search_adapter("stackexchange", cfg)
+
+
+# ── Marketplace sites that cannot answer are left out (ADR-0066) ──────
+
+
+def test_marketplace_drops_udemy_and_keyless_etsy():
+    cfg = Settings(marketplace_sites="gumroad,etsy,udemy", etsy_api_key="")
+    adapter = build_adapter("marketplace", cfg)
+    assert isinstance(adapter, MarketplaceAdapter)
+    assert adapter._marketplaces == ["gumroad"]
+
+
+def test_marketplace_keeps_etsy_when_a_key_is_set():
+    cfg = Settings(marketplace_sites="gumroad,etsy", etsy_api_key="kt_test")
+    adapter = build_adapter("marketplace", cfg)
+    assert isinstance(adapter, MarketplaceAdapter)
+    assert adapter._marketplaces == ["gumroad", "etsy"]
+
+
+def test_marketplace_with_no_usable_site_is_a_config_error():
+    cfg = Settings(marketplace_sites="udemy,etsy", etsy_api_key="")
+    with pytest.raises(AdapterConfigError, match="no usable marketplace"):
+        build_adapter("marketplace", cfg)
+
+
+def test_default_marketplace_sites_no_longer_include_udemy():
+    assert "udemy" not in Settings().marketplace_sites
+    assert "crowdfunding" in Settings().discovery_disabled_sources

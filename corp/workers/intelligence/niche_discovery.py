@@ -50,6 +50,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from corp.config import settings
 from corp.core.models.campaign import Campaign
 from corp.core.models.evidence import Evidence, EvidenceOrigin, EvidenceType
 from corp.core.models.niche import Niche, NicheAlias, NicheLifecycleStatus
@@ -62,7 +63,7 @@ from corp.core.models.workflow import ResearchRun, RunScope, RunType
 from corp.core.scoring.niche_qualification import load_rules
 from corp.workers.adapters.base import AdapterFamily, NormalizedContent, SourceAdapter
 from corp.workers.adapters.health import SourceHealthTracker, get_shared_tracker
-from corp.workers.adapters.registry import build_adapter
+from corp.workers.adapters.registry import AdapterConfigError, build_adapter
 from corp.workers.failures import PipelineFailureError, describe_failure
 from corp.workers.intelligence.errors import LLMCallError
 from corp.workers.intelligence.niche_naming import check_grounding
@@ -81,6 +82,13 @@ PIPELINE = "niche_discovery_recursive"
 # YouTube and Reddit also implement capability interfaces (T2) but are
 # creator-bound (channel handle / subreddit) -- excluded here, see module
 # docstring point 1.
+def _disabled_sources() -> frozenset[str]:
+    """Platforms DISCOVERY_DISABLED_SOURCES leaves out of the fan-out."""
+    return frozenset(
+        s.strip().lower() for s in settings.discovery_disabled_sources.split(",") if s.strip()
+    )
+
+
 NICHE_FAN_OUT_PLATFORMS: tuple[str, ...] = (
     "stackexchange",
     "searchdemand",
@@ -638,7 +646,14 @@ class RecursiveNicheDiscovery:
         never duplicated within one type. See module docstring point 2."""
         adapters: list[tuple[str, SourceAdapter]] = []
         skipped_sources: dict[str, str] = {}
+        disabled = _disabled_sources()
         for platform in NICHE_FAN_OUT_PLATFORMS:
+            # Deliberately off (DISCOVERY_DISABLED_SOURCES): recorded as
+            # skipped, never built, and never counted against source health
+            # -- the breaker is for sources that should work but don't.
+            if platform in disabled:
+                skipped_sources[platform] = "disabled by DISCOVERY_DISABLED_SOURCES"
+                continue
             # Circuit breaker: a source that has failed repeatedly is skipped
             # until its probe cooldown elapses, rather than being retried on
             # every keyword of every drill (spec: "monitored, and after
@@ -658,6 +673,12 @@ class RecursiveNicheDiscovery:
                 continue
             try:
                 adapters.append((platform, build_adapter(platform)))
+            except AdapterConfigError as exc:
+                # Configuration, not availability: the registry says this
+                # source cannot be built as configured (e.g. every
+                # marketplace site removed as blocked). Not a health failure.
+                logger.warning("Adapter %s not configured: %s", platform, exc)
+                skipped_sources[platform] = "not configured; details in the server log"
             except Exception as exc:
                 logger.warning("Could not build adapter %s: %s", platform, exc)
                 self._health.record_failure(platform, exc)

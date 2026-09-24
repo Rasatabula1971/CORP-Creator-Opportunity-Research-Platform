@@ -1,8 +1,12 @@
 """Adapter selection — builds a SourceAdapter for a platform name from settings."""
 
+import logging
+
 from corp.config import Settings
 from corp.config import settings as default_settings
 from corp.workers.adapters.base import SourceAdapter
+
+logger = logging.getLogger(__name__)
 
 KNOWN_PLATFORMS = (
     "youtube", "reddit", "tiktok", "web", "stackexchange",
@@ -32,6 +36,35 @@ def build_search_adapter(platform: str = "youtube", cfg: Settings | None = None)
 
         return YtDlpAdapter(platform=name, max_items=cfg.ytdlp_max_items)
     raise AdapterConfigError(f"Search discovery not supported for platform {platform!r}")
+
+
+def _usable_marketplaces(cfg: Settings) -> list[str]:
+    """MARKETPLACE_SITES minus the sites that cannot answer (ADR-0066).
+
+    Udemy's Affiliate API, the only public endpoint the adapter ever used,
+    was discontinued on 2025-01-01: every request is a 403. Etsy's search
+    page is behind DataDome, which refuses non-browser clients outright, so
+    without an Open API key the scrape is a guaranteed 403 per keyword. Both
+    are dropped here, with a warning, rather than spent on and then
+    circuit-broken as if they were merely down.
+    """
+    sites = [s.strip().lower() for s in cfg.marketplace_sites.split(",") if s.strip()]
+    usable: list[str] = []
+    for site in sites:
+        if site == "udemy":
+            logger.warning(
+                "Marketplace site 'udemy' ignored: Udemy's Affiliate API was "
+                "discontinued on 2025-01-01 and the endpoint returns 403"
+            )
+            continue
+        if site == "etsy" and not cfg.etsy_api_key:
+            logger.warning(
+                "Marketplace site 'etsy' ignored: the search page is bot-blocked "
+                "(DataDome); set ETSY_API_KEY to use the official Open API instead"
+            )
+            continue
+        usable.append(site)
+    return usable
 
 
 def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
@@ -105,10 +138,15 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
     if name == "marketplace":
         from corp.workers.adapters.marketplace import MarketplaceAdapter
 
-        sites = [s.strip() for s in cfg.marketplace_sites.split(",") if s.strip()]
+        sites = _usable_marketplaces(cfg)
+        if not sites:
+            raise AdapterConfigError(
+                "no usable marketplace: MARKETPLACE_SITES is empty once blocked "
+                "sites are removed (Udemy is discontinued; Etsy needs ETSY_API_KEY)"
+            )
         return MarketplaceAdapter(
             max_listings=cfg.marketplace_max_listings,
-            marketplaces=sites or None,
+            marketplaces=sites,
             etsy_api_key=cfg.etsy_api_key or None,
         )
 
