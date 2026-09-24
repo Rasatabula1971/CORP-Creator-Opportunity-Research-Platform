@@ -12,7 +12,7 @@ os.environ["DATABASE_URL_SYNC"] = os.environ.get(
     "CORP_TEST_DATABASE_URL_SYNC", "postgresql://corp:corp@localhost:5433/corp_test"
 )
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
 from sqlalchemy import text
@@ -41,6 +41,29 @@ async def _fresh_app_engine() -> AsyncGenerator[None]:
     if database._engine.cache_info().currsize:
         await database._engine().dispose()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolated_source_health(tmp_path, monkeypatch) -> Generator[None]:
+    """R15: the source-health circuit breaker is a process-wide singleton
+    persisted under CORP_DATA_PATH. Without this, every test that runs a
+    niche-discovery fan-out would read and write the developer's real
+    ``corp_data/adapter_health.json`` — polluting live operational state and
+    making tests order-dependent (a breaker tripped by one test would skip
+    sources in the next). Each test gets its own tracker over tmp_path.
+
+    Redirecting the DATA PATH rather than patching the accessor per importer
+    is deliberate: ``get_shared_tracker`` resolves ``settings.corp_data_path``
+    at call time, so any future module that imports the accessor by name is
+    covered automatically. Patching each importer instead would silently stop
+    protecting the real file the day someone adds a third one."""
+    from corp.config import settings
+    from corp.workers.adapters import health
+
+    health._shared_tracker.cache_clear()
+    monkeypatch.setattr(settings, "corp_data_path", str(tmp_path))
+    yield
+    health._shared_tracker.cache_clear()
 
 
 @pytest.fixture

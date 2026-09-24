@@ -2,16 +2,31 @@
 
 Tracks per-adapter success/failure rates. After consecutive failures exceed
 a threshold, the source is marked ``degraded``; after further failures it
-becomes ``disconnected`` and is skipped in multi-source runs. A disconnected
+becomes ``disconnected`` and is skipped in discovery runs. A disconnected
 source gets one probe attempt after a cooldown period to check recovery.
+This is the spec's "monitored, and after continued no response they are
+disconnected" behaviour.
 
 State is persisted as JSON under ``CORP_DATA_PATH/adapter_health.json``.
-This is operational state, not research data — loss is non-critical.
+This is operational state, not research data — loss is non-critical, but
+the write is atomic (tmp file + ``os.replace``) so a crash mid-write cannot
+leave truncated JSON that ``load()`` would swallow, silently resetting every
+source to healthy.
+
+The tracker is consumed by :class:`~corp.workers.intelligence.niche_discovery
+.RecursiveNicheDiscovery`, which is constructed fresh per job and per watch
+re-scan — so the tracker must outlive it, or consecutive-failure counts
+would reset before a breaker could ever trip. Use :func:`get_shared_tracker`
+rather than constructing one per engine.
 """
 
+import asyncio
+import functools
 import json
 import logging
+import os
 import time
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -93,17 +108,48 @@ class SourceHealthTracker:
             logger.warning("Could not load health state: %s", exc)
 
     def save(self) -> None:
+        """Atomically replace the state file. A partial write would be read
+        back as corrupt JSON and swallowed by ``load()``, which resets every
+        source to healthy — so the rename, not the write, is what publishes.
+
+        The temp name is unique per *writer*, not per process: ``save_async``
+        hands this to ``asyncio.to_thread``, and two concurrent fan-outs in
+        one process (a job and the R12 re-scan tick) would otherwise have two
+        real threads writing the same temp path — truncating each other and
+        publishing interleaved bytes, i.e. exactly the corruption this method
+        exists to prevent. ``fsync`` before the rename so the durability claim
+        holds through an OS crash, not just a process crash."""
+        tmp: Path | None = None
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(
-                json.dumps(
-                    {p: r.to_dict() for p, r in self._records.items()},
-                    indent=2,
-                ),
-                encoding="utf-8",
+            payload = json.dumps(
+                {p: r.to_dict() for p, r in self._records.items()},
+                indent=2,
             )
+            tmp = self._path.with_name(f"{self._path.name}.{uuid.uuid4().hex}.tmp")
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self._path)
+            tmp = None
         except OSError as exc:
             logger.warning("Could not save health state: %s", exc)
+        finally:
+            # A failed replace (Windows: destination held open by a scanner)
+            # would otherwise orphan one temp file per attempt.
+            if tmp is not None:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    # Best effort: the save already failed and was logged
+                    # above; an orphaned temp file is cosmetic, not a
+                    # reason to raise out of a finally block.
+                    logger.debug("Could not remove temp health file %s", tmp, exc_info=True)
+
+    async def save_async(self) -> None:
+        """``save()`` off the event loop — callers are async pipelines."""
+        await asyncio.to_thread(self.save)
 
     def _get(self, platform: str) -> SourceHealthRecord:
         if platform not in self._records:
@@ -178,3 +224,30 @@ class SourceHealthTracker:
 
     def summary(self) -> dict[str, dict[str, Any]]:
         return {p: r.to_dict() for p, r in self._records.items()}
+
+
+# maxsize=None, not 1: keyed on the path, a size-1 cache would evict on every
+# call if two paths ever alternated, silently handing each caller a freshly
+# loaded tracker — the per-instance failure mode this singleton exists to
+# avoid, with nothing failing loudly to reveal it.
+@functools.cache
+def _shared_tracker(data_path: str) -> SourceHealthTracker:
+    tracker = SourceHealthTracker(data_path)
+    tracker.load()
+    return tracker
+
+
+def get_shared_tracker(data_path: str | None = None) -> SourceHealthTracker:
+    """The process-wide tracker, loaded from disk once.
+
+    Discovery engines are constructed per job and per watch re-scan; a
+    per-engine tracker would reload a fresh copy each time and two live
+    engines would last-writer-wins each other's counts. One instance per
+    process keeps consecutive failures accumulating, which is the only way
+    ``disconnect_after`` is ever reached. Single-process deployment is the
+    assumption here (``start_corp.bat`` runs uvicorn with no ``--workers``),
+    the same assumption ``JobRegistry`` already makes.
+    """
+    from corp.config import settings
+
+    return _shared_tracker(data_path or settings.corp_data_path)
