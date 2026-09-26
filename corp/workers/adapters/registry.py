@@ -1,6 +1,7 @@
 """Adapter selection — builds a SourceAdapter for a platform name from settings."""
 
 import logging
+from urllib.parse import urlsplit
 
 from corp.config import Settings
 from corp.config import settings as default_settings
@@ -83,6 +84,45 @@ def _warn_once(site: str, message: str) -> None:
     logger.warning(message)
 
 
+def _grey_platforms(cfg: Settings) -> set[str]:
+    return {p.strip().lower() for p in cfg.grey_proxy_platforms.split(",") if p.strip()}
+
+
+def redact_proxy(url: str) -> str:
+    """``scheme://host:port`` with any credentials stripped, safe to log."""
+    parts = urlsplit(url)
+    host = parts.hostname or "?"
+    port = f":{parts.port}" if parts.port else ""
+    return f"{parts.scheme}://{host}{port}"
+
+
+_logged_proxy_platforms: set[str] = set()
+
+
+def _grey_proxy(name: str, cfg: Settings) -> str | None:
+    """Proxy URL for a grey-source adapter, or None to go direct (ADR-0067).
+
+    Only platforms listed in ``GREY_PROXY_PLATFORMS`` are routed. With
+    ``GREY_PROXY_REQUIRED`` set and no ``GREY_PROXY_URL``, the adapter is
+    refused rather than allowed to fall back to the operator's own address.
+    """
+    if name not in _grey_platforms(cfg):
+        return None
+    url = cfg.grey_proxy_url.strip()
+    if not url:
+        if cfg.grey_proxy_required:
+            raise AdapterConfigError(
+                f"{name!r} is a grey source and GREY_PROXY_REQUIRED is set, but "
+                "GREY_PROXY_URL is empty; refusing to send it from this machine's "
+                "own address (ADR-0067)"
+            )
+        return None
+    if name not in _logged_proxy_platforms:
+        _logged_proxy_platforms.add(name)
+        logger.info("Grey source %r routed via proxy %s", name, redact_proxy(url))
+    return url
+
+
 def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
     cfg = cfg or default_settings
     name = platform.lower()
@@ -149,6 +189,7 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
         return AmazonReviewAdapter(
             max_reviews=cfg.amazon_max_reviews,
             max_products=cfg.amazon_max_products,
+            proxy=_grey_proxy(name, cfg),
         )
 
     if name == "marketplace":
@@ -164,6 +205,7 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
             max_listings=cfg.marketplace_max_listings,
             marketplaces=sites,
             etsy_api_key=cfg.etsy_api_key or None,
+            proxy=_grey_proxy(name, cfg),
         )
 
     if name == "hackernews":
@@ -201,7 +243,10 @@ def build_adapter(platform: str, cfg: Settings | None = None) -> SourceAdapter:
     if name == "crowdfunding":
         from corp.workers.adapters.crowdfunding import CrowdfundingAdapter
 
-        return CrowdfundingAdapter(max_projects=cfg.crowdfunding_max_projects)
+        return CrowdfundingAdapter(
+            max_projects=cfg.crowdfunding_max_projects,
+            proxy=_grey_proxy(name, cfg),
+        )
 
     if name == "patreon_substack":
         from corp.workers.adapters.patreon_substack import PatreonSubstackAdapter

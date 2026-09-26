@@ -82,6 +82,19 @@ class Settings(BaseSettings):
     # any non-browser client, browser headers included (ADR-0066).
     crowdfunding_max_projects: int = 30
 
+    # Grey-source egress (ADR-0067). The adapters that scrape pages without an
+    # official API (Amazon reviews, marketplace HTML, crowdfunding) are the
+    # ones a site may block, and a block lands on whatever address sent the
+    # request. Point GREY_PROXY_URL at a proxy (http://user:pass@host:port or
+    # socks5://...; socks needs the httpx[socks] extra) so a ban burns the
+    # proxy's address, not the operator's home connection. Official-API and
+    # honest-UA adapters (YouTube, Reddit, Stack Exchange, HN, Wikipedia, web)
+    # stay direct. With GREY_PROXY_REQUIRED=true the grey adapters refuse to
+    # build without a proxy instead of silently falling back to the home IP.
+    grey_proxy_url: str = ""
+    grey_proxy_required: bool = False
+    grey_proxy_platforms: str = "amazon_reviews,marketplace,crowdfunding"
+
     # Patreon + Substack adapter (niche-signal: creator monetisation --
     # paid tiers, pricing, subscriber counts). Substack's internal search
     # endpoint, verified live, no key. Patreon not yet implemented (its

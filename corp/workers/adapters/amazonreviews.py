@@ -102,7 +102,9 @@ class AmazonReviewAdapter(SourceAdapter, DissatisfactionProvider):
         star_filter: str = STAR_FILTER,
         request_interval_seconds: float = 3.0,
         client: httpx.AsyncClient | None = None,
+        proxy: str | None = None,
     ) -> None:
+        self._proxy = proxy or None
         self._max_reviews = max_reviews
         self._max_products = max_products
         self._star_filter = star_filter
@@ -204,6 +206,7 @@ class AmazonReviewAdapter(SourceAdapter, DissatisfactionProvider):
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
+                proxy=self._proxy,
                 base_url=AMAZON_BASE,
                 headers={
                     "User-Agent": DEFAULT_USER_AGENT,

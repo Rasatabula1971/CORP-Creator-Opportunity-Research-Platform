@@ -96,7 +96,9 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
         request_interval_seconds: float = 2.0,
         client: httpx.AsyncClient | None = None,
         etsy_api_key: str | None = None,
+        proxy: str | None = None,
     ) -> None:
+        self._proxy = proxy or None
         self._max_listings = max_listings
         self._marketplaces = marketplaces or ["gumroad", "etsy", "udemy"]
         self._interval = request_interval_seconds
@@ -254,6 +256,7 @@ class MarketplaceAdapter(SourceAdapter, TransactionProvider, SolutionProvider):
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
+                proxy=self._proxy,
                 headers={
                     "User-Agent": DEFAULT_USER_AGENT,
                     "Accept-Language": "en-US,en;q=0.9",

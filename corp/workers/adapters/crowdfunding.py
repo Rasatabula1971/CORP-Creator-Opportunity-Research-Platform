@@ -100,7 +100,9 @@ class CrowdfundingAdapter(SourceAdapter, TransactionProvider):
         platforms: list[str] | None = None,
         request_interval_seconds: float = 2.0,
         client: httpx.AsyncClient | None = None,
+        proxy: str | None = None,
     ) -> None:
+        self._proxy = proxy or None
         self._max_projects = max_projects
         self._platforms = platforms or list(PLATFORMS)
         self._interval = request_interval_seconds
@@ -199,6 +201,7 @@ class CrowdfundingAdapter(SourceAdapter, TransactionProvider):
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
+                proxy=self._proxy,
                 headers={"Accept": "application/json"},
                 timeout=20.0,
                 follow_redirects=True,
